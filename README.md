@@ -5,6 +5,8 @@ RESTful API untuk aplikasi sosial media **Portal SI** 😵‍💫🧠🌀👁️
 
 ---
 
+**WARNING!** `Sebelum lanjut yuk kita nyanyi Mars PSI terlebih dahulu!`
+
 ## 🎶 Mars Partai Solidaritas Indonesia (PSI)
 
 **Sayap garuda membentang tinggi**  
