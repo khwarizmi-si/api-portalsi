@@ -1,0 +1,31 @@
+<?php
+
+namespace App\Models;
+
+use Illuminate\Database\Eloquent\Factories\HasFactory;
+use Illuminate\Database\Eloquent\Model;
+
+class Story extends Model
+{
+    use HasFactory;
+
+    protected $primaryKey = 'story_id';
+
+    public $timestamps = false; // ⛔ Nonaktifkan updated_at & created_at otomatis
+
+    protected $fillable = [
+        'user_id',
+        'media_url',
+        'caption',
+        'expires_at',
+    ];
+
+    protected $casts = [
+        'expires_at' => 'datetime',
+    ];
+
+    public function user()
+    {
+        return $this->belongsTo(User::class, 'user_id');
+    }
+}

@@ -1,0 +1,86 @@
+<?php
+
+namespace App\Http\Controllers;
+
+use App\Models\Like;
+use App\Models\Post;
+use App\Models\Notification;
+use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Auth;
+use Carbon\Carbon;
+
+class LikeController extends Controller
+{
+    public function toggle(Request $request, $post_id)
+    {
+        $user_id = Auth::id();
+
+        if (!$user_id) {
+            return response()->json([
+                'error' => 'Unauthorized',
+                'message' => 'User ID not found. Are you logged in and sending token correctly?'
+            ], 401);
+        }
+
+        $post = Post::find($post_id);
+        if (!$post) {
+            return response()->json(['error' => 'Post not found'], 404);
+        }
+
+        $like = Like::where('user_id', $user_id)
+            ->where('post_id', $post_id)
+            ->first();
+
+        if ($like) {
+            $like->delete();
+            return response()->json(['message' => 'Post unliked']);
+        } else {
+            Like::create([
+                'user_id' => $user_id,
+                'post_id' => $post_id,
+            ]);
+
+            // Kirim notifikasi jika user bukan pemilik post
+            if ($post->user_id != $user_id) {
+
+                // Cek notifikasi terakhir untuk like
+                $lastNotif = Notification::where('recipient_id', $post->user_id)
+                    ->where('related_user_id', $user_id)
+                    ->where('related_post_id', $post_id)
+                    ->where('type', 'like')
+                    ->latest()
+                    ->first();
+
+                $allowNotify = true;
+
+                if ($lastNotif) {
+                    $lastCreated = Carbon::parse($lastNotif->created_at);
+                    $diff = now()->diffInSeconds($lastCreated);
+
+                    if ($diff < 60) {
+                        $allowNotify = false;
+                    }
+                }
+
+                if ($allowNotify) {
+                    Notification::create([
+                        'recipient_id'     => $post->user_id,
+                        'type'             => 'like',
+                        'related_user_id'  => $user_id,
+                        'related_post_id'  => $post_id,
+                        'created_at'       => now(),
+                        'is_read'          => false,
+                    ]);
+                }
+            }
+
+            return response()->json(['message' => 'Post liked']);
+        }
+    }
+
+    public function index($post_id)
+    {
+        $likes = Like::where('post_id', $post_id)->with('user')->get();
+        return response()->json($likes);
+    }
+}
