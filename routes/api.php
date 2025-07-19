@@ -143,6 +143,9 @@ Route::middleware('auth:sanctum')->group(function () {
     Route::put('/account/settings', [AccountController::class, 'update']);
     Route::put('/account/password', [AccountController::class, 'updatePassword']);
     Route::delete('/account/delete', [AccountController::class, 'destroy']);
+
+    // 🔎 SEARCH
+    Route::get('/users/search', [ProfileController::class, 'search']);
     });
     
 });
