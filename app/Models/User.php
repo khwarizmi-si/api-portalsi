@@ -7,7 +7,10 @@ use Illuminate\Foundation\Auth\User as Authenticatable;
 use Illuminate\Notifications\Notifiable;
 use Laravel\Sanctum\HasApiTokens;
 
-// ⬇️ IMPORT model lain jika diperlukan
+// ⬇️ Tambahan untuk verifikasi email
+use Illuminate\Contracts\Auth\MustVerifyEmail;
+
+// ⬇️ Relasi
 use App\Models\Post;
 use App\Models\Comment;
 use App\Models\Like;
@@ -15,15 +18,15 @@ use App\Models\Story;
 use App\Models\DirectMessage;
 use App\Models\Notification;
 
-class User extends Authenticatable
+class User extends Authenticatable implements MustVerifyEmail
 {
     use HasApiTokens, HasFactory, Notifiable;
 
-    // 🟢 PRIMARY KEY custom: user_id (WAJIB!)
+    // 🟢 PRIMARY KEY custom: user_id
     protected $primaryKey = 'user_id';
 
     /**
-     * Field yang bisa diisi secara massal (mass assignable)
+     * Mass assignment
      */
     protected $fillable = [
         'username',
@@ -32,12 +35,14 @@ class User extends Authenticatable
         'password_hash',
         'bio',
         'profile_picture_url',
-        'is_verified',
+        'is_verified',       // centang biru
         'is_private',
+        'role',              // dev, teacher, parent, student
+        'email_verified_at', // verifikasi email
     ];
 
     /**
-     * Field yang disembunyikan saat return JSON
+     * Hidden dari JSON response
      */
     protected $hidden = [
         'password_hash',
@@ -45,14 +50,16 @@ class User extends Authenticatable
     ];
 
     /**
-     * Field yang di-cast otomatis
+     * Casting otomatis
      */
     protected $casts = [
         'email_verified_at' => 'datetime',
+        'is_verified' => 'boolean',
+        'is_private' => 'boolean',
     ];
 
     /**
-     * Agar Laravel tahu bahwa password kamu pakai "password_hash" bukan "password"
+     * Agar Laravel pakai "password_hash" untuk login
      */
     public function getAuthPassword()
     {
@@ -81,15 +88,14 @@ class User extends Authenticatable
     public function followers()
     {
         return $this->belongsToMany(User::class, 'follows', 'followed_id', 'follower_id')
-            ->withPivot('followed_at', 'status'); // ❌ HAPUS withTimestamps()
+            ->withPivot('followed_at', 'status');
     }
-    
+
     public function following()
     {
         return $this->belongsToMany(User::class, 'follows', 'follower_id', 'followed_id')
-            ->withPivot('followed_at', 'status'); // ❌ HAPUS withTimestamps()
+            ->withPivot('followed_at', 'status');
     }
-    
 
     public function stories()
     {

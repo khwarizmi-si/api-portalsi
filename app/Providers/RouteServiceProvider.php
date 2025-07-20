@@ -7,6 +7,7 @@ use Illuminate\Foundation\Support\Providers\RouteServiceProvider as ServiceProvi
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\RateLimiter;
 use Illuminate\Support\Facades\Route;
+use Illuminate\Support\Facades\URL;
 
 class RouteServiceProvider extends ServiceProvider
 {
@@ -24,6 +25,18 @@ class RouteServiceProvider extends ServiceProvider
      */
     public function boot(): void
     {
+        // 🔧 Force root URL agar Laravel tahu base URL-nya
+        URL::forceRootUrl(config('app.url'));
+
+        // (Optional) Tambah fallback jika verification.notice dibutuhkan
+        if (!Route::has('verification.notice')) {
+            Route::get('/email/verify', function () {
+                return response()->json([
+                    'message' => 'Silakan verifikasi email Anda terlebih dahulu.'
+                ], 403);
+            })->name('verification.notice');
+        }
+
         RateLimiter::for('api', function (Request $request) {
             return Limit::perMinute(60)->by($request->user()?->id ?: $request->ip());
         });
