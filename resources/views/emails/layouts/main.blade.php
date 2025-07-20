@@ -11,7 +11,7 @@
                 <h2 style="color:#EDA130;">Portal Sekolah Impian</h2>
                 @yield('content')
                 <hr>
-                <p style="color:#999;font-size:12px;">© {{ date('Y') }} Portal SI</p>
+                <p style="color:#999;font-size:12px;">© {{ date('Y') }} Portal SI, All Rights Reserved.</p>
             </td>
         </tr>
     </table>
