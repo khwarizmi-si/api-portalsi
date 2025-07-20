@@ -2,7 +2,7 @@
 <html>
 <head>
     <meta charset="UTF-8">
-    <title>@yield('title', 'Portal SI')</title>
+    <title>Portal SI</title>
 </head>
 <body style="background-color:#f4f4f4;padding:40px 0;margin:0;">
     <table width="100%" cellpadding="0" cellspacing="0">
@@ -16,7 +16,7 @@
                     </tr>
                     <tr>
                         <td style="padding:40px 30px;font-family:sans-serif;font-size:16px;line-height:1.5;color:#333;">
-                            @yield('content')
+                            {{ $slot }}
                         </td>
                     </tr>
                     <tr>
