@@ -1,18 +1,23 @@
 <?php
 
-use Illuminate\Support\Facades\Route;
+use Illuminate\Support\Facades\Http;
 
-/*
-|--------------------------------------------------------------------------
-| Web Routes
-|--------------------------------------------------------------------------
-|
-| Here is where you can register web routes for your application. These
-| routes are loaded by the RouteServiceProvider and all of them will
-| be assigned to the "web" middleware group. Make something great!
-|
-*/
+Route::post('/submit-reset-password', function (Request $request) {
+    // Ambil input
+    $data = $request->validate([
+        'token' => 'required',
+        'email' => 'required|email',
+        'password' => 'required|confirmed',
+    ]);
 
-Route::get('/', function () {
-    return view('welcome');
+    // Kirim ke API asli Laravel (biasanya di routes/api.php)
+    $response = Http::post(config('app.api_url') . '/api/reset-password', $data);
+
+    if ($response->successful()) {
+        // Jika berhasil, redirect ke halaman sukses
+        return redirect('/reset-password-success');
+    } else {
+        // Jika gagal, kembali ke form dengan pesan error
+        return back()->withErrors(['message' => 'Reset password gagal. Token mungkin tidak valid atau sudah kadaluarsa.']);
+    }
 });
