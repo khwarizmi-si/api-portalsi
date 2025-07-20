@@ -17,6 +17,8 @@ use App\Models\Like;
 use App\Models\Story;
 use App\Models\DirectMessage;
 use App\Models\Notification;
+use App\Notifications\CustomVerifyEmail;
+use App\Notifications\CustomResetPassword;
 
 class User extends Authenticatable implements MustVerifyEmail
 {
@@ -115,5 +117,15 @@ class User extends Authenticatable implements MustVerifyEmail
     public function notifications()
     {
         return $this->hasMany(Notification::class, 'recipient_id');
+    }
+
+    public function sendEmailVerificationNotification()
+    {
+    $this->notify(new CustomVerifyEmail);
+    }
+
+    public function sendPasswordResetNotification($token)
+    {
+    $this->notify(new CustomResetPassword($token));
     }
 }

@@ -10,8 +10,8 @@
             <td align="center">
                 <table width="600" cellpadding="0" cellspacing="0" style="background-color:white;border-radius:12px;overflow:hidden;box-shadow:0 0 10px rgba(0,0,0,0.1);">
                     <tr>
-                        <td style="background-color:#00AEEF;padding:30px;text-align:center;">
-                            <h1 style="color:white;margin:0;font-size:24px;">📘 Portal Sekolah Impian</h1>
+                        <td style="background-color:#EDA130;padding:30px;text-align:center;">
+                            <h1 style="color:white;margin:0;font-size:24px;">Portal Sekolah Impian</h1>
                         </td>
                     </tr>
                     <tr>
