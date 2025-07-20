@@ -12,7 +12,7 @@ class CustomResetPassword extends BaseResetPassword
         return (new MailMessage)
             ->subject('Reset Password - Portal SI')
             ->view('emails.reset-password', [
-                'url' => url('/reset-password?token=' . $this->token . '&email=' . $notifiable->getEmailForPasswordReset()),
+                'url' => url('/api/reset-password?token=' . $this->token . '&email=' . $notifiable->getEmailForPasswordReset()),
                 'user' => $notifiable,
             ]);
     }
