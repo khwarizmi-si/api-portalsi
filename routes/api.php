@@ -22,6 +22,10 @@ use App\Http\Controllers\DirectMessageController;
 use App\Http\Controllers\AccountController;
 use App\Http\Controllers\MediaController;
 use App\Http\Controllers\AuthController;
+use App\Http\Controllers\GroupController;
+use App\Http\Controllers\GroupMessageController;
+
+
 
 // 🚀 PUBLIC ROUTES
 Route::post('/register', function (Request $request) {
@@ -201,6 +205,37 @@ Route::middleware(['auth:sanctum', 'verified.api'])->group(function () {
     Route::put('/account/settings', [AccountController::class, 'update']);
     Route::put('/account/password', [AccountController::class, 'updatePassword']);
     Route::delete('/account/delete', [AccountController::class, 'destroy']);
+
+    Route::middleware('auth:sanctum')->group(function () {
+        Route::prefix('groups')->group(function () {
+            Route::post('/', [GroupController::class, 'store']);               // Buat grup
+            Route::post('{group}/join', [GroupController::class, 'join']);     // Join grup
+            Route::post('{group}/leave', [GroupController::class, 'leave']);   // Leave grup
+            Route::get('{group}', [GroupController::class, 'show']);           // Lihat detail grup
+        });
+    });
+
+    Route::middleware('auth:sanctum')->group(function () {
+        Route::prefix('groups/{group}')->group(function () {
+            Route::post('/messages', [GroupMessageController::class, 'store']); // Kirim pesan
+        });
+    });
+
+    Route::middleware('auth:sanctum')->group(function () {
+        Route::get('groups/{group}/messages', [GroupMessageController::class, 'index']);
+    });
+
+    // Hapus pesan
+Route::delete('/groups/{group}/messages/{message}', [GroupMessageController::class, 'destroy']);
+
+// Pin/unpin pesan
+Route::post('/groups/{group}/messages/{message}/pin', [GroupMessageController::class, 'togglePin']);
+
+Route::middleware('auth:sanctum')->group(function () {
+    Route::put('/groups/{group}', [GroupController::class, 'update']);
+});
+
+
 });
 
 Route::fallback(function () {

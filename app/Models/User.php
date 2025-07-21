@@ -128,4 +128,18 @@ class User extends Authenticatable implements MustVerifyEmail
     {
     $this->notify(new CustomResetPassword($token));
     }
+    public function ownedGroups()
+    {
+    return $this->hasMany(Group::class, 'owner_id', 'user_id');
+    }
+
+    public function groupMemberships()
+    {
+    return $this->hasMany(GroupMember::class, 'user_id', 'user_id');
+    }
+
+    public function groupMessages()
+    {
+    return $this->hasMany(GroupMessage::class, 'sender_id', 'user_id');
+    }
 }
