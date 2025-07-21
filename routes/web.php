@@ -33,11 +33,12 @@ Route::post('/submit-reset-password', function (Request $request) {
         return redirect('/reset-password-error')->with('error', 'Gagal terhubung ke server API.');
     }
 
-    dd([
-        'status' => $response->status(),
-        'body' => $response->body(),
-        'json' => $response->json(),
-    ]);
+    if ($response->status() === 200 && $response->json('message') === 'Password berhasil direset.') {
+        return redirect('/reset-password-success');
+    } else {
+        return redirect('/reset-password-error')->with('error', $response->json('message') ?? 'Reset password gagal.');
+    }
+    
     
 });
 
