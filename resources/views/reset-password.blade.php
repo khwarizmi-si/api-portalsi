@@ -112,7 +112,7 @@
     <h1>Reset Password</h1>
     <p>Silakan masukkan password baru Anda di bawah ini.</p>
 
-    <form method="POST" action="{{ url('/api/reset-password') }}">
+    <form method="POST" action="{{ url('/submit-reset-password') }}">
       @csrf
       <input type="hidden" name="token" value="{{ $token }}">
       <input type="hidden" name="email" value="{{ $email }}">
