@@ -118,56 +118,47 @@ class GroupController extends Controller
             }),
         ]);
     }
-    
+
+    // 🔹 5. Update grup (mendukung multipart/form-data dengan _method=PUT)
     public function update(Request $request, Group $group)
-{
-    $user = auth()->user();
+    {
+        $user = auth()->user();
 
-    if ($group->owner_id !== $user->user_id) {
-        return response()->json(['message' => 'Tidak diizinkan mengedit grup ini.'], 403);
+        if ($group->owner_id !== $user->user_id) {
+            return response()->json(['message' => 'Tidak diizinkan mengedit grup ini.'], 403);
+        }
+
+        $validatedData = $request->validate([
+            'name' => 'required|string|max:100',
+            'description' => 'nullable|string',
+            'avatar' => 'nullable|file|image|mimes:jpg,jpeg,png|max:2048',
+            'cover' => 'nullable|file|image|mimes:jpg,jpeg,png|max:2048',
+        ]);
+
+        $group->name = $validatedData['name'];
+        $group->description = $validatedData['description'] ?? $group->description;
+
+        if ($request->hasFile('avatar')) {
+            Log::debug('Avatar file detected');
+            $avatarPath = $request->file('avatar')->store('uploads/group-avatars', 'public');
+            $group->avatar_url = asset('storage/' . $avatarPath);
+        } else {
+            Log::debug('Avatar file NOT detected');
+        }
+
+        if ($request->hasFile('cover')) {
+            Log::debug('Cover file detected');
+            $coverPath = $request->file('cover')->store('uploads/group-covers', 'public');
+            $group->cover_url = asset('storage/' . $coverPath);
+        } else {
+            Log::debug('Cover file NOT detected');
+        }
+
+        $group->save();
+
+        return response()->json([
+            'message' => 'Grup berhasil diperbarui.',
+            'group' => $group
+        ]);
     }
-
-    
-    // Validasi
-    $validatedData = $request->validate([
-        'name' => 'required|string|max:100',
-        'description' => 'nullable|string',
-        'avatar' => 'nullable|file|image|mimes:jpg,jpeg,png|max:2048',
-        'cover' => 'nullable|file|image|mimes:jpg,jpeg,png|max:2048',
-    ]);
-
-    // Update teks biasa
-    if ($request->has('name')) {
-        $group->name = $request->input('name');
-    }
-
-    if ($request->has('description')) {
-        $group->description = $request->input('description');
-    }
-
-    // Upload avatar
-    if ($request->hasFile('avatar')) {
-        Log::debug('Avatar file detected');
-        $avatarPath = $request->file('avatar')->store('uploads/group-avatars', 'public');
-        $group->avatar_url = asset('storage/' . $avatarPath);
-    } else {
-        Log::debug('Avatar file NOT detected');
-    }
-    
-    if ($request->hasFile('cover')) {
-        Log::debug('Cover file detected');
-        $coverPath = $request->file('cover')->store('uploads/group-covers', 'public');
-        $group->cover_url = asset('storage/' . $coverPath);
-    } else {
-        Log::debug('Cover file NOT detected');
-    }
-
-    $group->save();
-
-    return response()->json([
-        'message' => 'Grup berhasil diperbarui.',
-        'group' => $group
-    ]);
-}
-    
 }

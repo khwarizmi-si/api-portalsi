@@ -11,21 +11,21 @@ use Illuminate\Auth\Events\Verified;
 use Illuminate\Foundation\Auth\EmailVerificationRequest;
 use Illuminate\Support\Str;
 use App\Models\User;
-use App\Http\Controllers\PostController;
-use App\Http\Controllers\CommentController;
-use App\Http\Controllers\LikeController;
-use App\Http\Controllers\FollowController;
-use App\Http\Controllers\ProfileController;
-use App\Http\Controllers\StoryController;
-use App\Http\Controllers\NotificationController;
-use App\Http\Controllers\DirectMessageController;
-use App\Http\Controllers\AccountController;
-use App\Http\Controllers\MediaController;
-use App\Http\Controllers\AuthController;
-use App\Http\Controllers\GroupController;
-use App\Http\Controllers\GroupMessageController;
-
-
+use App\Http\Controllers\{
+    PostController,
+    CommentController,
+    LikeController,
+    FollowController,
+    ProfileController,
+    StoryController,
+    NotificationController,
+    DirectMessageController,
+    AccountController,
+    MediaController,
+    AuthController,
+    GroupController,
+    GroupMessageController
+};
 
 // 🚀 PUBLIC ROUTES
 Route::post('/register', function (Request $request) {
@@ -88,8 +88,6 @@ Route::post('/login', function (Request $request) {
 // 📩 Email Verification
 Route::get('/email/verify/{id}/{hash}', function (Request $request, $id, $hash) {
     $user = \App\Models\User::findOrFail($id);
-
-    // Validasi hash
     if (! hash_equals((string) $hash, sha1($user->getEmailForVerification()))) {
         return response()->json(['message' => 'Invalid verification link.'], 403);
     }
@@ -146,7 +144,6 @@ Route::post('/reset-password', function (Request $request) {
     ], $status === Password::PASSWORD_RESET ? 200 : 400);
 });
 
-
 Route::get('/profile/{id}', [ProfileController::class, 'show']);
 
 // 🔐 PROTECTED ROUTES
@@ -163,6 +160,7 @@ Route::middleware(['auth:sanctum'])->group(function () {
         ]);
     });
 
+    // Public Feed
     Route::get('/posts', [PostController::class, 'index']);
     Route::get('/posts/{id}', [PostController::class, 'show']);
     Route::get('/posts/{post_id}/comments', [CommentController::class, 'index']);
@@ -174,73 +172,67 @@ Route::middleware(['auth:sanctum'])->group(function () {
     Route::get('/messages/conversation/{user_id}', [DirectMessageController::class, 'conversation']);
     Route::get('/explore', [PostController::class, 'explore']);
     Route::get('/users/search', [ProfileController::class, 'search']);
-});
 
-Route::middleware(['auth:sanctum', 'verified.api'])->group(function () {
-    Route::post('/posts', [PostController::class, 'store']);
-    Route::put('/posts/{id}', [PostController::class, 'update']);
-    Route::delete('/posts/{id}', [PostController::class, 'destroy']);
+    // 🔐 Only for verified users
+    Route::middleware('verified.api')->group(function () {
+        // Post CRUD
+        Route::post('/posts', [PostController::class, 'store']);
+        Route::put('/posts/{id}', [PostController::class, 'update']);
+        Route::delete('/posts/{id}', [PostController::class, 'destroy']);
 
-    Route::post('/posts/{post_id}/comments', [CommentController::class, 'store']);
-    Route::put('/comments/{id}', [CommentController::class, 'update']);
-    Route::delete('/comments/{id}', [CommentController::class, 'destroy']);
+        // Comments
+        Route::post('/posts/{post_id}/comments', [CommentController::class, 'store']);
+        Route::put('/comments/{id}', [CommentController::class, 'update']);
+        Route::delete('/comments/{id}', [CommentController::class, 'destroy']);
 
-    Route::post('/posts/{post_id}/like', [LikeController::class, 'toggle']);
+        // Likes & Follow
+        Route::post('/posts/{post_id}/like', [LikeController::class, 'toggle']);
+        Route::post('/follow/{id}', [FollowController::class, 'follow']);
+        Route::delete('/unfollow/{id}', [FollowController::class, 'unfollow']);
 
-    Route::post('/follow/{id}', [FollowController::class, 'follow']);
-    Route::delete('/unfollow/{id}', [FollowController::class, 'unfollow']);
+        // Story
+        Route::post('/stories', [StoryController::class, 'store']);
+        Route::delete('/stories/{id}', [StoryController::class, 'destroy']);
+        Route::post('/stories/{id}/view', [StoryController::class, 'view']);
 
-    Route::post('/stories', [StoryController::class, 'store']);
-    Route::delete('/stories/{id}', [StoryController::class, 'destroy']);
-    Route::post('/stories/{id}/view', [StoryController::class, 'view']);
+        // Notifications
+        Route::patch('/notifications/{id}/read', [NotificationController::class, 'markAsRead']);
+        Route::patch('/notifications/read/all', [NotificationController::class, 'markAllAsRead']);
 
-    Route::patch('/notifications/{id}/read', [NotificationController::class, 'markAsRead']);
-    Route::patch('/notifications/read/all', [NotificationController::class, 'markAllAsRead']);
+        // DM
+        Route::post('/messages/send', [DirectMessageController::class, 'send']);
+        Route::patch('/messages/{id}/read', [DirectMessageController::class, 'markAsRead']);
 
-    Route::post('/messages/send', [DirectMessageController::class, 'send']);
-    Route::patch('/messages/{id}/read', [DirectMessageController::class, 'markAsRead']);
+        // Upload
+        Route::post('/upload', [MediaController::class, 'upload']);
 
-    Route::post('/upload', [MediaController::class, 'upload']);
+        // Account
+        Route::put('/account/settings', [AccountController::class, 'update']);
+        Route::put('/account/password', [AccountController::class, 'updatePassword']);
+        Route::delete('/account/delete', [AccountController::class, 'destroy']);
 
-    Route::put('/account/settings', [AccountController::class, 'update']);
-    Route::put('/account/password', [AccountController::class, 'updatePassword']);
-    Route::delete('/account/delete', [AccountController::class, 'destroy']);
-
-    Route::middleware('auth:sanctum')->group(function () {
+        // 💬 Group Routes
         Route::prefix('groups')->group(function () {
-            Route::post('/', [GroupController::class, 'store']);               // Buat grup
-            Route::post('{group}/join', [GroupController::class, 'join']);     // Join grup
-            Route::post('{group}/leave', [GroupController::class, 'leave']);   // Leave grup
-            Route::get('{group}', [GroupController::class, 'show']);           // Lihat detail grup
-            Route::put('/groups/{group}', [GroupController::class, 'update']);
-
+            Route::post('/', [GroupController::class, 'store']); // Buat grup
+            Route::post('{group}/join', [GroupController::class, 'join']);
+            Route::post('{group}/leave', [GroupController::class, 'leave']);
+            Route::get('{group}', [GroupController::class, 'show']);
+            
+            // ✅ Mendukung PUT asli & POST + _method=PUT (form-data)
+            Route::match(['put', 'post'], '{group}', [GroupController::class, 'update']);
         });
-    });
 
-    Route::middleware('auth:sanctum')->group(function () {
+        // Group Messages
         Route::prefix('groups/{group}')->group(function () {
-            Route::post('/messages', [GroupMessageController::class, 'store']); // Kirim pesan
+            Route::post('/messages', [GroupMessageController::class, 'store']);
+            Route::get('/messages', [GroupMessageController::class, 'index']);
+            Route::delete('/messages/{message}', [GroupMessageController::class, 'destroy']);
+            Route::post('/messages/{message}/pin', [GroupMessageController::class, 'togglePin']);
         });
     });
-
-    Route::middleware('auth:sanctum')->group(function () {
-        Route::get('groups/{group}/messages', [GroupMessageController::class, 'index']);
-    });
-
-    // Hapus pesan
-Route::delete('/groups/{group}/messages/{message}', [GroupMessageController::class, 'destroy']);
-
-// Pin/unpin pesan
-Route::post('/groups/{group}/messages/{message}/pin', [GroupMessageController::class, 'togglePin']);
-
-
-Route::middleware('auth:sanctum')->group(function () {
-    Route::put('/groups/{group}', [GroupController::class, 'update']);
 });
 
-
-});
-
+// Fallback
 Route::fallback(function () {
     return response()->json([
         'error' => 'Endpoint not found (404)'
