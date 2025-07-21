@@ -22,6 +22,7 @@ Route::post('/submit-reset-password', function (Request $request) {
         'token' => 'required',
         'email' => 'required|email',
         'password' => 'required|confirmed',
+        'password_confirmation' => 'required'
     ]);
 
     try {
