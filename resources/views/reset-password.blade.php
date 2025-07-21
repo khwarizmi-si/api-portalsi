@@ -64,7 +64,7 @@
     input[type="password"] {
       width: 100%;
       padding: 12px;
-      margin: 10px 0 20px 0;
+      margin: 10px 0 10px 0;
       border: 1px solid #ccc;
       border-radius: 6px;
       font-size: 15px;
@@ -82,14 +82,22 @@
       cursor: pointer;
     }
 
-    button:hover {
+    button:disabled {
+      opacity: 0.6;
+      cursor: not-allowed;
+    }
+
+    button:hover:enabled {
       background-color: #e1952a;
     }
 
     .message {
       color: #f00;
-      margin-bottom: 12px;
       font-size: 14px;
+      margin-top: -4px;
+      margin-bottom: 16px;
+      display: none;
+      text-align: left;
     }
 
     @media (max-width: 480px) {
@@ -112,16 +120,46 @@
     <h1>Reset Password</h1>
     <p>Silakan masukkan password baru Anda di bawah ini.</p>
 
-    <form method="POST" action="{{ url('/submit-reset-password') }}">
+    <form method="POST" action="{{ url('/submit-reset-password') }}" id="resetForm">
       @csrf
       <input type="hidden" name="token" value="{{ $token }}">
       <input type="hidden" name="email" value="{{ $email }}">
 
-      <input type="password" name="password" placeholder="Password baru" required>
-      <input type="password" name="password_confirmation" placeholder="Konfirmasi password" required>
+      <input type="password" name="password" id="password" placeholder="Password baru" required>
+      <input type="password" name="password_confirmation" id="password_confirmation" placeholder="Konfirmasi password" required>
+      <p id="errorMessage" class="message">Konfirmasi password tidak cocok.</p>
 
-      <button type="submit">Ubah Password</button>
+      <button type="submit" id="submitBtn" disabled>Ubah Password</button>
     </form>
   </div>
+
+  <script>
+    const password = document.getElementById('password');
+    const confirmPassword = document.getElementById('password_confirmation');
+    const errorMessage = document.getElementById('errorMessage');
+    const submitBtn = document.getElementById('submitBtn');
+
+    function validatePasswords() {
+      const passVal = password.value;
+      const confirmVal = confirmPassword.value;
+
+      if (!passVal || !confirmVal) {
+        submitBtn.disabled = true;
+        errorMessage.style.display = 'none';
+        return;
+      }
+
+      if (passVal !== confirmVal) {
+        submitBtn.disabled = true;
+        errorMessage.style.display = 'block';
+      } else {
+        submitBtn.disabled = false;
+        errorMessage.style.display = 'none';
+      }
+    }
+
+    password.addEventListener('input', validatePasswords);
+    confirmPassword.addEventListener('input', validatePasswords);
+  </script>
 </body>
 </html>
