@@ -4,7 +4,7 @@ use Illuminate\Support\Facades\Route;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Http;
 
-// 👇 Route GET untuk menampilkan form reset password
+// ✅ GET: Menampilkan form reset password
 Route::get('/reset-password', function (Request $request) {
     $token = $request->query('token');
     $email = $request->query('email');
@@ -16,7 +16,7 @@ Route::get('/reset-password', function (Request $request) {
     return view('reset-password', compact('token', 'email'));
 });
 
-// 👇 Route POST untuk submit form
+// ✅ POST: Mengirim form reset password
 Route::post('/submit-reset-password', function (Request $request) {
     $data = $request->validate([
         'token' => 'required',
@@ -24,12 +24,28 @@ Route::post('/submit-reset-password', function (Request $request) {
         'password' => 'required|confirmed',
     ]);
 
-    $response = Http::post(config('app.api_url') . '/api/reset-password', $data);
+    // ✅ Pastikan config('app.api_url') diset di .env
+    try {
+        $response = Http::post(config('app.api_url') . '/api/reset-password', $data);
+    } catch (\Exception $e) {
+        return redirect('/reset-password-error')->with('error', 'Gagal terhubung ke server API.');
+    }
 
     if ($response->successful()) {
         return redirect('/reset-password-success');
     } else {
-        return back()->withErrors(['message' => 'Reset password gagal. Token mungkin tidak valid atau sudah kadaluarsa.']);
+        return redirect('/reset-password-error')->with('error', 'Reset password gagal. Token mungkin tidak valid atau sudah kadaluarsa.');
     }
 });
 
+// ✅ GET: Halaman sukses
+Route::get('/reset-password-success', function () {
+    return view('reset-password-success');
+});
+
+// ✅ GET: Halaman gagal
+Route::get('/reset-password-error', function () {
+    return view('reset-password-error', [
+        'error' => session('error') ?? 'Terjadi kesalahan saat mengubah password.'
+    ]);
+});
