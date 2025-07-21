@@ -24,17 +24,18 @@ Route::post('/submit-reset-password', function (Request $request) {
         'password' => 'required|confirmed',
     ]);
 
-    // ✅ Pastikan config('app.api_url') diset di .env
     try {
-        $response = Http::post(config('app.api_url') . '/api/reset-password', $data);
+        $response = Http::withHeaders([
+            'Accept' => 'application/json'
+        ])->post(config('app.api_url') . '/api/reset-password', $data);
     } catch (\Exception $e) {
         return redirect('/reset-password-error')->with('error', 'Gagal terhubung ke server API.');
     }
 
-    if ($response->successful()) {
+    if ($response->status() === 200 && $response->json('message') === 'Password berhasil direset.') {
         return redirect('/reset-password-success');
     } else {
-        return redirect('/reset-password-error')->with('error', 'Reset password gagal. Token mungkin tidak valid atau sudah kadaluarsa.');
+        return redirect('/reset-password-error')->with('error', $response->json('message') ?? 'Reset password gagal. Token mungkin tidak valid atau sudah kadaluarsa.');
     }
 });
 
