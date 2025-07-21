@@ -21,6 +21,7 @@ use App\Http\Controllers\NotificationController;
 use App\Http\Controllers\DirectMessageController;
 use App\Http\Controllers\AccountController;
 use App\Http\Controllers\MediaController;
+use App\Http\Controllers\AuthController;
 
 // 🚀 PUBLIC ROUTES
 Route::post('/register', function (Request $request) {
