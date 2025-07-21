@@ -212,6 +212,8 @@ Route::middleware(['auth:sanctum', 'verified.api'])->group(function () {
             Route::post('{group}/join', [GroupController::class, 'join']);     // Join grup
             Route::post('{group}/leave', [GroupController::class, 'leave']);   // Leave grup
             Route::get('{group}', [GroupController::class, 'show']);           // Lihat detail grup
+            Route::put('/groups/{group}', [GroupController::class, 'update']);
+
         });
     });
 
@@ -230,6 +232,7 @@ Route::delete('/groups/{group}/messages/{message}', [GroupMessageController::cla
 
 // Pin/unpin pesan
 Route::post('/groups/{group}/messages/{message}/pin', [GroupMessageController::class, 'togglePin']);
+
 
 Route::middleware('auth:sanctum')->group(function () {
     Route::put('/groups/{group}', [GroupController::class, 'update']);

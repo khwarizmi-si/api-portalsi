@@ -21,7 +21,7 @@ class GroupMessageController extends Controller
         }
 
         $request->validate([
-            'content' => 'nullable|string',
+            'content' => 'required|string',
             'media' => 'nullable|file|mimes:jpg,jpeg,png,pdf|max:2048',
         ]);
 

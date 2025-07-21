@@ -127,9 +127,10 @@ class GroupController extends Controller
         return response()->json(['message' => 'Tidak diizinkan mengedit grup ini.'], 403);
     }
 
+    
     // Validasi
     $validatedData = $request->validate([
-        'name' => 'nullable|string|max:100',
+        'name' => 'required|string|max:100',
         'description' => 'nullable|string',
         'avatar' => 'nullable|file|image|mimes:jpg,jpeg,png|max:2048',
         'cover' => 'nullable|file|image|mimes:jpg,jpeg,png|max:2048',
