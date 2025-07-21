@@ -107,11 +107,11 @@ Route::post('/email/verification-notification', function (Request $request) {
 Route::post('/forgot-password', function (Request $request) {
     $request->validate(['email' => 'required|email']);
     $status = Password::sendResetLink($request->only('email'));
-    if ($status === Password::PASSWORD_RESET) {
-        return response()->json(['message' => 'Password berhasil direset.'], 200);
-    } else {
-        return response()->json(['message' => 'Reset gagal, token invalid atau expired.'], 400);
-    }
+    return response()->json([
+        'message' => $status === Password::RESET_LINK_SENT
+            ? 'Link reset dikirim ke email.'
+            : 'Gagal mengirim reset link.'
+    ]);
 });
 
 Route::post('/reset-password', function (Request $request) {
