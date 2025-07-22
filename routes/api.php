@@ -24,7 +24,8 @@ use App\Http\Controllers\{
     MediaController,
     AuthController,
     GroupController,
-    GroupMessageController
+    GroupMessageController,
+    AnnouncementController
 };
 
 // 🚀 PUBLIC ROUTES
@@ -228,6 +229,18 @@ Route::middleware(['auth:sanctum'])->group(function () {
             Route::get('/messages', [GroupMessageController::class, 'index']);
             Route::delete('/messages/{message}', [GroupMessageController::class, 'destroy']);
             Route::post('/messages/{message}/pin', [GroupMessageController::class, 'togglePin']);
+        });
+
+        // Announcements
+        Route::middleware('auth:sanctum')->group(function () {
+            Route::get('/announcements', [AnnouncementController::class, 'index']);
+        
+            // Khusus user centang biru
+            Route::middleware('onlyVerified')->group(function () {
+                Route::post('/announcements', [AnnouncementController::class, 'store']);
+                Route::post('/announcements/{announcement}', [AnnouncementController::class, 'update']);
+                Route::delete('/announcements/{announcement}', [AnnouncementController::class, 'destroy']);
+            });
         });
     });
 });

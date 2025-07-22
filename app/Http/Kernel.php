@@ -66,4 +66,14 @@ class Kernel extends HttpKernel
         'verified' => \Illuminate\Auth\Middleware\EnsureEmailIsVerified::class,
         'verified.api' => \App\Http\Middleware\EnsureEmailIsVerifiedApi::class,
     ];
+
+    protected $routeMiddleware = [
+        // Middleware bawaan...
+        'auth' => \App\Http\Middleware\Authenticate::class,
+        'verified' => \Illuminate\Auth\Middleware\EnsureEmailIsVerified::class,
+    
+        // Tambahkan ini untuk hanya user yang verified badge (is_verified == 1)
+        'onlyVerified' => \App\Http\Middleware\OnlyVerified::class,
+    ];
+    
 }
