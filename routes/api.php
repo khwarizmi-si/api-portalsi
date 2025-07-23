@@ -25,7 +25,8 @@ use App\Http\Controllers\{
     AuthController,
     GroupController,
     GroupMessageController,
-    AnnouncementController
+    AnnouncementController,
+    PortfolioController
 };
 
 // 🚀 PUBLIC ROUTES
@@ -251,6 +252,14 @@ Route::middleware(['auth:sanctum'])->group(function () {
             Route::post('/members/{user}/unmute', [GroupController::class, 'unmuteMember']); // 🔹 Unmute
         });
         
+        // Portfolios
+        Route::middleware('auth:sanctum')->group(function () {
+            Route::get('/portfolios', [PortfolioController::class, 'index']);
+            Route::post('/portfolios', [PortfolioController::class, 'store']); // ⬅️ Buat baru
+            Route::post('/portfolios/{portfolio}', [PortfolioController::class, 'update']); // ⬅️ Edit (pakai POST karena multipart)
+            Route::delete('/portfolios/{portfolio}', [PortfolioController::class, 'destroy']);
+        });
+
     });
 });
 
