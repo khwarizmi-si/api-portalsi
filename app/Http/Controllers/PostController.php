@@ -9,64 +9,67 @@ use App\Models\Notification;
 use App\Models\User;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
+use Illuminate\Support\Facades\Storage;
 
 class PostController extends Controller
 {
+    // 🔍 List semua post
     public function index()
     {
         $posts = Post::with(['user', 'tags', 'mentions'])->latest()->get();
         return response()->json($posts);
     }
 
+    // 🔍 Tampilkan satu post
     public function show($id)
     {
         $post = Post::with(['user', 'tags', 'mentions'])->findOrFail($id);
         return response()->json($post);
     }
 
+    // 🆕 Buat post baru (media upload pakai file)
     public function store(Request $request)
     {
         $request->validate([
             'caption'     => 'nullable|string',
-            'media_url'   => 'required|string',
+            'media'       => 'required|file|mimes:jpg,jpeg,png,mp4,mov,webm|max:10240',
             'location'    => 'nullable|string',
-            'is_archived' => 'boolean',
-            'is_video'    => 'boolean',
+            'is_archived' => 'nullable|boolean',
+            'is_video'    => 'nullable|boolean',
         ]);
+
+        // 🗂 Simpan file ke storage
+        $mediaPath = $request->file('media')->store('uploads/posts', 'public');
+        $mediaUrl = asset('storage/' . $mediaPath);
 
         $post = Post::create([
             'user_id'     => Auth::id(),
             'caption'     => $request->caption,
-            'media_url'   => $request->media_url,
+            'media_url'   => $mediaUrl,
             'location'    => $request->location,
             'is_archived' => $request->is_archived ?? false,
             'is_video'    => $request->is_video ?? false,
         ]);
 
-        // ✅ Tangani tag dari caption (contoh: #hebat)
+        // 🎯 Tangani hashtag
         if ($request->filled('caption')) {
             preg_match_all('/#(\w+)/', $request->caption, $tags);
-            $tagNames = $tags[1];
-
-            foreach ($tagNames as $tagName) {
+            foreach ($tags[1] as $tagName) {
                 $tag = Tag::firstOrCreate(['tag_name' => $tagName]);
                 $post->tags()->attach($tag->tag_id);
             }
         }
 
-        // ✅ Tangani mention dari caption (contoh: @azzam)
+        // 👥 Tangani mention
         if ($request->filled('caption')) {
             preg_match_all('/@(\w+)/', $request->caption, $mentions);
-            $usernames = $mentions[1];
-
-            foreach ($usernames as $username) {
+            foreach ($mentions[1] as $username) {
                 $mentionedUser = User::where('username', $username)->first();
                 if ($mentionedUser && $mentionedUser->user_id !== Auth::id()) {
                     PostMention::create([
                         'post_id' => $post->post_id,
                         'mentioned_user_id' => $mentionedUser->user_id
                     ]);
-
                     Notification::create([
                         'recipient_id'     => $mentionedUser->user_id,
                         'type'             => 'mention',
@@ -85,6 +88,7 @@ class PostController extends Controller
         ], 201);
     }
 
+    // ✏️ Edit post (media optional)
     public function update(Request $request, $id)
     {
         $post = Post::findOrFail($id);
@@ -94,14 +98,30 @@ class PostController extends Controller
         }
 
         $request->validate([
-            'caption' => 'nullable|string',
-            'media_url' => 'nullable|string',
-            'location' => 'nullable|string',
-            'is_archived' => 'boolean',
-            'is_video' => 'boolean',
+            'caption'     => 'nullable|string',
+            'media'       => 'nullable|file|mimes:jpg,jpeg,png,mp4,mov,webm|max:10240',
+            'location'    => 'nullable|string',
+            'is_archived' => 'nullable|boolean',
+            'is_video'    => 'nullable|boolean',
         ]);
 
-        $post->update($request->only('caption', 'media_url', 'location', 'is_archived', 'is_video'));
+        // 🔄 Ganti file jika ada media baru
+        if ($request->hasFile('media')) {
+            // Hapus media lama (opsional)
+            if ($post->media_url) {
+                $path = str_replace(asset('storage') . '/', '', $post->media_url);
+                Storage::disk('public')->delete($path);
+            }
+            $mediaPath = $request->file('media')->store('uploads/posts', 'public');
+            $post->media_url = asset('storage/' . $mediaPath);
+        }
+
+        // Update field lainnya
+        $post->caption = $request->caption ?? $post->caption;
+        $post->location = $request->location ?? $post->location;
+        $post->is_archived = $request->is_archived ?? $post->is_archived;
+        $post->is_video = $request->is_video ?? $post->is_video;
+        $post->save();
 
         return response()->json([
             'message' => 'Post updated',
@@ -109,6 +129,7 @@ class PostController extends Controller
         ]);
     }
 
+    // 🗑 Hapus post
     public function destroy($id)
     {
         $post = Post::findOrFail($id);
@@ -117,18 +138,23 @@ class PostController extends Controller
             return response()->json(['error' => 'Unauthorized'], 403);
         }
 
+        // Hapus media
+        if ($post->media_url) {
+            $path = str_replace(asset('storage') . '/', '', $post->media_url);
+            Storage::disk('public')->delete($path);
+        }
+
         $post->delete();
 
         return response()->json(['message' => 'Post deleted']);
     }
 
-    // 📢 EXPLORE
+    // 🔎 Explore feed
     public function explore(Request $request)
     {
         $query = Post::with(['user', 'tags'])
             ->where('is_archived', false);
 
-        // 🔎 Filter berdasarkan hashtag
         if ($request->filled('tag')) {
             $tagName = $request->tag;
             $query->whereHas('tags', function ($q) use ($tagName) {
@@ -136,7 +162,6 @@ class PostController extends Controller
             });
         }
 
-        // 🔀 Sorting: popular / random / newest
         $sort = $request->input('sort', 'random');
 
         if ($sort === 'popular') {

@@ -6,28 +6,35 @@ use Illuminate\Http\Request;
 use App\Models\Story;
 use App\Models\StoryView;
 use Illuminate\Support\Facades\Auth;
+use Illuminate\Support\Facades\Storage;
 
 class StoryController extends Controller
 {
-    // ✅ Upload story
+    // ✅ Upload story (dengan file)
     public function store(Request $request)
     {
         $validated = $request->validate([
-            'media_url' => 'required|url',
-            'caption'   => 'nullable|string',
+            'media'   => 'required|file|mimes:jpg,jpeg,png,mp4,mov|max:51200', // max 50MB
+            'caption' => 'nullable|string',
         ]);
+
+        // Simpan file ke storage/app/public/uploads/stories
+        $path = $request->file('media')->store('uploads/stories', 'public');
+
+        // Generate URL yang bisa diakses publik
+        $mediaUrl = asset('storage/' . $path);
 
         $story = Story::create([
             'user_id'    => Auth::id(),
-            'media_url'  => $validated['media_url'],
+            'media_url'  => $mediaUrl,
             'caption'    => $validated['caption'] ?? null,
             'created_at' => now(),
-            'expires_at' => now()->addHours(24), // ⏳ 24 jam story
+            'expires_at' => now()->addHours(24),
         ]);
 
         return response()->json([
             'message' => 'Story berhasil dibuat.',
-            'story' => $story
+            'story'   => $story
         ], 201);
     }
 
@@ -53,6 +60,12 @@ class StoryController extends Controller
                       ->where('user_id', Auth::id())
                       ->firstOrFail();
 
+        // Hapus file dari storage jika ada
+        if ($story->media_url) {
+            $relativePath = str_replace(asset('storage') . '/', '', $story->media_url);
+            Storage::disk('public')->delete($relativePath);
+        }
+
         $story->delete();
 
         return response()->json(['message' => 'Story berhasil dihapus.']);
@@ -64,23 +77,21 @@ class StoryController extends Controller
         $user = Auth::user();
         $story = Story::findOrFail($id);
 
-        // 🚫 Tidak boleh melihat story sendiri
         if ($story->user_id == $user->user_id) {
             return response()->json([
                 'message' => 'Tidak dapat melihat story milik sendiri.'
             ], 403);
         }
 
-        // ✅ Cek apakah sudah melihat
         $alreadyViewed = StoryView::where('story_id', $story->story_id)
             ->where('viewer_id', $user->user_id)
             ->exists();
 
         if (!$alreadyViewed) {
             StoryView::create([
-                'story_id'   => $story->story_id,
-                'viewer_id'  => $user->user_id,
-                'viewed_at'  => now()
+                'story_id'  => $story->story_id,
+                'viewer_id' => $user->user_id,
+                'viewed_at' => now()
             ]);
         }
 

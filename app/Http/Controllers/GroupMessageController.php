@@ -29,8 +29,9 @@ class GroupMessageController extends Controller
         if ($request->hasFile('media')) {
             $media = $request->file('media');
             $path = $media->store('group-media', 'public');
-            $mediaUrl = Storage::url($path);
+            $mediaUrl = asset('storage/' . $path); // ✅ gunakan URL publik penuh
         }
+        
 
         $message = GroupMessage::create([
             'group_id' => $group->id,

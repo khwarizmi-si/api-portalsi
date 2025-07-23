@@ -178,7 +178,7 @@ Route::middleware(['auth:sanctum'])->group(function () {
     Route::middleware('verified.api')->group(function () {
         // Post CRUD
         Route::post('/posts', [PostController::class, 'store']);
-        Route::put('/posts/{id}', [PostController::class, 'update']);
+        Route::post('/posts/{id}/update', [PostController::class, 'update']);
         Route::delete('/posts/{id}', [PostController::class, 'destroy']);
 
         // Comments
@@ -204,24 +204,21 @@ Route::middleware(['auth:sanctum'])->group(function () {
         Route::post('/messages/send', [DirectMessageController::class, 'send']);
         Route::patch('/messages/{id}/read', [DirectMessageController::class, 'markAsRead']);
 
-        // Upload
-        Route::post('/upload', [MediaController::class, 'upload']);
-
         // Account
-        Route::put('/account/settings', [AccountController::class, 'update']);
+        Route::post('/account/settings', [AccountController::class, 'update']);
         Route::put('/account/password', [AccountController::class, 'updatePassword']);
         Route::delete('/account/delete', [AccountController::class, 'destroy']);
 
-        // 💬 Group Routes
+        // Groups CRUD
         Route::prefix('groups')->group(function () {
-            Route::post('/', [GroupController::class, 'store']); // Buat grup
+            Route::post('/', [GroupController::class, 'store']);
             Route::post('{group}/join', [GroupController::class, 'join']);
             Route::post('{group}/leave', [GroupController::class, 'leave']);
             Route::get('{group}', [GroupController::class, 'show']);
-            
-            // ✅ Mendukung PUT asli & POST + _method=PUT (form-data)
             Route::match(['put', 'post'], '{group}', [GroupController::class, 'update']);
+            Route::delete('{group}', [GroupController::class, 'destroy']); // ✅ tambahkan ini
         });
+        
 
         // Group Messages
         Route::prefix('groups/{group}')->group(function () {
@@ -242,6 +239,18 @@ Route::middleware(['auth:sanctum'])->group(function () {
                 Route::delete('/announcements/{announcement}', [AnnouncementController::class, 'destroy']);
             });
         });
+
+        // Group Members
+        Route::prefix('groups/{group}')->group(function () {
+            Route::post('/members', [GroupController::class, 'addMember']); // 🔹 Tambah anggota dari username/email
+            Route::get('/members', [GroupController::class, 'listMembers']); // 🔹 Lihat daftar anggota
+            Route::post('/members/{user}/promote', [GroupController::class, 'promoteToAdmin']); // 🔹 Jadikan admin
+            Route::post('/members/{user}/demote', [GroupController::class, 'demoteToMember']); // 🔹 Turunkan jadi member
+            Route::delete('/members/{user}', [GroupController::class, 'removeMember']); // 🔹 Kick anggota
+            Route::post('/members/{user}/mute', [GroupController::class, 'muteMember']); // 🔹 Mute
+            Route::post('/members/{user}/unmute', [GroupController::class, 'unmuteMember']); // 🔹 Unmute
+        });
+        
     });
 });
 

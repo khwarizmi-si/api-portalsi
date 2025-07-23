@@ -4,6 +4,7 @@ namespace App\Http\Controllers;
 
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
+use App\Models\User;
 use App\Models\Group;
 use App\Models\GroupMember;
 use Illuminate\Support\Facades\Log;
@@ -23,19 +24,27 @@ class GroupController extends Controller
         $request->validate([
             'name' => 'required|string|max:255',
             'description' => 'nullable|string',
-            'avatar_url' => 'nullable|url',
-            'cover_url' => 'nullable|url',
+            'avatar' => 'nullable|file|image|mimes:jpg,jpeg,png|max:2048',
+            'cover' => 'nullable|file|image|mimes:jpg,jpeg,png|max:2048',
         ]);
 
-        $group = Group::create([
-            'owner_id' => $user->user_id,
-            'name' => $request->name,
-            'description' => $request->description,
-            'avatar_url' => $request->avatar_url,
-            'cover_url' => $request->cover_url,
-        ]);
+        $group = new Group();
+        $group->owner_id = $user->user_id;
+        $group->name = $request->name;
+        $group->description = $request->description;
 
-        // Otomatis join sebagai admin
+        if ($request->hasFile('avatar')) {
+            $path = $request->file('avatar')->store('uploads/group-avatars', 'public');
+            $group->avatar_url = asset('storage/' . $path);
+        }
+
+        if ($request->hasFile('cover')) {
+            $path = $request->file('cover')->store('uploads/group-covers', 'public');
+            $group->cover_url = asset('storage/' . $path);
+        }
+
+        $group->save();
+
         GroupMember::create([
             'group_id' => $group->id,
             'user_id' => $user->user_id,
@@ -76,7 +85,6 @@ class GroupController extends Controller
             return response()->json(['message' => 'Kamu belum tergabung dalam grup ini.'], 404);
         }
 
-        // Admin tidak bisa keluar jika masih satu-satunya admin
         if ($membership->role === 'admin') {
             $adminCount = GroupMember::where('group_id', $group->id)->where('role', 'admin')->count();
             if ($adminCount <= 1) {
@@ -89,14 +97,11 @@ class GroupController extends Controller
         return response()->json(['message' => 'Berhasil keluar dari grup.']);
     }
 
-    // 🔹 4. Lihat detail grup
+    // 🔹 4. Detail grup
     public function show(Group $group)
     {
-        $group->load([
-            'owner:user_id,username',
-            'members.user:user_id,username'
-        ]);
-    
+        $group->load(['owner:user_id,username', 'members.user:user_id,username']);
+
         return response()->json([
             'group' => [
                 'id' => $group->id,
@@ -119,7 +124,7 @@ class GroupController extends Controller
         ]);
     }
 
-    // 🔹 5. Update grup (mendukung multipart/form-data dengan _method=PUT)
+    // 🔹 5. Update grup (PUT /groups/{group})
     public function update(Request $request, Group $group)
     {
         $user = auth()->user();
@@ -139,19 +144,13 @@ class GroupController extends Controller
         $group->description = $validatedData['description'] ?? $group->description;
 
         if ($request->hasFile('avatar')) {
-            Log::debug('Avatar file detected');
             $avatarPath = $request->file('avatar')->store('uploads/group-avatars', 'public');
             $group->avatar_url = asset('storage/' . $avatarPath);
-        } else {
-            Log::debug('Avatar file NOT detected');
         }
 
         if ($request->hasFile('cover')) {
-            Log::debug('Cover file detected');
             $coverPath = $request->file('cover')->store('uploads/group-covers', 'public');
             $group->cover_url = asset('storage/' . $coverPath);
-        } else {
-            Log::debug('Cover file NOT detected');
         }
 
         $group->save();
@@ -161,4 +160,198 @@ class GroupController extends Controller
             'group' => $group
         ]);
     }
+    
+    // 🔹 6. HAPUS GRUP (DELETE /groups/{group})
+    public function destroy(Group $group)
+{
+    $user = auth()->user();
+
+    if ($group->owner_id !== $user->user_id) {
+        return response()->json([
+            'message' => 'Kamu tidak diizinkan menghapus grup ini.'
+        ], 403);
+    }
+
+    // Hapus avatar & cover dari storage jika ada
+    if ($group->avatar_url) {
+        $this->hapusFileStorage($group->avatar_url);
+    }
+    if ($group->cover_url) {
+        $this->hapusFileStorage($group->cover_url);
+    }
+
+    $group->delete();
+
+    return response()->json([
+        'message' => 'Grup berhasil dihapus.'
+    ]);
+}
+
+// Fungsi bantu hapus file dari public disk
+private function hapusFileStorage($url)
+{
+    $path = str_replace(asset('storage') . '/', '', $url);
+    if (\Storage::disk('public')->exists($path)) {
+        \Storage::disk('public')->delete($path);
+    }
+}
+
+// 🔹 7. Tambah anggota (POST /groups/{group}/members)
+public function addMember(Request $request, Group $group)
+{
+    $request->validate([
+        'identifier' => 'required|string', // username atau email
+        'role' => 'nullable|in:member,admin',
+    ]);
+
+    $user = Auth::user();
+
+    // Hanya admin yang bisa menambah anggota
+    $isAdmin = GroupMember::where('group_id', $group->id)
+        ->where('user_id', $user->user_id)
+        ->where('role', 'admin')
+        ->exists();
+
+    if (!$isAdmin) {
+        return response()->json(['message' => 'Unauthorized'], 403);
+    }
+
+    // Temukan user dari username atau email
+    $target = User::where('username', $request->identifier)
+        ->orWhere('email', $request->identifier)
+        ->first();
+
+    if (!$target) {
+        return response()->json(['message' => 'User not found'], 404);
+    }
+
+    // Cegah duplikat anggota
+    if (GroupMember::where('group_id', $group->id)->where('user_id', $target->user_id)->exists()) {
+        return response()->json(['message' => 'User already joined'], 409);
+    }
+
+    GroupMember::create([
+        'group_id' => $group->id,
+        'user_id' => $target->user_id,
+        'role' => $request->role ?? 'member',
+        'joined_at' => now(),
+        'is_muted' => false,
+    ]);
+
+    return response()->json(['message' => 'User added to group'], 201);
+}
+
+public function listMembers(Group $group)
+{
+    $members = GroupMember::with('user')
+        ->where('group_id', $group->id)
+        ->get()
+        ->map(function ($member) {
+            return [
+                'user_id' => $member->user_id,
+                'name' => $member->user->name,
+                'username' => $member->user->username,
+                'role' => $member->role,
+                'joined_at' => $member->joined_at,
+                'is_muted' => (bool) $member->is_muted,
+            ];
+        });
+
+    return response()->json($members);
+}
+
+public function promoteToAdmin(Group $group, User $user)
+{
+    return $this->updateRole($group, $user, 'admin');
+}
+
+public function demoteToMember(Group $group, User $user)
+{
+    return $this->updateRole($group, $user, 'member');
+}
+
+protected function updateRole(Group $group, User $target, string $role)
+{
+    $actor = Auth::user();
+
+    $isAdmin = GroupMember::where('group_id', $group->id)
+        ->where('user_id', $actor->user_id)
+        ->where('role', 'admin')
+        ->exists();
+
+    if (!$isAdmin) {
+        return response()->json(['message' => 'Unauthorized'], 403);
+    }
+
+    $member = GroupMember::where('group_id', $group->id)
+        ->where('user_id', $target->user_id)
+        ->first();
+
+    if (!$member) {
+        return response()->json(['message' => 'User is not a member'], 404);
+    }
+
+    $member->role = $role;
+    $member->save();
+
+    return response()->json(['message' => 'Role updated']);
+}
+
+public function removeMember(Group $group, User $user)
+{
+    $actor = Auth::user();
+
+    $isAdmin = GroupMember::where('group_id', $group->id)
+        ->where('user_id', $actor->user_id)
+        ->where('role', 'admin')
+        ->exists();
+
+    if (!$isAdmin) {
+        return response()->json(['message' => 'Unauthorized'], 403);
+    }
+
+    $deleted = GroupMember::where('group_id', $group->id)
+        ->where('user_id', $user->user_id)
+        ->delete();
+
+    return response()->json(['message' => $deleted ? 'Removed' : 'Not found']);
+}
+
+public function muteMember(Group $group, User $user)
+{
+    return $this->toggleMute($group, $user, true);
+}
+
+public function unmuteMember(Group $group, User $user)
+{
+    return $this->toggleMute($group, $user, false);
+}
+
+protected function toggleMute(Group $group, User $target, bool $mute)
+{
+    $actor = Auth::user();
+
+    $isAdmin = GroupMember::where('group_id', $group->id)
+        ->where('user_id', $actor->user_id)
+        ->where('role', 'admin')
+        ->exists();
+
+    if (!$isAdmin) {
+        return response()->json(['message' => 'Unauthorized'], 403);
+    }
+
+    $member = GroupMember::where('group_id', $group->id)
+        ->where('user_id', $target->user_id)
+        ->first();
+
+    if (!$member) {
+        return response()->json(['message' => 'User not found in group'], 404);
+    }
+
+    $member->is_muted = $mute;
+    $member->save();
+
+    return response()->json(['message' => $mute ? 'User muted' : 'User unmuted']);
+}
+
 }
