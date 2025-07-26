@@ -30,7 +30,7 @@ class CommentController extends Controller
             'parent_comment_id' => $request->input('parent_comment_id'),
         ]);
 
-        // 🔔 Notifikasi COMMENT ke pemilik POST wkwk
+        // 🔔 Notifikasi COMMENT ke pemilik POST wkwkwk
         if (!$request->filled('parent_comment_id') && $post->user_id != $user_id) {
             Notification::create([
                 'recipient_id'     => $post->user_id,
