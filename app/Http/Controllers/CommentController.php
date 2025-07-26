@@ -22,7 +22,7 @@ class CommentController extends Controller
         $user_id = Auth::id();
         $post = Post::findOrFail($post_id);
 
-        // Simpan komentar
+        // Simpan komentar nih
         $comment = Comment::create([
             'post_id' => $post_id,
             'user_id' => $user_id,
