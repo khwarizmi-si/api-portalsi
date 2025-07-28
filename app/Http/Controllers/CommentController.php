@@ -82,4 +82,22 @@ class CommentController extends Controller
             'data' => $comment
         ], 201);
     }
+
+    // 🔍 Ambil semua komentar & reply dari sebuah post
+public function getCommentsByPost($post_id)
+{
+    $post = Post::findOrFail($post_id);
+
+    $comments = $post->comments()
+        ->with(['user', 'replies.user']) // eager load user dan replies
+        ->whereNull('parent_comment_id') // hanya ambil komentar utama
+        ->orderBy('created_at', 'asc')
+        ->get();
+
+    return response()->json([
+        'post_id' => $post_id,
+        'comments' => $comments
+    ]);
+}
+
 }

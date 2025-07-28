@@ -165,7 +165,6 @@ Route::middleware(['auth:sanctum'])->group(function () {
     // Public Feed
     Route::get('/posts', [PostController::class, 'index']);
     Route::get('/posts/{id}', [PostController::class, 'show']);
-    Route::get('/posts/{post_id}/comments', [CommentController::class, 'index']);
     Route::get('/posts/{post_id}/likes', [LikeController::class, 'index']);
     Route::get('/users/{id}/followers', [FollowController::class, 'followers']);
     Route::get('/users/{id}/following', [FollowController::class, 'following']);
@@ -183,6 +182,7 @@ Route::middleware(['auth:sanctum'])->group(function () {
         Route::delete('/posts/{id}', [PostController::class, 'destroy']);
 
         // Comments
+        Route::get('/posts/{post_id}/comments', [CommentController::class, 'getCommentsByPost']);
         Route::post('/posts/{post_id}/comments', [CommentController::class, 'store']);
         Route::put('/comments/{id}', [CommentController::class, 'update']);
         Route::delete('/comments/{id}', [CommentController::class, 'destroy']);
