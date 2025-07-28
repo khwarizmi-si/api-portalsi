@@ -11,7 +11,7 @@ use App\Models\User;
 
 class AccountController extends Controller
 {
-    // 🔧 Update akun
+    // 🔧 UPDATE AKUN
     public function update(Request $request)
     {
         $user = Auth::user();
