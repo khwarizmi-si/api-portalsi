@@ -100,4 +100,55 @@ public function getCommentsByPost($post_id)
     ]);
 }
 
+// ✏️ Update komentar / reply
+public function update(Request $request, $comment_id)
+{
+    $request->validate([
+        'content' => 'required|string'
+    ]);
+
+    $comment = Comment::findOrFail($comment_id);
+
+    // Hanya user yang membuat komentar yang boleh mengedit
+    if ($comment->user_id !== Auth::id()) {
+        return response()->json([
+            'message' => 'Kamu tidak punya izin untuk mengedit komentar ini.'
+        ], 403);
+    }
+
+    $comment->content = $request->input('content');
+    $comment->updated_at = now();
+    $comment->save();
+
+    return response()->json([
+        'message' => 'Komentar berhasil diperbarui.',
+        'data' => $comment
+    ]);
+}
+
+// 🗑️ Hapus komentar / reply
+public function destroy($comment_id)
+{
+    $comment = Comment::findOrFail($comment_id);
+
+    // Hanya user yang membuat komentar yang boleh menghapus
+    if ($comment->user_id !== Auth::id()) {
+        return response()->json([
+            'message' => 'Kamu tidak punya izin untuk menghapus komentar ini.'
+        ], 403);
+    }
+
+    // Jika komentar utama, hapus juga reply-nya
+    if ($comment->parent_comment_id === null) {
+        Comment::where('parent_comment_id', $comment->comment_id)->delete();
+    }
+
+    $comment->delete();
+
+    return response()->json([
+        'message' => 'Komentar berhasil dihapus.'
+    ]);
+}
+
+
 }
