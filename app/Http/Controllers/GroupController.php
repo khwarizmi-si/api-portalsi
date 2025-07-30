@@ -18,7 +18,7 @@ class GroupController extends Controller
         $user = Auth::user();
 
         if (!$user->is_verified) {
-            return response()->json(['message' => 'Hanya user terverifikasi yang bisa membuat grup.'], 403);
+            return response()->json(['message' => 'Hanya user terverifikasi (centang biru) yang bisa membuat grup.'], 403);
         }
 
         $request->validate([
