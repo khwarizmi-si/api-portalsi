@@ -68,4 +68,23 @@ class DirectMessageController extends Controller
 
         return response()->json(['message' => 'Pesan ditandai sebagai telah dibaca.']);
     }
+
+    // ✅ Hapus pesan (oleh pengirim saja)
+public function destroy($id)
+{
+    $message = DirectMessage::where('message_id', $id)
+        ->where('sender_id', Auth::id()) // hanya pengirim yang boleh menghapus
+        ->firstOrFail();
+
+    // Hapus file media jika ada
+    if ($message->media_url) {
+        $path = str_replace(asset('storage') . '/', '', $message->media_url);
+        Storage::disk('public')->delete($path);
+    }
+
+    $message->delete();
+
+    return response()->json(['message' => 'Pesan berhasil dihapus.']);
+}
+
 }

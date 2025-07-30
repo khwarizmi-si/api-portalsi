@@ -204,6 +204,7 @@ Route::middleware(['auth:sanctum'])->group(function () {
         // DM
         Route::post('/messages/send', [DirectMessageController::class, 'send']);
         Route::patch('/messages/{id}/read', [DirectMessageController::class, 'markAsRead']);
+        Route::delete('/messages/{id}', [DirectMessageController::class, 'destroy']);
 
         // Account
         Route::post('/account/settings', [AccountController::class, 'update']);
