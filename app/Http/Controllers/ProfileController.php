@@ -12,37 +12,37 @@ class ProfileController extends Controller
     // ✅ Public Profile
     public function show($id)
     {
-        $authUser = Auth::user(); // Ambil user yang login
+        $authUser = Auth::user(); // User yang sedang login
         $user = User::withCount(['followers', 'following', 'posts'])
                     ->findOrFail($id);
     
+        $canViewPosts = false;
+    
         // 🛡️ Cek apakah akun privat
-        if ($user->is_private) {
-            $isSelf = $authUser && $authUser->user_id === $user->user_id;
+        if (!$user->is_private) {
+            $canViewPosts = true; // Public account, siapa pun bisa lihat post
+        } elseif ($authUser && $authUser->user_id === $user->user_id) {
+            $canViewPosts = true; // Diri sendiri, boleh lihat post
+        } elseif ($authUser) {
+            // Cek apakah sudah jadi follower dengan status accepted
+            $isAcceptedFollower = $user->followers()
+                ->where('users.user_id', $authUser->user_id)
+                ->wherePivot('status', 'accepted')
+                ->exists();
     
-            $isAcceptedFollower = false;
-    
-            if ($authUser && !$isSelf) {
-                $isAcceptedFollower = $user->followers()
-                    ->where('users.user_id', $authUser->user_id)
-                    ->wherePivot('status', 'accepted')
-                    ->exists();
-            }
-    
-            if (!$isSelf && !$isAcceptedFollower) {
-                // ❌ Bukan diri sendiri dan bukan follower accepted
-                return response()->json([
-                    'message' => 'Akun ini privat. Anda tidak dapat melihat postingan.'
-                ], 403);
+            if ($isAcceptedFollower) {
+                $canViewPosts = true;
             }
         }
     
-        // ✅ Kalau tidak privat, atau yang lihat adalah accepted follower / diri sendiri
-        $recentPosts = $user->posts()
-            ->latest()
-            ->take(5)
-            ->select('post_id', 'caption', 'media_url', 'created_at')
-            ->get();
+        // ✅ Ambil postingan hanya jika boleh lihat
+        $recentPosts = $canViewPosts
+            ? $user->posts()
+                ->latest()
+                ->take(5)
+                ->select('post_id', 'caption', 'media_url', 'created_at')
+                ->get()
+            : [];
     
         return response()->json([
             'user_id'             => $user->user_id,
@@ -56,9 +56,11 @@ class ProfileController extends Controller
             'followers_count'     => $user->followers_count,
             'following_count'     => $user->following_count,
             'posts_count'         => $user->posts_count,
-            'recent_posts'        => $recentPosts
+            'recent_posts'        => $recentPosts,
+            'message'             => $canViewPosts ? null : 'Postingan disembunyikan karena akun ini privat.',
         ]);
     }
+    
     
 
     // ✅ Update profile (auth user)
