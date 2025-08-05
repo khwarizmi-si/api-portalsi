@@ -12,15 +12,38 @@ class ProfileController extends Controller
     // ✅ Public Profile
     public function show($id)
     {
+        $authUser = Auth::user(); // Ambil user yang login
         $user = User::withCount(['followers', 'following', 'posts'])
                     ->findOrFail($id);
-
+    
+        // 🛡️ Cek apakah akun privat
+        if ($user->is_private) {
+            $isSelf = $authUser && $authUser->user_id === $user->user_id;
+    
+            $isAcceptedFollower = false;
+    
+            if ($authUser && !$isSelf) {
+                $isAcceptedFollower = $user->followers()
+                    ->where('users.user_id', $authUser->user_id)
+                    ->wherePivot('status', 'accepted')
+                    ->exists();
+            }
+    
+            if (!$isSelf && !$isAcceptedFollower) {
+                // ❌ Bukan diri sendiri dan bukan follower accepted
+                return response()->json([
+                    'message' => 'Akun ini privat. Anda tidak dapat melihat postingan.'
+                ], 403);
+            }
+        }
+    
+        // ✅ Kalau tidak privat, atau yang lihat adalah accepted follower / diri sendiri
         $recentPosts = $user->posts()
             ->latest()
             ->take(5)
             ->select('post_id', 'caption', 'media_url', 'created_at')
             ->get();
-
+    
         return response()->json([
             'user_id'             => $user->user_id,
             'username'            => $user->username,
@@ -36,6 +59,7 @@ class ProfileController extends Controller
             'recent_posts'        => $recentPosts
         ]);
     }
+    
 
     // ✅ Update profile (auth user)
     public function update(Request $request)
