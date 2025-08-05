@@ -118,4 +118,86 @@ class FollowController extends Controller
             'following' => $following
         ]);
     }
+
+    // ✅ TERIMA PERMINTAAN FOLLOW
+public function acceptFollowRequest($followerId)
+{
+    $authUser = Auth::user();
+
+    // Hanya akun private yang boleh melakukan aksi ini
+    if (!$authUser->is_private) {
+        return response()->json(['message' => 'Akun Anda bukan private.'], 403);
+    }
+
+    // Cek apakah ada request follow pending
+    $exists = $authUser->followers()
+        ->wherePivot('follower_id', $followerId)
+        ->wherePivot('status', 'pending')
+        ->exists();
+
+    if (!$exists) {
+        return response()->json(['message' => 'Tidak ada permintaan follow yang pending dari user ini.'], 404);
+    }
+
+    // Update status ke accepted
+    $authUser->followers()->updateExistingPivot($followerId, ['status' => 'accepted']);
+
+    // Kirim notifikasi ke follower bahwa follow sudah diterima
+    Notification::create([
+        'recipient_id'     => $followerId,
+        'type'             => 'follow_accepted',
+        'related_user_id'  => $authUser->user_id,
+        'related_post_id'  => null,
+        'created_at'       => now(),
+        'is_read'          => false,
+    ]);
+
+    return response()->json(['message' => 'Permintaan follow diterima.'], 200);
+}
+
+// ❌ TOLAK PERMINTAAN FOLLOW
+public function rejectFollowRequest($followerId)
+{
+    $authUser = Auth::user();
+
+    if (!$authUser->is_private) {
+        return response()->json(['message' => 'Akun Anda bukan private.'], 403);
+    }
+
+    // Cek apakah ada request follow pending
+    $exists = $authUser->followers()
+        ->wherePivot('follower_id', $followerId)
+        ->wherePivot('status', 'pending')
+        ->exists();
+
+    if (!$exists) {
+        return response()->json(['message' => 'Tidak ada permintaan follow yang pending dari user ini.'], 404);
+    }
+
+    // Hapus dari tabel follows
+    $authUser->followers()->detach($followerId);
+
+    return response()->json(['message' => 'Permintaan follow ditolak.'], 200);
+}
+
+public function pendingFollowRequests()
+{
+    $authUser = Auth::user();
+
+    if (!$authUser->is_private) {
+        return response()->json(['message' => 'Akun Anda bukan private.'], 403);
+    }
+
+    $pending = $authUser->followers()
+        ->wherePivot('status', 'pending')
+        ->select('users.user_id', 'users.username', 'users.full_name')
+        ->get();
+
+    return response()->json([
+        'pending_requests_count' => $pending->count(),
+        'pending_requests' => $pending
+    ]);
+}
+
+
 }

@@ -261,6 +261,14 @@ Route::middleware(['auth:sanctum'])->group(function () {
             Route::delete('/portfolios/{portfolio}', [PortfolioController::class, 'destroy']);
         });
 
+        // Acc atau tidak Followers ketika akun private
+        Route::middleware('auth:sanctum')->group(function () {
+            Route::post('/followers/{follower_id}/accept', [FollowController::class, 'acceptFollowRequest']);
+            Route::post('/followers/{follower_id}/reject', [FollowController::class, 'rejectFollowRequest']);
+            Route::get('/followers/pending', [FollowController::class, 'pendingFollowRequests']);
+        });
+        
+
     });
 });
 
