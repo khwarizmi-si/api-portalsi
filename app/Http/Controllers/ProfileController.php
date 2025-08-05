@@ -57,7 +57,7 @@ class ProfileController extends Controller
             'following_count'     => $user->following_count,
             'posts_count'         => $user->posts_count,
             'recent_posts'        => $recentPosts,
-            'message'             => $canViewPosts ? null : 'Postingan disembunyikan karena akun ini privat.',
+            'message'             => $canViewPosts ? null : 'Akun private, follow untuk melihat postingan.',
         ]);
     }
     
