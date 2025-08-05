@@ -26,42 +26,52 @@ class FollowController extends Controller
             return response()->json(['message' => 'Sudah di-follow.'], 409);
         }
 
-        // ➕ Lakukan follow
+        // 🟡 Tentukan status follow berdasarkan privasi user
+        $status = $userToFollow->is_private ? 'pending' : 'accepted';
+
+        // ➕ Lakukan follow dengan status
         $authUser->following()->attach($userToFollow->user_id, [
             'followed_at' => now(),
-            'status' => 'pending'
+            'status' => $status
         ]);
 
-        // 🔔 Cek delay notifikasi (maks 1x per 60 detik)
-        $lastNotif = Notification::where('recipient_id', $userToFollow->user_id)
-            ->where('related_user_id', $authUser->user_id)
-            ->where('type', 'follow')
-            ->latest()
-            ->first();
+        // 🔔 Kirim notifikasi hanya jika statusnya accepted
+        if ($status === 'accepted') {
+            $lastNotif = Notification::where('recipient_id', $userToFollow->user_id)
+                ->where('related_user_id', $authUser->user_id)
+                ->where('type', 'follow')
+                ->latest()
+                ->first();
 
-        $allowNotify = true;
+            $allowNotify = true;
 
-        if ($lastNotif) {
-            $lastCreated = Carbon::parse($lastNotif->created_at);
-            $diff = now()->diffInSeconds($lastCreated);
+            if ($lastNotif) {
+                $lastCreated = Carbon::parse($lastNotif->created_at);
+                $diff = now()->diffInSeconds($lastCreated);
 
-            if ($diff < 60) {
-                $allowNotify = false;
+                if ($diff < 60) {
+                    $allowNotify = false;
+                }
+            }
+
+            if ($allowNotify) {
+                Notification::create([
+                    'recipient_id'     => $userToFollow->user_id,
+                    'type'             => 'follow',
+                    'related_user_id'  => $authUser->user_id,
+                    'related_post_id'  => null,
+                    'created_at'       => now(),
+                    'is_read'          => false,
+                ]);
             }
         }
 
-        if ($allowNotify) {
-            Notification::create([
-                'recipient_id'     => $userToFollow->user_id,
-                'type'             => 'follow',
-                'related_user_id'  => $authUser->user_id,
-                'related_post_id'  => null,
-                'created_at'       => now(),
-                'is_read'          => false,
-            ]);
-        }
-
-        return response()->json(['message' => 'Berhasil follow user.'], 201);
+        return response()->json([
+            'message' => $status === 'accepted'
+                ? 'Berhasil follow user.'
+                : 'Permintaan follow dikirim. Menunggu konfirmasi.',
+            'status' => $status
+        ], 201);
     }
 
     // ✅ UNFOLLOW USER
@@ -84,6 +94,7 @@ class FollowController extends Controller
     {
         $user = User::findOrFail($id);
         $followers = $user->followers()
+            ->wherePivot('status', 'accepted')
             ->select('users.user_id', 'username', 'full_name')
             ->get();
 
@@ -98,6 +109,7 @@ class FollowController extends Controller
     {
         $user = User::findOrFail($id);
         $following = $user->following()
+            ->wherePivot('status', 'accepted')
             ->select('users.user_id', 'username', 'full_name')
             ->get();
 

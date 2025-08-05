@@ -87,17 +87,38 @@ class User extends Authenticatable implements MustVerifyEmail
         return $this->hasMany(Like::class, 'user_id');
     }
 
-    public function followers()
-    {
-        return $this->belongsToMany(User::class, 'follows', 'followed_id', 'follower_id')
-            ->withPivot('followed_at', 'status');
-    }
+// User.php
 
-    public function following()
-    {
-        return $this->belongsToMany(User::class, 'follows', 'follower_id', 'followed_id')
-            ->withPivot('followed_at', 'status');
-    }
+public function followers()
+{
+    return $this->belongsToMany(User::class, 'follows', 'followed_id', 'follower_id')
+        ->withPivot('followed_at', 'status')
+        ->withTimestamps();
+}
+
+public function following()
+{
+    return $this->belongsToMany(User::class, 'follows', 'follower_id', 'followed_id')
+        ->withPivot('followed_at', 'status')
+        ->withTimestamps();
+}
+
+// 🔍 Optional (tapi berguna jika kamu sering query berdasarkan status):
+public function pendingFollowers()
+{
+    return $this->followers()->wherePivot('status', 'pending');
+}
+
+public function acceptedFollowers()
+{
+    return $this->followers()->wherePivot('status', 'accepted');
+}
+
+public function blockedFollowers()
+{
+    return $this->followers()->wherePivot('status', 'blocked');
+}
+
 
     public function stories()
     {
