@@ -39,21 +39,25 @@ class StoryController extends Controller
     }
 
     // ✅ Ambil story dari user yang diikuti dan diri sendiri
-    public function feed()
-    {
-        $user = Auth::user();
+// ✅ Ambil story dari user yang diikuti dan diri sendiri, lengkap dengan user info
+public function feed()
+{
+    $user = Auth::user();
 
-        // Ambil ID user yang diikuti + diri sendiri
-        $followedIds = $user->following()->pluck('users.user_id')->toArray();
-        $allIds = array_merge($followedIds, [$user->user_id]);
+    // Ambil ID user yang diikuti + diri sendiri
+    $followedIds = $user->following()->pluck('users.user_id')->toArray();
+    $allIds = array_merge($followedIds, [$user->user_id]);
 
-        $stories = Story::whereIn('user_id', $allIds)
-            ->where('expires_at', '>', now())
-            ->latest()
-            ->get();
+    // Ambil stories + info user: username & profile_picture_url
+    $stories = Story::with(['user:user_id,username,profile_picture_url'])
+        ->whereIn('user_id', $allIds)
+        ->where('expires_at', '>', now())
+        ->latest()
+        ->get();
 
-        return response()->json($stories);
-    }
+    return response()->json($stories);
+}
+
 
     // ✅ Hapus story milik sendiri
     public function destroy($id)
