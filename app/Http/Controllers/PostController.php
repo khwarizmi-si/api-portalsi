@@ -21,12 +21,12 @@ class PostController extends Controller
         $posts = Post::with(['user', 'tags', 'mentions'])
             ->whereHas('user', function ($query) use ($authUser) {
                 $query->where(function ($q) use ($authUser) {
-                    $q->where('is_private', 0); // Public account
+                    $q->where('is_private', 0); // Akun publik
                     if ($authUser) {
                         $q->orWhere('user_id', $authUser->user_id); // Diri sendiri
                         $q->orWhereHas('followers', function ($fq) use ($authUser) {
                             $fq->where('follower_id', $authUser->user_id)
-                               ->wherePivot('status', 'accepted'); // Follower accepted
+                               ->where('status', 'accepted'); // ← Ini yang benar
                         });
                     }
                 });
@@ -36,6 +36,7 @@ class PostController extends Controller
     
         return response()->json($posts);
     }
+    
     
 
     // 🔍 Tampilkan satu post
