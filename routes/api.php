@@ -30,6 +30,7 @@ use App\Http\Controllers\{
 };
 
 // 🚀 PUBLIC ROUTES
+// 🚀 PUBLIC ROUTES
 Route::post('/register', function (Request $request) {
     $request->validate([
         'username' => [
@@ -53,9 +54,9 @@ Route::post('/register', function (Request $request) {
     }
 
     $user = User::create([
-        'username'            => $request->username,
+        'username'            => strtolower($request->username), // 👈 Lowercase username
         'full_name'           => $request->full_name,
-        'email'               => $request->email,
+        'email'               => strtolower($request->email),     // 👈 Lowercase email
         'password_hash'       => bcrypt($request->password),
         'role'                => $request->role ?? 'student',
         'profile_picture_url' => 'https://api.portalsi.com/storage/default.png'
