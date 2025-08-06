@@ -10,36 +10,21 @@ use Illuminate\Support\Facades\Hash;
 class ProfileController extends Controller
 {
     // ✅ Public Profile
-    public function show($id)
+    public function show(Request $request, $username)
     {
-        $authUser = Auth::user(); // User yang sedang login
-        $user = User::withCount(['followers', 'following', 'posts'])
-                    ->findOrFail($id);
+        $authUser = Auth::user();
     
-        $canViewPosts = false;
+        $user = User::whereRaw('LOWER(username) = ?', [strtolower($username)])
+            ->withCount(['followers', 'following', 'posts'])
+            ->with('followers')
+            ->firstOrFail();
     
-        // 🛡️ Cek apakah akun privat
-        if (!$user->is_private) {
-            $canViewPosts = true; // Public account, siapa pun bisa lihat post
-        } elseif ($authUser && $authUser->user_id === $user->user_id) {
-            $canViewPosts = true; // Diri sendiri, boleh lihat post
-        } elseif ($authUser) {
-            // Cek apakah sudah jadi follower dengan status accepted
-            $isAcceptedFollower = $user->followers()
-                ->where('users.user_id', $authUser->user_id)
-                ->wherePivot('status', 'accepted')
-                ->exists();
+        $canViewPosts = !$user->is_private ||
+            ($authUser && ($authUser->user_id === $user->user_id || $user->followers->contains($authUser->user_id)));
     
-            if ($isAcceptedFollower) {
-                $canViewPosts = true;
-            }
-        }
-    
-        // ✅ Ambil postingan hanya jika boleh lihat
         $recentPosts = $canViewPosts
             ? $user->posts()
                 ->latest()
-                ->take(5)
                 ->select('post_id', 'caption', 'media_url', 'created_at')
                 ->get()
             : [];
@@ -60,6 +45,8 @@ class ProfileController extends Controller
             'message'             => $canViewPosts ? null : 'Akun private, follow untuk melihat postingan.',
         ]);
     }
+    
+    
     
     
 

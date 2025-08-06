@@ -146,7 +146,7 @@ Route::post('/reset-password', function (Request $request) {
     ], $status === Password::PASSWORD_RESET ? 200 : 400);
 });
 
-Route::get('/profile/{id}', [ProfileController::class, 'show']);
+Route::get('/profile/{username}', [ProfileController::class, 'show']);
 
 // 🔐 PROTECTED ROUTES
 Route::middleware(['auth:sanctum'])->group(function () {

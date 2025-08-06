@@ -16,16 +16,53 @@ class PostController extends Controller
     // 🔍 List semua post
     public function index()
     {
-        $posts = Post::with(['user', 'tags', 'mentions'])->latest()->get();
+        $authUser = Auth::user();
+    
+        $posts = Post::with(['user', 'tags', 'mentions'])
+            ->whereHas('user', function ($query) use ($authUser) {
+                $query->where(function ($q) use ($authUser) {
+                    $q->where('is_private', 0); // Public account
+                    if ($authUser) {
+                        $q->orWhere('user_id', $authUser->user_id); // Diri sendiri
+                        $q->orWhereHas('followers', function ($fq) use ($authUser) {
+                            $fq->where('follower_id', $authUser->user_id)
+                               ->wherePivot('status', 'accepted'); // Follower accepted
+                        });
+                    }
+                });
+            })
+            ->latest()
+            ->get();
+    
         return response()->json($posts);
     }
+    
 
     // 🔍 Tampilkan satu post
     public function show($id)
     {
+        $authUser = Auth::user();
         $post = Post::with(['user', 'tags', 'mentions'])->findOrFail($id);
+        $owner = $post->user;
+    
+        $canView = !$owner->is_private ||
+            ($authUser && (
+                $authUser->user_id === $owner->user_id ||
+                $owner->followers()
+                    ->where('follower_id', $authUser->user_id)
+                    ->wherePivot('status', 'accepted')
+                    ->exists()
+            ));
+    
+        if (!$canView) {
+            return response()->json([
+                'message' => 'Post ini hanya bisa dilihat oleh followers yang telah diterima.'
+            ], 403);
+        }
+    
         return response()->json($post);
     }
+    
 
     // 🆕 Buat post baru (media upload pakai file)
     public function store(Request $request)
