@@ -38,14 +38,16 @@ class StoryController extends Controller
         ], 201);
     }
 
-    // ✅ Ambil story dari user yang diikuti
+    // ✅ Ambil story dari user yang diikuti dan diri sendiri
     public function feed()
     {
         $user = Auth::user();
 
-        $followedIds = $user->following()->pluck('users.user_id');
+        // Ambil ID user yang diikuti + diri sendiri
+        $followedIds = $user->following()->pluck('users.user_id')->toArray();
+        $allIds = array_merge($followedIds, [$user->user_id]);
 
-        $stories = Story::whereIn('user_id', $followedIds)
+        $stories = Story::whereIn('user_id', $allIds)
             ->where('expires_at', '>', now())
             ->latest()
             ->get();
@@ -71,32 +73,49 @@ class StoryController extends Controller
         return response()->json(['message' => 'Story berhasil dihapus.']);
     }
 
-    // ✅ Lihat story (mencatat view)
+    // ✅ Lihat story (boleh lihat sendiri tapi tidak dicatat view)
     public function view($id)
     {
         $user = Auth::user();
         $story = Story::findOrFail($id);
 
-        if ($story->user_id == $user->user_id) {
+        // Jika story bukan milik sendiri, catat view
+        if ($story->user_id !== $user->user_id) {
+            $alreadyViewed = StoryView::where('story_id', $story->story_id)
+                ->where('viewer_id', $user->user_id)
+                ->exists();
+
+            if (!$alreadyViewed) {
+                StoryView::create([
+                    'story_id'  => $story->story_id,
+                    'viewer_id' => $user->user_id,
+                    'viewed_at' => now()
+                ]);
+            }
+
             return response()->json([
-                'message' => 'Tidak dapat melihat story milik sendiri.'
-            ], 403);
-        }
-
-        $alreadyViewed = StoryView::where('story_id', $story->story_id)
-            ->where('viewer_id', $user->user_id)
-            ->exists();
-
-        if (!$alreadyViewed) {
-            StoryView::create([
-                'story_id'  => $story->story_id,
-                'viewer_id' => $user->user_id,
-                'viewed_at' => now()
+                'message' => $alreadyViewed
+                    ? 'Story sudah pernah dilihat.'
+                    : 'Story berhasil dilihat dan dicatat.'
             ]);
         }
 
+        // Jika melihat story sendiri, tetap bisa, tapi tidak dicatat
         return response()->json([
-            'message' => $alreadyViewed ? 'Sudah pernah melihat story.' : 'Story berhasil dilihat.'
+            'message' => 'Story milik sendiri berhasil dilihat (tanpa dicatat).'
         ]);
+    }
+
+    // ✅ (Opsional) Ambil semua story milik sendiri
+    public function myStories()
+    {
+        $user = Auth::user();
+
+        $stories = Story::where('user_id', $user->user_id)
+            ->where('expires_at', '>', now())
+            ->latest()
+            ->get();
+
+        return response()->json($stories);
     }
 }
