@@ -53,11 +53,12 @@ Route::post('/register', function (Request $request) {
     }
 
     $user = User::create([
-        'username'      => $request->username,
-        'full_name'     => $request->full_name,
-        'email'         => $request->email,
-        'password_hash' => bcrypt($request->password),
-        'role'          => $request->role ?? 'student'
+        'username'            => $request->username,
+        'full_name'           => $request->full_name,
+        'email'               => $request->email,
+        'password_hash'       => bcrypt($request->password),
+        'role'                => $request->role ?? 'student',
+        'profile_picture_url' => 'https://api.portalsi.com/storage/default.png'
     ]);
 
     $user->sendEmailVerificationNotification();
