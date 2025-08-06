@@ -32,7 +32,7 @@ class AccountController extends Controller
             'username.regex' => 'Username hanya boleh berisi huruf, angka, titik, dan underscore tanpa spasi atau simbol lain.'
         ]);
     
-        // ✅ Upload profile picture (jika ada)
+        // ✅ Upload profile picture (jika ada YA)
         if ($request->hasFile('profile_picture')) {
             // Hapus file lama jika ada dan dari folder yang sama
             if ($user->profile_picture_url && str_contains($user->profile_picture_url, '/storage/profile_pictures/')) {
