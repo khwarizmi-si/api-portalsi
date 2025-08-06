@@ -126,7 +126,6 @@ class ProfileController extends Controller
             ->when($fullName, function ($q) use ($fullName) {
                 $q->where('full_name', 'like', "%{$fullName}%");
             })
-            ->where('is_private', false)
             ->select('user_id', 'username', 'full_name', 'profile_picture_url')
             ->get();
 
