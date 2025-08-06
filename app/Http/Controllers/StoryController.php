@@ -38,7 +38,6 @@ class StoryController extends Controller
         ], 201);
     }
 
-    // ✅ Ambil story dari user yang diikuti dan diri sendiri
 // ✅ Ambil story dari user yang diikuti dan diri sendiri, lengkap dengan user info
 public function feed()
 {
@@ -48,15 +47,36 @@ public function feed()
     $followedIds = $user->following()->pluck('users.user_id')->toArray();
     $allIds = array_merge($followedIds, [$user->user_id]);
 
-    // Ambil stories + info user: username & profile_picture_url
+    // Ambil semua story dan user terkait (sekali query)
     $stories = Story::with(['user:user_id,username,profile_picture_url'])
         ->whereIn('user_id', $allIds)
         ->where('expires_at', '>', now())
         ->latest()
         ->get();
 
-    return response()->json($stories);
+    // Group by user
+    $grouped = $stories->groupBy('user.user_id')->map(function ($userStories) {
+        $user = $userStories->first()->user;
+
+        return [
+            'user_id' => $user->user_id,
+            'username' => $user->username,
+            'profile_picture_url' => $user->profile_picture_url,
+            'stories' => $userStories->map(function ($story) {
+                return [
+                    'story_id'   => $story->story_id,
+                    'media_url'  => $story->media_url,
+                    'caption'    => $story->caption,
+                    'created_at' => $story->created_at,
+                    'expires_at' => $story->expires_at,
+                ];
+            })->values()
+        ];
+    })->values(); // Reset keys ke array numerik
+
+    return response()->json($grouped);
 }
+
 
 
     // ✅ Hapus story milik sendiri
