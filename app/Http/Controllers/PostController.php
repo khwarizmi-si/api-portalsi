@@ -46,12 +46,12 @@ class PostController extends Controller
         $post = Post::with(['user', 'tags', 'mentions'])->findOrFail($id);
         $owner = $post->user;
     
-        $canView = !$owner->is_private ||
+        $canView = !$owner->is_private || // publik
             ($authUser && (
-                $authUser->user_id === $owner->user_id ||
+                $authUser->user_id === $owner->user_id || // diri sendiri
                 $owner->followers()
                     ->where('follower_id', $authUser->user_id)
-                    ->wherePivot('status', 'accepted')
+                    ->where('status', 'accepted') // diperbaiki di sini
                     ->exists()
             ));
     
@@ -63,6 +63,7 @@ class PostController extends Controller
     
         return response()->json($post);
     }
+    
     
 
     // 🆕 Buat post baru (media upload pakai file)
