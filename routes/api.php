@@ -32,11 +32,18 @@ use App\Http\Controllers\{
 // 🚀 PUBLIC ROUTES
 Route::post('/register', function (Request $request) {
     $request->validate([
-        'username'   => 'required|string|unique:users',
-        'full_name'  => 'required|string',
-        'email'      => 'required|email|unique:users',
-        'password'   => 'required|min:6',
-        'role'       => 'in:teacher,parent,student,other'
+        'username' => [
+            'required',
+            'string',
+            'unique:users',
+            'regex:/^[a-zA-Z0-9._]+$/'
+        ],
+        'full_name' => 'required|string',
+        'email'     => 'required|email|unique:users',
+        'password'  => 'required|min:6',
+        'role'      => 'in:teacher,parent,student,other'
+    ], [
+        'username.regex' => 'Username hanya boleh berisi huruf, angka, titik, dan underscore tanpa spasi atau simbol lain.'
     ]);
 
     if ($request->role === 'dev') {
@@ -46,11 +53,11 @@ Route::post('/register', function (Request $request) {
     }
 
     $user = User::create([
-        'username'         => $request->username,
-        'full_name'        => $request->full_name,
-        'email'            => $request->email,
-        'password_hash'    => bcrypt($request->password),
-        'role'             => $request->role ?? 'student'
+        'username'      => $request->username,
+        'full_name'     => $request->full_name,
+        'email'         => $request->email,
+        'password_hash' => bcrypt($request->password),
+        'role'          => $request->role ?? 'student'
     ]);
 
     $user->sendEmailVerificationNotification();
@@ -59,22 +66,25 @@ Route::post('/register', function (Request $request) {
 
     return response()->json([
         'message' => 'User registered successfully. Please verify your email.',
-        'token' => $token,
-        'user' => $user
+        'token'   => $token,
+        'user'    => $user
     ], 201);
 });
 
 Route::post('/login', function (Request $request) {
     $request->validate([
-        'email'    => 'required|email',
-        'password' => 'required'
+        'login'    => 'required|string', // bisa username atau email
+        'password' => 'required|string',
     ]);
 
-    $user = User::where('email', $request->email)->first();
+    // Coba cari berdasarkan email dulu, jika tidak ketemu cari sebagai username
+    $user = User::where('email', $request->login)
+                ->orWhere('username', $request->login)
+                ->first();
 
     if (! $user || ! Hash::check($request->password, $user->password_hash)) {
         throw ValidationException::withMessages([
-            'email' => ['The provided credentials are incorrect.'],
+            'login' => ['The provided credentials are incorrect.'],
         ]);
     }
 
@@ -82,8 +92,8 @@ Route::post('/login', function (Request $request) {
 
     return response()->json([
         'message' => 'Login successful',
-        'token' => $token,
-        'user' => $user
+        'token'   => $token,
+        'user'    => $user
     ]);
 });
 
