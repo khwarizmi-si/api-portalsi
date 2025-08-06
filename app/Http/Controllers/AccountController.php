@@ -15,16 +15,23 @@ class AccountController extends Controller
     public function update(Request $request)
     {
         $user = Auth::user();
-
+    
         $request->validate([
-            'username' => 'nullable|string|unique:users,username,' . $user->user_id . ',user_id',
+            'username' => [
+                'nullable',
+                'string',
+                'regex:/^[a-zA-Z0-9._]+$/',
+                'unique:users,username,' . $user->user_id . ',user_id'
+            ],
             'full_name' => 'nullable|string',
             'email' => 'nullable|email|unique:users,email,' . $user->user_id . ',user_id',
             'bio' => 'nullable|string',
             'is_private' => 'nullable|boolean',
             'profile_picture' => 'nullable|image|max:2048', // upload file, bukan URL
+        ], [
+            'username.regex' => 'Username hanya boleh berisi huruf, angka, titik, dan underscore tanpa spasi atau simbol lain.'
         ]);
-
+    
         // ✅ Upload profile picture (jika ada)
         if ($request->hasFile('profile_picture')) {
             // Hapus file lama jika ada dan dari folder yang sama
@@ -32,11 +39,11 @@ class AccountController extends Controller
                 $oldPath = str_replace(asset('storage') . '/', '', $user->profile_picture_url);
                 Storage::disk('public')->delete($oldPath);
             }
-
+    
             $path = $request->file('profile_picture')->store('profile_pictures', 'public');
             $user->profile_picture_url = asset('storage/' . $path);
         }
-
+    
         // ✅ Update field lain
         $user->fill($request->only([
             'username',
@@ -45,14 +52,15 @@ class AccountController extends Controller
             'bio',
             'is_private'
         ]));
-
+    
         $user->save();
-
+    
         return response()->json([
             'message' => 'Akun berhasil diperbarui',
             'user' => $user
         ]);
     }
+    
 
     // 🔒 Ganti password
     public function updatePassword(Request $request)
