@@ -19,23 +19,16 @@ class PostController extends Controller
         $authUser = Auth::user();
     
         $posts = Post::with(['user', 'tags', 'mentions'])
-            ->whereHas('user', function ($query) use ($authUser) {
-                $query->where(function ($q) use ($authUser) {
-                    $q->where('is_private', 0); // Akun publik
-                    if ($authUser) {
-                        $q->orWhere('user_id', $authUser->user_id); // Diri sendiri
-                        $q->orWhereHas('followers', function ($fq) use ($authUser) {
-                            $fq->where('follower_id', $authUser->user_id)
-                               ->where('status', 'accepted'); // ← Ini yang benar
-                        });
-                    }
-                });
+            ->whereHas('user.followers', function ($query) use ($authUser) {
+                $query->where('follower_id', $authUser->user_id)
+                      ->where('status', 'accepted');
             })
             ->latest()
             ->get();
     
         return response()->json($posts);
     }
+    
     
     
 
