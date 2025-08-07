@@ -14,27 +14,34 @@ class StoryController extends Controller
     public function store(Request $request)
     {
         $validated = $request->validate([
-            'media'   => 'required|file|mimes:jpg,jpeg,png,mp4,mov|max:51200', // max 50MB
-            'caption' => 'nullable|string',
+            'media.*'   => 'required|file|mimes:jpg,jpeg,png,mp4,mov|max:51200', // max 50MB per file
+            'caption'   => 'nullable|array',
+            'caption.*' => 'nullable|string',
         ]);
-
-        // Simpan file ke storage/app/public/uploads/stories
-        $path = $request->file('media')->store('uploads/stories', 'public');
-
-        // Generate URL yang bisa diakses publik
-        $mediaUrl = asset('storage/' . $path);
-
-        $story = Story::create([
-            'user_id'    => Auth::id(),
-            'media_url'  => $mediaUrl,
-            'caption'    => $validated['caption'] ?? null,
-            'created_at' => now(),
-            'expires_at' => now()->addHours(24),
-        ]);
-
+    
+        $stories = [];
+    
+        foreach ($request->file('media') as $index => $file) {
+            // Simpan file ke storage/app/public/uploads/stories
+            $path = $file->store('uploads/stories', 'public');
+    
+            // Generate URL yang bisa diakses publik
+            $mediaUrl = asset('storage/' . $path);
+    
+            $story = Story::create([
+                'user_id'    => Auth::id(),
+                'media_url'  => $mediaUrl,
+                'caption'    => $validated['caption'][$index] ?? null,
+                'created_at' => now(),
+                'expires_at' => now()->addHours(24),
+            ]);
+    
+            $stories[] = $story;
+        }
+    
         return response()->json([
-            'message' => 'Story berhasil dibuat.',
-            'story'   => $story
+            'message' => 'Semua story berhasil dibuat.',
+            'stories' => $stories
         ], 201);
     }
 
