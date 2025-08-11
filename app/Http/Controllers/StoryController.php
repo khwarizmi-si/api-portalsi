@@ -10,90 +10,130 @@ use Illuminate\Support\Facades\Storage;
 
 class StoryController extends Controller
 {
-    // ✅ Upload story (dengan file)
+    /**
+     * Upload story baru (image, video, music)
+     */
     public function store(Request $request)
     {
         $validated = $request->validate([
-            'media.*'   => 'required|file|mimes:jpg,jpeg,png,mp4,mov|max:51200', // max 50MB per file
-            'caption'   => 'nullable|array',
-            'caption.*' => 'nullable|string',
+            'type'                   => 'required|string|in:image,video,music',
+            'media.*'                 => 'nullable|file|mimes:jpg,jpeg,png,mp4,mov|max:51200',
+            'caption'                 => 'nullable|array',
+            'caption.*'               => 'nullable|string',
+
+            // Metadata music
+            'music_track_name'        => 'nullable|string|max:255',
+            'music_artist_name'       => 'nullable|string|max:255',
+            'music_preview_url'       => 'nullable|string',
+            'music_start_position_ms' => 'nullable|integer',
+            'music_display_style'     => 'nullable|string|max:50',
         ]);
-    
+
         $stories = [];
-    
-        foreach ($request->file('media') as $index => $file) {
-            // Simpan file ke storage/app/public/uploads/stories
-            $path = $file->store('uploads/stories', 'public');
-    
-            // Generate URL yang bisa diakses publik
-            $mediaUrl = asset('storage/' . $path);
-    
-            $story = Story::create([
-                'user_id'    => Auth::id(),
-                'media_url'  => $mediaUrl,
-                'caption'    => $validated['caption'][$index] ?? null,
-                'created_at' => now(),
-                'expires_at' => now()->addHours(24),
-            ]);
-    
-            $stories[] = $story;
+        $mediaFiles = $request->file('media', []);
+
+        // Jika type bukan music dan tidak ada file
+        if ($request->type !== 'music' && empty($mediaFiles)) {
+            return response()->json(['message' => 'Media file wajib diunggah untuk image/video.'], 422);
         }
-    
+
+        // CASE 1: Music tanpa media file (cover mungkin dari API lain)
+        if ($request->type === 'music' && empty($mediaFiles)) {
+            $stories[] = Story::create([
+                'user_id'                => Auth::id(),
+                'type'                   => 'music',
+                'media_url'              => null,
+                'caption'                => null,
+                'music_track_name'       => $request->music_track_name,
+                'music_artist_name'      => $request->music_artist_name,
+                'music_preview_url'      => $request->music_preview_url,
+                'music_start_position_ms'=> $request->music_start_position_ms,
+                'music_display_style'    => $request->music_display_style,
+                'created_at'             => now(),
+                'expires_at'             => now()->addHours(24),
+            ]);
+        }
+        // CASE 2: Ada file media
+        else {
+            foreach ($mediaFiles as $index => $file) {
+                $path = $file->store('uploads/stories', 'public');
+                $mediaUrl = asset('storage/' . $path);
+
+                $stories[] = Story::create([
+                    'user_id'                => Auth::id(),
+                    'type'                   => $request->type,
+                    'media_url'              => $mediaUrl,
+                    'caption'                => $validated['caption'][$index] ?? null,
+                    'music_track_name'       => $request->music_track_name,
+                    'music_artist_name'      => $request->music_artist_name,
+                    'music_preview_url'      => $request->music_preview_url,
+                    'music_start_position_ms'=> $request->music_start_position_ms,
+                    'music_display_style'    => $request->music_display_style,
+                    'created_at'             => now(),
+                    'expires_at'             => now()->addHours(24),
+                ]);
+            }
+        }
+
         return response()->json([
-            'message' => 'Semua story berhasil dibuat.',
+            'message' => 'Story berhasil dibuat.',
             'stories' => $stories
         ], 201);
     }
 
-// ✅ Ambil story dari user yang diikuti dan diri sendiri, lengkap dengan user info
-public function feed()
-{
-    $user = Auth::user();
+    /**
+     * Ambil story dari user yang diikuti + diri sendiri
+     */
+    public function feed()
+    {
+        $user = Auth::user();
 
-    // Ambil ID user yang diikuti + diri sendiri
-    $followedIds = $user->following()->pluck('users.user_id')->toArray();
-    $allIds = array_merge($followedIds, [$user->user_id]);
+        $followedIds = $user->following()->pluck('users.user_id')->toArray();
+        $allIds = array_merge($followedIds, [$user->user_id]);
 
-    // Ambil semua story dan user terkait (sekali query)
-    $stories = Story::with(['user:user_id,username,profile_picture_url'])
-        ->whereIn('user_id', $allIds)
-        ->where('expires_at', '>', now())
-        ->latest()
-        ->get();
+        $stories = Story::with(['user:user_id,username,profile_picture_url'])
+            ->whereIn('user_id', $allIds)
+            ->where('expires_at', '>', now())
+            ->latest()
+            ->get();
 
-    // Group by user
-    $grouped = $stories->groupBy('user.user_id')->map(function ($userStories) {
-        $user = $userStories->first()->user;
+        $grouped = $stories->groupBy('user.user_id')->map(function ($userStories) {
+            $user = $userStories->first()->user;
 
-        return [
-            'user_id' => $user->user_id,
-            'username' => $user->username,
-            'profile_picture_url' => $user->profile_picture_url,
-            'stories' => $userStories->map(function ($story) {
-                return [
-                    'story_id'   => $story->story_id,
-                    'media_url'  => $story->media_url,
-                    'caption'    => $story->caption,
-                    'created_at' => $story->created_at,
-                    'expires_at' => $story->expires_at,
-                ];
-            })->values()
-        ];
-    })->values(); // Reset keys ke array numerik
+            return [
+                'user_id' => $user->user_id,
+                'username' => $user->username,
+                'profile_picture_url' => $user->profile_picture_url,
+                'stories' => $userStories->map(function ($story) {
+                    return [
+                        'story_id'                => $story->story_id,
+                        'type'                    => $story->type,
+                        'media_url'               => $story->media_url,
+                        'caption'                 => $story->caption,
+                        'music_track_name'        => $story->music_track_name,
+                        'music_artist_name'       => $story->music_artist_name,
+                        'music_preview_url'       => $story->music_preview_url,
+                        'music_start_position_ms' => $story->music_start_position_ms,
+                        'music_display_style'     => $story->music_display_style,
+                        'created_at'              => $story->created_at,
+                        'expires_at'              => $story->expires_at,
+                    ];
+                })->values()
+            ];
+        })->values();
 
-    return response()->json($grouped);
-}
+        return response()->json($grouped);
+    }
 
-
-
-    // ✅ Hapus story milik sendiri
+    /**
+     * Hapus story milik sendiri
+     */
     public function destroy($id)
     {
         $story = Story::where('story_id', $id)
-                      ->where('user_id', Auth::id())
-                      ->firstOrFail();
+            ->where('user_id', Auth::id())
+            ->firstOrFail();
 
-        // Hapus file dari storage jika ada
         if ($story->media_url) {
             $relativePath = str_replace(asset('storage') . '/', '', $story->media_url);
             Storage::disk('public')->delete($relativePath);
@@ -104,13 +144,14 @@ public function feed()
         return response()->json(['message' => 'Story berhasil dihapus.']);
     }
 
-    // ✅ Lihat story (boleh lihat sendiri tapi tidak dicatat view)
+    /**
+     * Lihat story (catat view jika bukan milik sendiri)
+     */
     public function view($id)
     {
         $user = Auth::user();
         $story = Story::findOrFail($id);
 
-        // Jika story bukan milik sendiri, catat view
         if ($story->user_id !== $user->user_id) {
             $alreadyViewed = StoryView::where('story_id', $story->story_id)
                 ->where('viewer_id', $user->user_id)
@@ -131,13 +172,14 @@ public function feed()
             ]);
         }
 
-        // Jika melihat story sendiri, tetap bisa, tapi tidak dicatat
         return response()->json([
             'message' => 'Story milik sendiri berhasil dilihat (tanpa dicatat).'
         ]);
     }
 
-    // ✅ (Opsional) Ambil semua story milik sendiri
+    /**
+     * Ambil semua story milik sendiri
+     */
     public function myStories()
     {
         $user = Auth::user();
@@ -145,7 +187,22 @@ public function feed()
         $stories = Story::where('user_id', $user->user_id)
             ->where('expires_at', '>', now())
             ->latest()
-            ->get();
+            ->get()
+            ->map(function ($story) {
+                return [
+                    'story_id'                => $story->story_id,
+                    'type'                    => $story->type,
+                    'media_url'               => $story->media_url,
+                    'caption'                 => $story->caption,
+                    'music_track_name'        => $story->music_track_name,
+                    'music_artist_name'       => $story->music_artist_name,
+                    'music_preview_url'       => $story->music_preview_url,
+                    'music_start_position_ms' => $story->music_start_position_ms,
+                    'music_display_style'     => $story->music_display_style,
+                    'created_at'              => $story->created_at,
+                    'expires_at'              => $story->expires_at,
+                ];
+            });
 
         return response()->json($stories);
     }

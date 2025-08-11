@@ -17,7 +17,14 @@ class Story extends Model
         'user_id',
         'media_url',
         'caption',
-        'expires_at',
+        'type',
+        'music_track_name',
+        'music_artist_name',
+        'music_preview_url',
+        'music_start_position_ms',
+        'music_display_style',
+        'created_at',
+        'expires_at'
     ];
 
     protected $casts = [
