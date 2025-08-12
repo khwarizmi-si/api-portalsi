@@ -33,8 +33,12 @@ class StoryController extends Controller
 
         // Kalau ada file media diupload
         if ($request->hasFile('media')) {
-            $mediaPath = $request->file('media')->store('stories', 'public');
+            // Simpan di public/uploads/stories
+            $mediaPath = $request->file('media')->store('uploads/stories', 'public');
+            // Buat URL lengkap
+            $mediaPath = Storage::url($mediaPath);
         }
+        
 
         // Insert ke DB
         $story = Story::create([
