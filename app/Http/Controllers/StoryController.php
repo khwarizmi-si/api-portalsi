@@ -26,20 +26,20 @@ class StoryController extends Controller
             'music_start_position_ms' => 'nullable|integer',
             'music_display_style'   => 'nullable|string|max:50',
         ]);
-
+    
         $user = Auth::user();
-
         $mediaPath = null;
-
+    
         // Kalau ada file media diupload
         if ($request->hasFile('media')) {
-            $mediaPath = $request->file('media')->store('stories', 'public');
+            // Simpan file ke folder 'uploads/stories' di storage
+            $mediaPath = $request->file('media')->store('uploads/stories', 'public');
         }
-
+    
         // Insert ke DB
         $story = Story::create([
             'user_id'               => $user->user_id,
-            'media_url'             => $mediaPath ? Storage::url($mediaPath) : null,
+            'media_url'             => $mediaPath ? asset('storage/'.$mediaPath) : null,
             'type'                  => $request->type,
             'music_track_name'      => $request->music_track_name,
             'music_artist_name'     => $request->music_artist_name,
@@ -50,7 +50,7 @@ class StoryController extends Controller
             'created_at'            => now(),
             'expires_at'            => Carbon::now()->addHours(24),
         ]);
-
+    
         return response()->json([
             'message' => 'Story uploaded successfully',
             'data' => $story
