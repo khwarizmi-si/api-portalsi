@@ -7,6 +7,7 @@ use App\Models\Story;
 use App\Models\StoryView;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\Storage;
+use Carbon\Carbon; // ⬅️ WAJIB ADA
 
 class StoryController extends Controller
 {
