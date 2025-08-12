@@ -107,7 +107,9 @@ public function checkPrivateStatus()
     $user = auth()->user();
 
     if (!$user) {
-        return response()->json(0); // tidak login → 0
+        return response()->json([
+            'message' => 'User belum login'
+        ], 401); // 401 Unauthorized
     }
 
     return response()->json($user->is_private == 1 ? 1 : 0);
