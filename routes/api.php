@@ -182,7 +182,6 @@ Route::middleware(['auth:sanctum'])->group(function () {
     Route::get('/users/{id}/following', [FollowController::class, 'following']);
     Route::get('/stories/feed', [StoryController::class, 'feed']);
     Route::get('/notifications', [NotificationController::class, 'index']);
-    Route::get('/messages/conversation/{user_id}', [DirectMessageController::class, 'conversation']);
     Route::get('/explore', [PostController::class, 'explore']);
     Route::get('/users/search', [ProfileController::class, 'search']);
 
@@ -214,6 +213,7 @@ Route::middleware(['auth:sanctum'])->group(function () {
         Route::patch('/notifications/read/all', [NotificationController::class, 'markAllAsRead']);
 
         // DM
+        Route::get('/messages/conversation/{user_id}', [DirectMessageController::class, 'conversation']);
         Route::post('/messages/send', [DirectMessageController::class, 'send']);
         Route::patch('/messages/{id}/read', [DirectMessageController::class, 'markAsRead']);
         Route::delete('/messages/{id}', [DirectMessageController::class, 'destroy']);
