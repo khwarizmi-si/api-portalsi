@@ -46,69 +46,6 @@ class ProfileController extends Controller
         ]);
     }
     
-    
-    
-    
-
-    // ✅ Update profile (auth user)
-    public function update(Request $request)
-    {
-        $user = Auth::user();
-
-        $request->validate([
-            'username'            => 'nullable|string|unique:users,username,' . $user->user_id . ',user_id',
-            'full_name'           => 'nullable|string',
-            'email'               => 'nullable|email|unique:users,email,' . $user->user_id . ',user_id',
-            'bio'                 => 'nullable|string',
-            'profile_picture_url' => 'nullable|url',
-            'is_private'          => 'nullable|boolean',
-        ]);
-
-        $user->update($request->only([
-            'username',
-            'full_name',
-            'email',
-            'bio',
-            'profile_picture_url',
-            'is_private',
-        ]));
-
-        return response()->json([
-            'message' => 'Profil berhasil diperbarui.',
-            'user' => $user
-        ]);
-    }
-
-    // ✅ Ganti password
-    public function updatePassword(Request $request)
-    {
-        $request->validate([
-            'current_password' => 'required',
-            'new_password'     => 'required|min:6',
-        ]);
-
-        $user = Auth::user();
-
-        if (!Hash::check($request->current_password, $user->password_hash)) {
-            return response()->json(['error' => 'Password lama salah'], 403);
-        }
-
-        $user->update([
-            'password_hash' => bcrypt($request->new_password),
-        ]);
-
-        return response()->json(['message' => 'Password berhasil diubah.']);
-    }
-
-    // ✅ Hapus akun
-    public function destroy()
-    {
-        $user = Auth::user();
-        $user->delete();
-
-        return response()->json(['message' => 'Akun berhasil dihapus.']);
-    }
-
     // ✅ Search user by username and/or full_name
     public function search(Request $request)
     {

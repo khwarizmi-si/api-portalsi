@@ -99,4 +99,19 @@ class AccountController extends Controller
 
         return response()->json(['message' => 'Akun telah dihapus']);
     }
+
+
+// 🔍 Cek status private user login
+public function checkPrivateStatus()
+{
+    $user = auth()->user();
+
+    if (!$user) {
+        return response()->json(0); // tidak login → 0
+    }
+
+    return response()->json($user->is_private == 1 ? 1 : 0);
+}
+
+
 }

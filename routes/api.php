@@ -217,6 +217,7 @@ Route::middleware(['auth:sanctum'])->group(function () {
         Route::post('/messages/send', [DirectMessageController::class, 'send']);
         Route::patch('/messages/{id}/read', [DirectMessageController::class, 'markAsRead']);
         Route::delete('/messages/{id}', [DirectMessageController::class, 'destroy']);
+        Route::get('/messages/chat-list', [DirectMessageController::class, 'chatList']);
 
         // Account
         Route::post('/account/settings', [AccountController::class, 'update']);
@@ -280,6 +281,10 @@ Route::middleware(['auth:sanctum'])->group(function () {
             Route::get('/followers/pending', [FollowController::class, 'pendingFollowRequests']);
         });
         
+        // GET Private atau tidak
+        Route::get('/account/is-private', [AccountController::class, 'checkPrivateStatus'])
+        ->middleware('auth:sanctum');
+
 
     });
 });

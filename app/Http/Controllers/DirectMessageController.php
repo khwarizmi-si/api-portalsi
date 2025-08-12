@@ -87,4 +87,37 @@ public function destroy($id)
     return response()->json(['message' => 'Pesan berhasil dihapus.']);
 }
 
+// ✅ List user yang pernah di-chat
+public function chatList()
+{
+    $auth_id = Auth::id();
+
+    // Ambil semua chat yang melibatkan user ini
+    $chats = DirectMessage::where('sender_id', $auth_id)
+        ->orWhere('receiver_id', $auth_id)
+        ->latest('sent_at')
+        ->get()
+        ->groupBy(function ($message) use ($auth_id) {
+            // Grup berdasarkan lawan bicara
+            return $message->sender_id == $auth_id
+                ? $message->receiver_id
+                : $message->sender_id;
+        })
+        ->map(function ($messages, $user_id) {
+            $lastMessage = $messages->sortByDesc('sent_at')->first();
+
+            return [
+                'user_id'      => (int) $user_id,
+                'last_message' => $lastMessage->content ?? '📎 Media',
+                'last_media'   => $lastMessage->media_url,
+                'sent_at'      => $lastMessage->sent_at,
+                'is_read'      => $lastMessage->is_read,
+            ];
+        })
+        ->values();
+
+    return response()->json($chats);
+}
+
+
 }
