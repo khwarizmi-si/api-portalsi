@@ -17,10 +17,11 @@ class StoryController extends Controller
     {
         $validated = $request->validate([
             'type'                   => 'required|string|in:image,video,music',
-            'media.*'                 => 'nullable|file|mimes:jpg,jpeg,png,mp4,mov|max:51200',
-            'caption'                 => 'nullable|array',
-            'caption.*'               => 'nullable|string',
-
+            'media.*'                => 'nullable|file|mimes:jpg,jpeg,png,mp4,mov|max:51200',
+    
+            // caption bisa string atau array
+            'caption'                => 'nullable',
+    
             // Metadata music
             'music_track_name'        => 'nullable|string|max:255',
             'music_artist_name'       => 'nullable|string|max:255',
@@ -28,22 +29,30 @@ class StoryController extends Controller
             'music_start_position_ms' => 'nullable|integer',
             'music_display_style'     => 'nullable|string|max:50',
         ]);
-
+    
         $stories = [];
         $mediaFiles = $request->file('media', []);
-
-        // Jika type bukan music dan tidak ada file
+    
+        // Kalau type bukan music, media harus ada
         if ($request->type !== 'music' && empty($mediaFiles)) {
             return response()->json(['message' => 'Media file wajib diunggah untuk image/video.'], 422);
         }
-
-        // CASE 1: Music tanpa media file (cover mungkin dari API lain)
+    
+        // Ambil caption: kalau array, pakai index; kalau string, pakai sama semua
+        $getCaption = function($index = 0) use ($request) {
+            if (is_array($request->caption)) {
+                return $request->caption[$index] ?? null;
+            }
+            return $request->caption; // string
+        };
+    
+        // CASE 1: Music tanpa file
         if ($request->type === 'music' && empty($mediaFiles)) {
             $stories[] = Story::create([
                 'user_id'                => Auth::id(),
                 'type'                   => 'music',
                 'media_url'              => null,
-                'caption'                => null,
+                'caption'                => $getCaption(),
                 'music_track_name'       => $request->music_track_name,
                 'music_artist_name'      => $request->music_artist_name,
                 'music_preview_url'      => $request->music_preview_url,
@@ -58,12 +67,12 @@ class StoryController extends Controller
             foreach ($mediaFiles as $index => $file) {
                 $path = $file->store('uploads/stories', 'public');
                 $mediaUrl = asset('storage/' . $path);
-
+    
                 $stories[] = Story::create([
                     'user_id'                => Auth::id(),
                     'type'                   => $request->type,
                     'media_url'              => $mediaUrl,
-                    'caption'                => $validated['caption'][$index] ?? null,
+                    'caption'                => $getCaption($index),
                     'music_track_name'       => $request->music_track_name,
                     'music_artist_name'      => $request->music_artist_name,
                     'music_preview_url'      => $request->music_preview_url,
@@ -74,13 +83,13 @@ class StoryController extends Controller
                 ]);
             }
         }
-
+    
         return response()->json([
             'message' => 'Story berhasil dibuat.',
             'stories' => $stories
         ], 201);
     }
-
+    
     /**
      * Ambil story dari user yang diikuti + diri sendiri
      */
