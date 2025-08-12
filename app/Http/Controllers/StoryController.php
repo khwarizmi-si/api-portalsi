@@ -17,49 +17,40 @@ class StoryController extends Controller
     public function store(Request $request)
     {
         $request->validate([
-            'type'                  => 'required|in:image,video,music',
-            'media'                 => 'nullable|file|mimes:jpg,jpeg,png,mp4,mp3,wav',
-            'caption'               => 'nullable|string',
-            'music_track_name'      => 'nullable|string|max:255',
-            'music_artist_name'     => 'nullable|string|max:255',
-            'music_preview_url'     => 'nullable|url',
-            'music_start_position_ms' => 'nullable|integer',
-            'music_display_style'   => 'nullable|string|max:50',
+            'type'     => 'required|in:image,video,music',
+            'caption'  => 'nullable|string|max:255',
+            'media'    => 'required|file|max:51200', // max 50MB
         ]);
 
         $user = Auth::user();
-
-        $mediaPath = null;
-
-        // Kalau ada file media diupload
-        if ($request->hasFile('media')) {
-            // Simpan di public/uploads/stories
-            $mediaPath = $request->file('media')->store('uploads/stories', 'public');
-            // Buat URL lengkap
-            $mediaPath = Storage::url($mediaPath);
+        if (!$user) {
+            return response()->json([
+                'error' => 'Unauthenticated',
+                'message' => 'User belum login'
+            ], 401);
         }
-        
 
-        // Insert ke DB
+        // Simpan file ke public/uploads/stories
+        $path = $request->file('media')->store('uploads/stories', 'public');
+
+        // Buat URL lengkap
+        $mediaUrl = url(Storage::url($path));
+
         $story = Story::create([
-            'user_id'               => $user->user_id,
-            'media_url'             => $mediaPath ? Storage::url($mediaPath) : null,
-            'type'                  => $request->type,
-            'music_track_name'      => $request->music_track_name,
-            'music_artist_name'     => $request->music_artist_name,
-            'music_preview_url'     => $request->music_preview_url,
-            'music_start_position_ms' => $request->music_start_position_ms,
-            'music_display_style'   => $request->music_display_style,
-            'caption'               => $request->caption,
-            'created_at'            => now(),
-            'expires_at'            => Carbon::now()->addHours(24),
+            'user_id'    => $user->user_id,
+            'type'       => $request->type,
+            'caption'    => $request->caption,
+            'media_url'  => $mediaUrl,
+            'expires_at' => Carbon::now()->addHours(24), // story habis 24 jam
         ]);
 
         return response()->json([
-            'message' => 'Story uploaded successfully',
-            'data' => $story
+            'success' => true,
+            'message' => 'Story berhasil diupload',
+            'data'    => $story
         ]);
     }
+
     
     /**
      * Ambil story dari user yang diikuti + diri sendiri
