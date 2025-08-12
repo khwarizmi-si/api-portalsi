@@ -16,79 +16,59 @@ class StoryController extends Controller
     public function store(Request $request)
     {
         $validated = $request->validate([
-            'type'                   => 'required|string|in:image,video,music',
-            'media.*'                => 'nullable|file|mimes:jpg,jpeg,png,mp4,mov|max:51200',
-    
-            // caption bisa string atau array
-            'caption'                => 'nullable',
-    
-            // Metadata music
-            'music_track_name'        => 'nullable|string|max:255',
-            'music_artist_name'       => 'nullable|string|max:255',
-            'music_preview_url'       => 'nullable|string',
-            'music_start_position_ms' => 'nullable|integer',
-            'music_display_style'     => 'nullable|string|max:50',
+            'type'        => 'required|in:image,video,music',
+            'caption'     => 'nullable',
+            'caption.*'   => 'nullable|string', // Kalau array caption
+            'media'       => 'nullable', // Bisa single atau array file
+            'media.*'     => 'nullable|file|mimes:jpeg,png,jpg,mp4,mp3,wav|max:20480',
         ]);
     
-        $stories = [];
-        $mediaFiles = $request->file('media', []);
+        $user = auth()->user();
+        if (!$user) {
+            return response()->json(['message' => 'User belum login'], 401);
+        }
     
-        // Kalau type bukan music, media harus ada
+        // Pastikan $mediaFiles selalu array
+        $mediaFiles = $request->file('media');
+        if ($mediaFiles && !is_array($mediaFiles)) {
+            $mediaFiles = [$mediaFiles];
+        }
+    
+        // Kalau bukan music, wajib ada file
         if ($request->type !== 'music' && empty($mediaFiles)) {
             return response()->json(['message' => 'Media file wajib diunggah untuk image/video.'], 422);
         }
     
-        // Ambil caption: kalau array, pakai index; kalau string, pakai sama semua
-        $getCaption = function($index = 0) use ($request) {
-            if (is_array($request->caption)) {
-                return $request->caption[$index] ?? null;
-            }
-            return $request->caption; // string
-        };
+        $stories = [];
     
-        // CASE 1: Music tanpa file
-        if ($request->type === 'music' && empty($mediaFiles)) {
-            $stories[] = Story::create([
-                'user_id'                => Auth::id(),
-                'type'                   => 'music',
-                'media_url'              => null,
-                'caption'                => $getCaption(),
-                'music_track_name'       => $request->music_track_name,
-                'music_artist_name'      => $request->music_artist_name,
-                'music_preview_url'      => $request->music_preview_url,
-                'music_start_position_ms'=> $request->music_start_position_ms,
-                'music_display_style'    => $request->music_display_style,
-                'created_at'             => now(),
-                'expires_at'             => now()->addHours(24),
-            ]);
-        }
-        // CASE 2: Ada file media
-        else {
+        // Upload media jika ada
+        if (!empty($mediaFiles)) {
             foreach ($mediaFiles as $index => $file) {
-                $path = $file->store('uploads/stories', 'public');
-                $mediaUrl = asset('storage/' . $path);
+                $path = $file->store('stories', 'public');
     
                 $stories[] = Story::create([
-                    'user_id'                => Auth::id(),
-                    'type'                   => $request->type,
-                    'media_url'              => $mediaUrl,
-                    'caption'                => $getCaption($index),
-                    'music_track_name'       => $request->music_track_name,
-                    'music_artist_name'      => $request->music_artist_name,
-                    'music_preview_url'      => $request->music_preview_url,
-                    'music_start_position_ms'=> $request->music_start_position_ms,
-                    'music_display_style'    => $request->music_display_style,
-                    'created_at'             => now(),
-                    'expires_at'             => now()->addHours(24),
+                    'user_id'   => $user->user_id,
+                    'type'      => $request->type,
+                    'caption'   => is_array($request->caption) ? ($request->caption[$index] ?? null) : $request->caption,
+                    'media_url' => $path,
                 ]);
             }
+        } else {
+            // Untuk music tanpa file
+            $stories[] = Story::create([
+                'user_id'   => $user->user_id,
+                'type'      => $request->type,
+                'caption'   => $request->caption,
+                'media_url' => null,
+            ]);
         }
     
         return response()->json([
-            'message' => 'Story berhasil dibuat.',
+            'message' => 'Story berhasil dibuat',
             'stories' => $stories
         ], 201);
     }
+    
     
     /**
      * Ambil story dari user yang diikuti + diri sendiri
