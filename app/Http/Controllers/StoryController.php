@@ -15,60 +15,46 @@ class StoryController extends Controller
      */
     public function store(Request $request)
     {
-        $validated = $request->validate([
-            'type'        => 'required|in:image,video,music',
-            'caption'     => 'nullable',
-            'caption.*'   => 'nullable|string', // Kalau array caption
-            'media'       => 'nullable', // Bisa single atau array file
-            'media.*'     => 'nullable|file|mimes:jpeg,png,jpg,mp4,mp3,wav|max:20480',
+        $request->validate([
+            'type'                  => 'required|in:image,video,music',
+            'media'                 => 'nullable|file|mimes:jpg,jpeg,png,mp4,mp3,wav',
+            'caption'               => 'nullable|string',
+            'music_track_name'      => 'nullable|string|max:255',
+            'music_artist_name'     => 'nullable|string|max:255',
+            'music_preview_url'     => 'nullable|url',
+            'music_start_position_ms' => 'nullable|integer',
+            'music_display_style'   => 'nullable|string|max:50',
         ]);
-    
-        $user = auth()->user();
-        if (!$user) {
-            return response()->json(['message' => 'User belum login'], 401);
+
+        $user = Auth::user();
+
+        $mediaPath = null;
+
+        // Kalau ada file media diupload
+        if ($request->hasFile('media')) {
+            $mediaPath = $request->file('media')->store('stories', 'public');
         }
-    
-        // Pastikan $mediaFiles selalu array
-        $mediaFiles = $request->file('media');
-        if ($mediaFiles && !is_array($mediaFiles)) {
-            $mediaFiles = [$mediaFiles];
-        }
-    
-        // Kalau bukan music, wajib ada file
-        if ($request->type !== 'music' && empty($mediaFiles)) {
-            return response()->json(['message' => 'Media file wajib diunggah untuk image/video.'], 422);
-        }
-    
-        $stories = [];
-    
-        // Upload media jika ada
-        if (!empty($mediaFiles)) {
-            foreach ($mediaFiles as $index => $file) {
-                $path = $file->store('stories', 'public');
-    
-                $stories[] = Story::create([
-                    'user_id'   => $user->user_id,
-                    'type'      => $request->type,
-                    'caption'   => is_array($request->caption) ? ($request->caption[$index] ?? null) : $request->caption,
-                    'media_url' => $path,
-                ]);
-            }
-        } else {
-            // Untuk music tanpa file
-            $stories[] = Story::create([
-                'user_id'   => $user->user_id,
-                'type'      => $request->type,
-                'caption'   => $request->caption,
-                'media_url' => null,
-            ]);
-        }
-    
+
+        // Insert ke DB
+        $story = Story::create([
+            'user_id'               => $user->user_id,
+            'media_url'             => $mediaPath ? Storage::url($mediaPath) : null,
+            'type'                  => $request->type,
+            'music_track_name'      => $request->music_track_name,
+            'music_artist_name'     => $request->music_artist_name,
+            'music_preview_url'     => $request->music_preview_url,
+            'music_start_position_ms' => $request->music_start_position_ms,
+            'music_display_style'   => $request->music_display_style,
+            'caption'               => $request->caption,
+            'created_at'            => now(),
+            'expires_at'            => Carbon::now()->addHours(24),
+        ]);
+
         return response()->json([
-            'message' => 'Story berhasil dibuat',
-            'stories' => $stories
-        ], 201);
+            'message' => 'Story uploaded successfully',
+            'data' => $story
+        ]);
     }
-    
     
     /**
      * Ambil story dari user yang diikuti + diri sendiri
