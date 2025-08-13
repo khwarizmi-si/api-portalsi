@@ -167,11 +167,8 @@ Route::middleware(['auth:sanctum'])->group(function () {
         return response()->json(['message' => 'Logged out']);
     });
 
-    Route::get('/user', function (Request $request) {
-        return response()->json([
-            'user' => $request->user(),
-            'email_verified' => $request->user()->hasVerifiedEmail()
-        ]);
+    Route::middleware(['auth:sanctum'])->group(function () {
+        Route::get('/user', [ProfileController::class, 'me']);
     });
 
     // Public Feed
