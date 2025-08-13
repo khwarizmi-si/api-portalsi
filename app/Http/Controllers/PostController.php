@@ -19,7 +19,7 @@ class PostController extends Controller
         $authUser = Auth::user();
     
         $posts = Post::with(['user', 'tags', 'mentions'])
-            ->withCount(['likes', 'comments']) // ✅ Tambahkan count
+            ->withCount(['likes', 'comments'])
             ->where(function ($query) use ($authUser) {
                 $query->whereHas('user.followers', function ($q) use ($authUser) {
                     $q->where('follower_id', $authUser->user_id)
@@ -30,7 +30,11 @@ class PostController extends Controller
                 });
             })
             ->latest()
-            ->get();
+            ->get()
+            ->map(function ($post) use ($authUser) {
+                $post->is_liked = $post->likes()->where('user_id', $authUser->user_id)->exists();
+                return $post;
+            });
     
         return response()->json($posts);
     }
@@ -39,7 +43,7 @@ class PostController extends Controller
     {
         $authUser = Auth::user();
         $post = Post::with(['user', 'tags', 'mentions'])
-            ->withCount(['likes', 'comments']) // ✅ Tambahkan count
+            ->withCount(['likes', 'comments'])
             ->findOrFail($id);
     
         $owner = $post->user;
@@ -59,8 +63,11 @@ class PostController extends Controller
             ], 403);
         }
     
+        $post->is_liked = $post->likes()->where('user_id', $authUser->user_id)->exists();
+    
         return response()->json($post);
     }
+    
     
     public function explore(Request $request)
     {
