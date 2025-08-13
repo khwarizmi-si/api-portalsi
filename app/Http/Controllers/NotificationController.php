@@ -73,13 +73,17 @@ class NotificationController extends Controller
     // 🔧 Pesan notifikasi dinamis
     private function generateMessage($notif)
     {
-        $username = $notif->sender->username ?? 'Seseorang';
+        $username = $notif->sender ? $notif->sender->username : 'Seseorang';
     
-        $commentText = optional($notif->comment)->content;
-        if ($commentText) {
-            $commentText = Str::limit($commentText, 50);
-        } else {
-            $commentText = '(tidak ada isi komentar)';
+        // Ambil isi comment/reply kalau ada
+        $commentText = null;
+        if (in_array($notif->type, ['comment', 'reply']) && $notif->related_comment_id) {
+            $comment = \App\Models\Comment::find($notif->related_comment_id);
+            if ($comment) {
+                $commentText = trim($comment->content) !== ''
+                    ? $comment->content
+                    : '(tidak ada isi komentar)';
+            }
         }
     
         return match ($notif->type) {
@@ -91,5 +95,6 @@ class NotificationController extends Controller
             default   => "$username melakukan aksi tidak dikenal"
         };
     }
+    
     
 }
