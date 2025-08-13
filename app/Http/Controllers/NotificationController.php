@@ -71,14 +71,16 @@ class NotificationController extends Controller
     private function generateMessage($notif)
     {
         $username = optional($notif->sender)->username ?? 'Seseorang';
-
+        $commentText = optional($notif->comment)->content ?? '';
+    
         return match ($notif->type) {
             'follow'  => "$username mulai mengikuti kamu",
             'like'    => "$username menyukai postingan kamu",
-            'comment' => "$username mengomentari postingan kamu",
-            'reply'   => "$username membalas komentar kamu",
+            'comment' => "$username mengomentari postingan kamu: \"$commentText\"",
+            'reply'   => "$username membalas komentar kamu: \"$commentText\"",
             'mention' => "$username menyebut kamu",
             default   => "$username melakukan aksi tidak dikenal"
         };
     }
+    
 }
