@@ -42,4 +42,14 @@ class Notification extends Model
     {
         return $this->belongsTo(Post::class, 'related_post_id');
     }
+
+    public function comment()
+    {
+        return $this->belongsTo(Comment::class, 'comment_id', 'comment_id');
+    }
+
+    public function reply()
+    {
+        return $this->belongsTo(Comment::class, 'reply_id', 'comment_id');
+    }
 }

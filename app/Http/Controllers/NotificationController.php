@@ -5,6 +5,8 @@ namespace App\Http\Controllers;
 use App\Models\Notification;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
+use Illuminate\Support\Str;
+
 
 class NotificationController extends Controller
 {
@@ -12,10 +14,10 @@ class NotificationController extends Controller
     public function index()
     {
         $user = Auth::user();
-
+    
         $notifications = Notification::where('recipient_id', $user->user_id)
             ->orderBy('created_at', 'desc')
-            ->with(['sender', 'post'])
+            ->with(['sender', 'post', 'comment', 'reply']) // 🔹 tambahin relasi comment & reply
             ->get()
             ->map(function ($notif) {
                 return [
@@ -32,9 +34,10 @@ class NotificationController extends Controller
                     'created_at' => $notif->created_at
                 ];
             });
-
+    
         return response()->json($notifications);
     }
+    
 
     // 🔔 PATCH /notifications/{id}/read - Tandai satu notif sebagai dibaca
     public function markAsRead($id)
@@ -70,8 +73,14 @@ class NotificationController extends Controller
     // 🔧 Pesan notifikasi dinamis
     private function generateMessage($notif)
     {
-        $username = optional($notif->sender)->username ?? 'Seseorang';
-        $commentText = optional($notif->comment)->content ?? '';
+        $username = $notif->sender->username ?? 'Seseorang';
+    
+        $commentText = optional($notif->comment)->content;
+        if ($commentText) {
+            $commentText = Str::limit($commentText, 50);
+        } else {
+            $commentText = '(tidak ada isi komentar)';
+        }
     
         return match ($notif->type) {
             'follow'  => "$username mulai mengikuti kamu",
