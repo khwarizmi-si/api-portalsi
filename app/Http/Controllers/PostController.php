@@ -19,13 +19,12 @@ class PostController extends Controller
         $authUser = Auth::user();
     
         $posts = Post::with(['user', 'tags', 'mentions'])
+            ->withCount(['likes', 'comments']) // ✅ Tambahkan count
             ->where(function ($query) use ($authUser) {
-                // Postingan dari akun yang sudah di-follow (accepted)
                 $query->whereHas('user.followers', function ($q) use ($authUser) {
                     $q->where('follower_id', $authUser->user_id)
                       ->where('status', 'accepted');
                 })
-                // Atau postingan dari akun sendiri
                 ->orWhereHas('user', function ($q) use ($authUser) {
                     $q->where('user_id', $authUser->user_id);
                 });
@@ -36,22 +35,21 @@ class PostController extends Controller
         return response()->json($posts);
     }
     
-    
-    
-
-    // 🔍 Tampilkan satu post
     public function show($id)
     {
         $authUser = Auth::user();
-        $post = Post::with(['user', 'tags', 'mentions'])->findOrFail($id);
+        $post = Post::with(['user', 'tags', 'mentions'])
+            ->withCount(['likes', 'comments']) // ✅ Tambahkan count
+            ->findOrFail($id);
+    
         $owner = $post->user;
     
-        $canView = !$owner->is_private || // publik
+        $canView = !$owner->is_private ||
             ($authUser && (
-                $authUser->user_id === $owner->user_id || // diri sendiri
+                $authUser->user_id === $owner->user_id ||
                 $owner->followers()
                     ->where('follower_id', $authUser->user_id)
-                    ->where('status', 'accepted') // diperbaiki di sini
+                    ->where('status', 'accepted')
                     ->exists()
             ));
     
@@ -63,6 +61,35 @@ class PostController extends Controller
     
         return response()->json($post);
     }
+    
+    public function explore(Request $request)
+    {
+        $query = Post::with(['user', 'tags'])
+            ->withCount(['likes', 'comments']) // ✅ Tambahkan count
+            ->where('is_archived', false);
+    
+        if ($request->filled('tag')) {
+            $tagName = $request->tag;
+            $query->whereHas('tags', function ($q) use ($tagName) {
+                $q->where('tag_name', $tagName);
+            });
+        }
+    
+        $sort = $request->input('sort', 'random');
+    
+        if ($sort === 'popular') {
+            $query->orderByDesc('likes_count');
+        } elseif ($sort === 'newest') {
+            $query->orderByDesc('created_at');
+        } else {
+            $query->inRandomOrder();
+        }
+    
+        $posts = $query->take(20)->get();
+    
+        return response()->json($posts);
+    }
+    
     
     
 
@@ -188,31 +215,5 @@ class PostController extends Controller
         return response()->json(['message' => 'Post deleted']);
     }
 
-    // 🔎 Explore feed
-    public function explore(Request $request)
-    {
-        $query = Post::with(['user', 'tags'])
-            ->where('is_archived', false);
 
-        if ($request->filled('tag')) {
-            $tagName = $request->tag;
-            $query->whereHas('tags', function ($q) use ($tagName) {
-                $q->where('tag_name', $tagName);
-            });
-        }
-
-        $sort = $request->input('sort', 'random');
-
-        if ($sort === 'popular') {
-            $query->withCount('likes')->orderByDesc('likes_count');
-        } elseif ($sort === 'newest') {
-            $query->orderByDesc('created_at');
-        } else {
-            $query->inRandomOrder();
-        }
-
-        $posts = $query->take(20)->get();
-
-        return response()->json($posts);
-    }
 }
