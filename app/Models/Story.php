@@ -21,14 +21,23 @@ class Story extends Model
         'music_track_name',
         'music_artist_name',
         'music_preview_url',
+        'music_album_art_url',       // ✅ baru
         'music_start_position_ms',
+        'music_clip_duration_ms',    // ✅ baru
         'music_display_style',
+        'music_sticker_position_x',  // ✅ baru
+        'music_sticker_position_y',  // ✅ baru
         'created_at',
         'expires_at'
     ];
 
     protected $casts = [
         'expires_at' => 'datetime',
+        'created_at' => 'datetime',
+        'music_start_position_ms' => 'integer',
+        'music_clip_duration_ms' => 'integer',
+        'music_sticker_position_x' => 'float',
+        'music_sticker_position_y' => 'float',
     ];
 
     public function user()
