@@ -94,38 +94,53 @@ public function chatList()
 {
     $auth_id = Auth::id();
 
-    // Ambil semua chat yang melibatkan user ini
-    $chats = DirectMessage::where('sender_id', $auth_id)
-        ->orWhere('receiver_id', $auth_id)
-        ->latest('sent_at')
+    // Ambil chat terakhir tiap lawan bicara
+    $subQuery = DirectMessage::select(
+            DB::raw("CASE 
+                        WHEN sender_id = $auth_id THEN receiver_id 
+                        ELSE sender_id 
+                     END as user_id"),
+            'content',
+            'media_url',
+            'sent_at',
+            'is_read'
+        )
+        ->where(function($q) use ($auth_id) {
+            $q->where('sender_id', $auth_id)
+              ->orWhere('receiver_id', $auth_id);
+        })
+        ->orderBy('sent_at', 'desc');
+
+    // Ambil yang terakhir per user_id
+    $lastChats = DB::table(DB::raw("({$subQuery->toSql()}) as dm"))
+        ->mergeBindings($subQuery->getQuery())
+        ->select('dm.*')
+        ->groupBy('dm.user_id')
+        ->get();
+
+    // Ambil user data sekaligus
+    $userIds = $lastChats->pluck('user_id')->toArray();
+    $users = User::whereIn('id', $userIds)
+        ->select('id','username','full_name','profile_picture_url')
         ->get()
-        ->groupBy(function ($message) use ($auth_id) {
-            // Grup berdasarkan lawan bicara
-            return $message->sender_id == $auth_id
-                ? $message->receiver_id
-                : $message->sender_id;
-        })
-        ->map(function ($messages, $user_id) {
-            $lastMessage = $messages->sortByDesc('sent_at')->first();
+        ->keyBy('id');
 
-            // Ambil data user lawan bicara
-            $user = \App\Models\User::select('id', 'username', 'full_name', 'profile_picture_url')
-                ->find($user_id);
+    // Gabungkan
+    $result = $lastChats->map(function($chat) use ($users) {
+        $user = $users[$chat->user_id] ?? null;
+        return [
+            'user_id'             => (int) $chat->user_id,
+            'username'            => $user->username ?? null,
+            'full_name'           => $user->full_name ?? null,
+            'profile_picture_url' => $user->profile_picture_url ?? null,
+            'last_message'        => $chat->content ?? '📎 Media',
+            'last_media'          => $chat->media_url,
+            'sent_at'             => $chat->sent_at,
+            'is_read'             => $chat->is_read,
+        ];
+    });
 
-            return [
-                'user_id'             => (int) $user_id,
-                'username'            => $user->username ?? null,
-                'full_name'           => $user->full_name ?? null,
-                'profile_picture_url' => $user->profile_picture_url ?? null,
-                'last_message'        => $lastMessage->content ?? '📎 Media',
-                'last_media'          => $lastMessage->media_url,
-                'sent_at'             => $lastMessage->sent_at,
-                'is_read'             => $lastMessage->is_read,
-            ];
-        })
-        ->values();
-
-    return response()->json($chats);
+    return response()->json($result->values());
 }
 
 
