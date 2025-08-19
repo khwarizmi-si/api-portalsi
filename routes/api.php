@@ -18,6 +18,7 @@ use App\Http\Controllers\{
     FollowController,
     ProfileController,
     StoryController,
+    StoryViewController,
     NotificationController,
     DirectMessageController,
     AccountController,
@@ -29,7 +30,6 @@ use App\Http\Controllers\{
     PortfolioController
 };
 
-// 🚀 PUBLIC ROUTES
 // 🚀 PUBLIC ROUTES
 Route::post('/register', function (Request $request) {
     $request->validate([
