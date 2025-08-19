@@ -12,10 +12,10 @@ return new class extends Migration
     public function up(): void
     {
         Schema::table('stories', function (Blueprint $table) {
-            $table->string('music_album_art_url')->nullable()->after('music_preview_url');
-            $table->string('music_clip_duration_ms')->nullable()->after('music_start_position_ms');
-            $table->string('music_sticker_position_x')->nullable()->after('music_display_style');
-            $table->string('music_sticker_position_y')->nullable()->after('music_sticker_position_x');
+            $table->text('music_album_art_url')->nullable()->after('music_preview_url');
+            $table->integer('music_clip_duration_ms')->nullable()->after('music_start_position_ms');
+            $table->decimal('music_sticker_position_x', 10, 8)->nullable()->after('music_display_style');
+            $table->decimal('music_sticker_position_y', 10, 8)->nullable()->after('music_sticker_position_x');
         });
     }
 
