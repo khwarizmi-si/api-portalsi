@@ -106,18 +106,26 @@ public function chatList()
         ->map(function ($messages, $user_id) {
             $lastMessage = $messages->sortByDesc('sent_at')->first();
 
+            // Ambil data user lawan bicara
+            $user = \App\Models\User::select('id', 'username', 'full_name', 'profile_picture_url')
+                ->find($user_id);
+
             return [
-                'user_id'      => (int) $user_id,
-                'last_message' => $lastMessage->content ?? '📎 Media',
-                'last_media'   => $lastMessage->media_url,
-                'sent_at'      => $lastMessage->sent_at,
-                'is_read'      => $lastMessage->is_read,
+                'user_id'             => (int) $user_id,
+                'username'            => $user->username ?? null,
+                'full_name'           => $user->full_name ?? null,
+                'profile_picture_url' => $user->profile_picture_url ?? null,
+                'last_message'        => $lastMessage->content ?? '📎 Media',
+                'last_media'          => $lastMessage->media_url,
+                'sent_at'             => $lastMessage->sent_at,
+                'is_read'             => $lastMessage->is_read,
             ];
         })
         ->values();
 
     return response()->json($chats);
 }
+
 
 
 }
