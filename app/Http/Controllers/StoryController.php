@@ -63,24 +63,39 @@ class StoryController extends Controller
     public function feed()
     {
         $user = Auth::user();
-
+    
         $followedIds = $user->following()->pluck('users.user_id')->toArray();
         $allIds = array_merge($followedIds, [$user->user_id]);
-
+    
         $stories = Story::with(['user:user_id,username,profile_picture_url'])
             ->whereIn('user_id', $allIds)
             ->where('expires_at', '>', now())
             ->latest()
             ->get();
-
-        $grouped = $stories->groupBy('user.user_id')->map(function ($userStories) {
-            $user = $userStories->first()->user;
-
+    
+        $grouped = $stories->groupBy('user.user_id')->map(function ($userStories) use ($user) {
+            $storyOwner = $userStories->first()->user;
+    
+            // cek apakah semua story user ini sudah dilihat oleh logged in user
+            $storyIds = $userStories->pluck('story_id')->toArray();
+            $viewedCount = \DB::table('story_views')
+                ->whereIn('story_id', $storyIds)
+                ->where('viewer_id', $user->user_id)
+                ->count();
+    
+            $isAllViewed = $viewedCount >= count($storyIds);
+    
             return [
-                'user_id' => $user->user_id,
-                'username' => $user->username,
-                'profile_picture_url' => $user->profile_picture_url,
-                'stories' => $userStories->map(function ($story) {
+                'user_id' => $storyOwner->user_id,
+                'username' => $storyOwner->username,
+                'profile_picture_url' => $storyOwner->profile_picture_url,
+                'is_viewed' => $isAllViewed, // ✅ untuk frontend (lingkaran IG style)
+                'stories' => $userStories->map(function ($story) use ($user) {
+                    $alreadyViewed = \DB::table('story_views')
+                        ->where('story_id', $story->story_id)
+                        ->where('viewer_id', $user->user_id)
+                        ->exists();
+    
                     return [
                         'story_id'                => $story->story_id,
                         'type'                    => $story->type,
@@ -93,13 +108,15 @@ class StoryController extends Controller
                         'music_display_style'     => $story->music_display_style,
                         'created_at'              => $story->created_at,
                         'expires_at'              => $story->expires_at,
+                        'is_viewed'               => $alreadyViewed, // ✅ buat indikator per story
                     ];
                 })->values()
             ];
         })->values();
-
+    
         return response()->json($grouped);
     }
+    
 
     /**
      * Hapus story milik sendiri

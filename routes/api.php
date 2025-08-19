@@ -204,6 +204,8 @@ Route::middleware(['auth:sanctum'])->group(function () {
         Route::post('/stories', [StoryController::class, 'store']);
         Route::delete('/stories/{id}', [StoryController::class, 'destroy']);
         Route::post('/stories/{id}/view', [StoryController::class, 'view']);
+        Route::get('/stories/my', [StoryController::class, 'myStories']);
+        Route::get('/stories/{id}/viewers', [StoryViewController::class, 'viewers']);
 
         // Notifications
         Route::patch('/notifications/{id}/read', [NotificationController::class, 'markAsRead']);
