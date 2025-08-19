@@ -118,14 +118,14 @@ public function chatList()
         ->groupBy('dm.user_id')
         ->get();
 
-    // Ambil user data sekaligus
+    // Ambil user data sekaligus (pakai user_id)
     $userIds = $lastChats->pluck('user_id')->toArray();
-    $users = User::whereIn('id', $userIds)
-        ->select('id','username','full_name','profile_picture_url')
+    $users = User::whereIn('user_id', $userIds)
+        ->select('user_id','username','full_name','profile_picture_url')
         ->get()
-        ->keyBy('id');
+        ->keyBy('user_id');
 
-    // Gabungkan
+    // Gabungkan hasil
     $result = $lastChats->map(function($chat) use ($users) {
         $user = $users[$chat->user_id] ?? null;
         return [
