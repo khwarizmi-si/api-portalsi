@@ -9,14 +9,24 @@ use Illuminate\Support\Facades\Storage;
 
 class AnnouncementController extends Controller
 {
-    // 🔹 List semua pengumuman (terbaru dulu)
-    public function index()
-    {
-        return Announcement::with([
-            'creator:user_id,full_name,username,profile_picture_url'
-        ])->latest()->get();
-    }
-    
+
+// 🔹 List semua pengumuman (terbaru dulu)
+public function index()
+{
+    return Announcement::with([
+        'creator:user_id,full_name,username,profile_picture_url'
+    ])->latest()->get();
+}
+
+// 🔹 List hanya pengumuman yang pinned
+public function pinned()
+{
+    return Announcement::with([
+        'creator:user_id,full_name,username,profile_picture_url'
+    ])->where('pinned', 1)
+      ->latest()
+      ->get();
+}
 
     // 🔹 Tambah pengumuman (admin only)
     public function store(Request $request)

@@ -245,6 +245,7 @@ Route::middleware(['auth:sanctum'])->group(function () {
         // Announcements
         Route::middleware('auth:sanctum')->group(function () {
             Route::get('/announcements', [AnnouncementController::class, 'index']);
+            Route::get('/announcements/pinned', [AnnouncementController::class, 'pinned']); // hanya pinned
         
             // Khusus user centang biru
             Route::middleware('onlyVerified')->group(function () {
