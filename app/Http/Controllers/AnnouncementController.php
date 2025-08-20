@@ -12,8 +12,11 @@ class AnnouncementController extends Controller
     // 🔹 List semua pengumuman (terbaru dulu)
     public function index()
     {
-        return Announcement::latest()->get();
+        return Announcement::with([
+            'creator:user_id,full_name,username,profile_picture_url'
+        ])->latest()->get();
     }
+    
 
     // 🔹 Tambah pengumuman (admin only)
     public function store(Request $request)
@@ -47,6 +50,7 @@ class AnnouncementController extends Controller
         }
 
         $announcement = Announcement::create($data);
+        $announcement->load('creator:user_id,full_name,username,profile_picture_url');
         return response()->json($announcement, 201);
     }
 
@@ -89,6 +93,7 @@ class AnnouncementController extends Controller
         }
 
         $announcement->update($data);
+        $announcement->load('creator:user_id,full_name,username,profile_picture_url');
         return response()->json($announcement);
     }
 
