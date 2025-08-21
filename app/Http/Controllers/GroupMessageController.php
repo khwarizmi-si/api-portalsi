@@ -22,7 +22,7 @@ class GroupMessageController extends Controller
 
         $request->validate([
             'content' => 'required|string',
-            'media' => 'nullable|file|mimes:jpg,jpeg,png,pdf|max:2048',
+            'media' => 'nullable|file|mimes:jpg,jpeg,png,pdf|max:51200',
         ]);
 
         $mediaUrl = null;

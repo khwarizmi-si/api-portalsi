@@ -73,7 +73,7 @@ class PortfolioController extends Controller
             'aspect' => 'required|in:quran,it,bahasa,karakter',
             'title' => 'required|string|max:255',
             'description' => 'nullable|string',
-            'media' => 'nullable|file|mimes:jpg,jpeg,png,pdf|max:2048',
+            'media' => 'nullable|file|mimes:jpg,jpeg,png,pdf|max:51200',
             'year' => 'nullable|integer|min:2000|max:' . date('Y'),
         ]);
 
@@ -111,7 +111,7 @@ class PortfolioController extends Controller
             'aspect' => 'nullable|in:quran,it,bahasa,karakter',
             'title' => 'nullable|string|max:255',
             'description' => 'nullable|string',
-            'media' => 'nullable|file|mimes:jpg,jpeg,png,pdf|max:2048',
+            'media' => 'nullable|file|mimes:jpg,jpeg,png,pdf|max:51200',
             'year' => 'nullable|integer|min:2000|max:' . date('Y'),
         ]);
 

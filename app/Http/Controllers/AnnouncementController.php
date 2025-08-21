@@ -48,7 +48,7 @@ public function pinned()
         $request->validate([
             'title'     => 'nullable|string|max:255',
             'content'   => 'nullable|string',
-            'image'     => 'nullable|image|max:2048',
+            'image'     => 'nullable|image|max:51200',
             'poll_data' => 'nullable|array',
             'pinned'    => 'boolean',
         ]);
@@ -86,7 +86,7 @@ public function pinned()
         $request->validate([
             'title'     => 'nullable|string|max:255',
             'content'   => 'nullable|string',
-            'image'     => 'nullable|image|max:2048',
+            'image'     => 'nullable|image|max:51200',
             'poll_data' => 'nullable|array',
             'pinned'    => 'boolean',
         ]);

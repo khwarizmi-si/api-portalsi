@@ -17,7 +17,7 @@ class DirectMessageController extends Controller
         $request->validate([
             'receiver_id' => 'required|exists:users,user_id',
             'content'     => 'nullable|string',
-            'media'       => 'nullable|file|mimes:jpg,jpeg,png,mp4,pdf|max:10240', // maksimal 10MB
+            'media'       => 'nullable|file|mimes:jpg,jpeg,png,mp4,pdf|max:51200', // maksimal 10MB
         ]);
 
         $mediaUrl = null;
