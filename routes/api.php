@@ -73,6 +73,7 @@ Route::post('/register', function (Request $request) {
     ], 201);
 });
 
+// 🔑 Login
 Route::post('/login', function (Request $request) {
     $request->validate([
         'login'    => 'required|string', // bisa username atau email
