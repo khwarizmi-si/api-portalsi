@@ -29,26 +29,27 @@ Route::post('/submit-reset-password', function (Request $request) {
         $response = Http::withHeaders([
             'Accept' => 'application/json'
         ])->post(config('app.api_url') . '/api/reset-password', $data);
-
-        // 🔎 Log untuk debugging
-        Log::info('Submit Reset Password Response', [
-            'status' => $response->status(),
-            'json'   => $response->json(),
-        ]);
-
     } catch (\Exception $e) {
-        Log::error('Submit Reset Password Exception', ['error' => $e->getMessage()]);
         return redirect('/reset-password-error')->with('error', 'Gagal terhubung ke server API.');
     }
 
-    // ✅ Cek hanya status code
-    if ($response->status() === 200) {
+    if ($response->status() === 200 && $response->json('message') === 'Password berhasil direset.') {
         return redirect('/reset-password-success');
+    } else {
+        return redirect('/reset-password-error')->with('error', $response->json('message') ?? 'Reset password gagal.');
     }
+    
+    
+});
 
-    // ❌ Kalau gagal
-    return redirect('/reset-password-error')->with(
-        'error',
-        $response->json('message') ?? 'Reset password gagal.'
-    );
+// ✅ GET: Halaman sukses
+Route::get('/reset-password-success', function () {
+    return view('reset-password-success');
+});
+
+// ✅ GET: Halaman gagal
+Route::get('/reset-password-error', function () {
+    return view('reset-password-error', [
+        'error' => session('error') ?? 'Terjadi kesalahan saat mengubah password.'
+    ]);
 });
