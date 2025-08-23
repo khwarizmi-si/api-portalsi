@@ -140,12 +140,15 @@ Route::post('/reset-password', function (Request $request) {
     $status = Password::reset(
         $request->only('email', 'password', 'password_confirmation', 'token'),
         function ($user, $password) {
-            $user->password = Hash::make($password); // pakai field yang benar di tabel
+            $user->password = Hash::make($password);
             $user->save();
-
+    
             event(new PasswordReset($user));
         }
     );
+    
+    dd($status);
+    
 
     if ($status === Password::PASSWORD_RESET) {
         return response()->json(['message' => 'Password berhasil direset.']);
