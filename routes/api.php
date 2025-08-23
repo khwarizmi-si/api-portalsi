@@ -140,25 +140,23 @@ Route::post('/reset-password', function (Request $request) {
     $status = Password::reset(
         $request->only('email', 'password', 'password_confirmation', 'token'),
         function ($user, $password) {
-            $user->password = Hash::make($password);
+            $user->password_hash = Hash::make($password);
             $user->save();
-    
+
             event(new PasswordReset($user));
         }
     );
-    
-    dd($status);
-    
-
-    if ($status === Password::PASSWORD_RESET) {
-        return response()->json(['message' => 'Password berhasil direset.']);
-    }
 
     return response()->json([
-        'message' => __($status), // otomatis translate: invalid token, invalid user, dll
-    ], 400);
+        'message' => match ($status) {
+            Password::PASSWORD_RESET => 'Password berhasil direset.',
+            Password::INVALID_TOKEN => 'Token tidak valid atau sudah kadaluarsa.',
+            Password::INVALID_USER => 'Email tidak ditemukan.',
+            Password::RESET_THROTTLED => 'Terlalu sering mencoba. Coba beberapa saat lagi.',
+            default => 'Reset password gagal.'
+        }
+    ], $status === Password::PASSWORD_RESET ? 200 : 400);
 });
-
 
 Route::get('/profile/{username}', [ProfileController::class, 'show']);
 
