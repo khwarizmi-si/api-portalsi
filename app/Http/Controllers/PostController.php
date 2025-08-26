@@ -105,7 +105,7 @@ class PostController extends Controller
     {
         $request->validate([
             'caption'     => 'nullable|string',
-            'media'       => 'required|file|mimes:jpg,jpeg,png,mp4,mov,webm|max:51200',
+            'media' => 'required|file|mimes:jpg,jpeg,png,mp4,mov,webm,avi,3gp,mkv|max:512000',
             'location'    => 'nullable|string',
             'is_archived' => 'nullable|boolean',
             'is_video'    => 'nullable|boolean',
@@ -172,7 +172,7 @@ class PostController extends Controller
 
         $request->validate([
             'caption'     => 'nullable|string',
-            'media'       => 'nullable|file|mimes:jpg,jpeg,png,mp4,mov,webm|max:51200',
+            'media'       => 'nullable|file|mimes:jpg,jpeg,png,mp4,mov,webm,avi,3gp,mkv|max:512000',
             'location'    => 'nullable|string',
             'is_archived' => 'nullable|boolean',
             'is_video'    => 'nullable|boolean',
