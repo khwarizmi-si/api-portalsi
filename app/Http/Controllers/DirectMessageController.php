@@ -94,35 +94,37 @@ public function chatList()
 {
     $auth_id = Auth::id();
 
-    // Ambil chat terakhir tiap lawan bicara
+    // Subquery untuk ambil sent_at terakhir tiap lawan bicara
     $subQuery = DirectMessage::select(
             DB::raw("CASE 
                         WHEN sender_id = $auth_id THEN receiver_id 
                         ELSE sender_id 
                      END as user_id"),
-            'content',
-            'media_url',
-            'sent_at',
-            'is_read'
+            DB::raw("MAX(sent_at) as last_sent_at")
         )
         ->where(function($q) use ($auth_id) {
             $q->where('sender_id', $auth_id)
               ->orWhere('receiver_id', $auth_id);
         })
-        ->orderBy('sent_at', 'desc');
-
-        $subQuery = DB::table('direct_messages')
-        ->selectRaw('user_id, MAX(id) as last_id')
         ->groupBy('user_id');
-    
-    $lastChats = DB::table('direct_messages as dm')
-        ->joinSub($subQuery, 'sq', function ($join) {
-            $join->on('dm.id', '=', 'sq.last_id');
-        })
-        ->get();
-    
 
-    // Ambil user data sekaligus (pakai user_id)
+    // Join ke direct_messages untuk ambil detail pesan terakhir
+    $lastChats = DB::table('direct_messages as dm')
+        ->joinSub($subQuery, 'sq', function($join) use ($auth_id) {
+            $join->on(DB::raw("CASE WHEN dm.sender_id = $auth_id THEN dm.receiver_id ELSE dm.sender_id END"), '=', 'sq.user_id')
+                 ->on('dm.sent_at', '=', 'sq.last_sent_at');
+        })
+        ->select(
+            DB::raw("CASE WHEN dm.sender_id = $auth_id THEN dm.receiver_id ELSE dm.sender_id END as user_id"),
+            'dm.content',
+            'dm.media_url',
+            'dm.sent_at',
+            'dm.is_read'
+        )
+        ->orderBy('dm.sent_at', 'desc') // urutkan chat list berdasarkan terbaru
+        ->get();
+
+    // Ambil user data
     $userIds = $lastChats->pluck('user_id')->toArray();
     $users = User::whereIn('user_id', $userIds)
         ->select('user_id','username','full_name','profile_picture_url')
@@ -146,7 +148,5 @@ public function chatList()
 
     return response()->json($result->values());
 }
-
-
 
 }
