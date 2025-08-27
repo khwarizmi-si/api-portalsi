@@ -111,12 +111,16 @@ public function chatList()
         })
         ->orderBy('sent_at', 'desc');
 
-    // Ambil yang terakhir per user_id
-    $lastChats = DB::table(DB::raw("({$subQuery->toSql()}) as dm"))
-        ->mergeBindings($subQuery->getQuery())
-        ->select('dm.*')
-        ->groupBy('dm.user_id')
+        $subQuery = DB::table('direct_messages')
+        ->selectRaw('user_id, MAX(id) as last_id')
+        ->groupBy('user_id');
+    
+    $lastChats = DB::table('direct_messages as dm')
+        ->joinSub($subQuery, 'sq', function ($join) {
+            $join->on('dm.id', '=', 'sq.last_id');
+        })
         ->get();
+    
 
     // Ambil user data sekaligus (pakai user_id)
     $userIds = $lastChats->pluck('user_id')->toArray();
