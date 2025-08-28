@@ -7,9 +7,10 @@ use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\DB;
 use App\Models\User;
 use App\Models\DirectMessage;
-use Illuminate\Support\Facades\Storage;
 use App\Models\Group;
 use App\Models\GroupMember;
+use Illuminate\Support\Facades\Storage;
+
 
 class DirectMessageController extends Controller
 {
