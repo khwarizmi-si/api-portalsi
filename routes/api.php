@@ -190,6 +190,9 @@ Route::middleware(['auth:sanctum'])->group(function () {
         Route::post('/posts/{id}/update', [PostController::class, 'update']);
         Route::delete('/posts/{id}', [PostController::class, 'destroy']);
 
+        // User Suggestion
+        Route::get('/suggestions', [UserSuggestionController::class, 'index']);
+
         // Comments
         Route::get('/posts/{post_id}/comments', [CommentController::class, 'getCommentsByPost']);
         Route::post('/posts/{post_id}/comments', [CommentController::class, 'store']);
