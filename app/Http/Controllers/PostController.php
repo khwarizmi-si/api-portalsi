@@ -18,11 +18,15 @@ class PostController extends Controller
  {
      $authUser = Auth::user();
  
+     // =========================
+     // Ambil postingan utama
+     // =========================
      $isFollowing = $authUser->following()
          ->where('status', 'accepted')
          ->exists();
  
      if ($isFollowing) {
+         // 🚀 Timeline normal (dari following + self)
          $posts = Post::with(['user', 'tags', 'mentions'])
              ->withCount(['likes', 'comments'])
              ->where(function ($query) use ($authUser) {
@@ -36,53 +40,105 @@ class PostController extends Controller
              })
              ->latest()
              ->take(50)
-             ->get();
+             ->get()
+             ->map(function ($post) use ($authUser) {
+                 $post->is_liked = $post->likes()->where('user_id', $authUser->user_id)->exists();
+                 $post->type = 'post'; // tandai sebagai post
+                 return $post;
+             });
      } else {
+         // 🎯 Belum follow siapapun → tampilkan random postingan
          $posts = Post::with(['user', 'tags'])
              ->withCount(['likes', 'comments'])
              ->latest()
              ->take(50)
+             ->get()
+             ->map(function ($post) use ($authUser) {
+                 $post->is_liked = $post->likes()->where('user_id', $authUser->user_id)->exists();
+                 $post->type = 'post';
+                 return $post;
+             });
+     }
+ 
+     // =============================
+     // 🚀 Ambil suggestion follow
+     // =============================
+     $followingIds = $authUser->following()
+         ->where('status', 'accepted')
+         ->pluck('followed_id');
+ 
+     $suggestions = collect();
+ 
+     if ($followingIds->isNotEmpty()) {
+         // Cari "teman dari teman"
+         $mutuals = \DB::table('follows')
+             ->select('followed_id', \DB::raw('COUNT(*) as mutual_count'))
+             ->whereIn('follower_id', $followingIds)
+             ->whereNotIn('followed_id', $followingIds)
+             ->where('followed_id', '!=', $authUser->user_id)
+             ->groupBy('followed_id')
+             ->orderByDesc('mutual_count')
+             ->take(10)
              ->get();
-     }
  
-     $posts->map(function ($post) use ($authUser) {
-         $post->is_liked = $post->likes()->where('user_id', $authUser->user_id)->exists();
-         return $post;
-     });
+         $userIds = $mutuals->pluck('followed_id');
  
-     $suggestions = $this->getSuggestions($authUser);
+         if ($userIds->isNotEmpty()) {
+             $users = \App\Models\User::whereIn('user_id', $userIds)
+                 ->orderByRaw("FIELD(user_id, " . implode(',', $userIds->toArray()) . ")")
+                 ->get();
  
-     // 🧩 Feed builder
-     $feed = [];
-     $suggestionIndex = 0;
- 
-     foreach ($posts as $i => $post) {
-         $feed[] = [
-             'type' => 'post',
-             'data' => $post
-         ];
- 
-         // 👉 Setelah 2 postingan pertama → inject suggestion
-         if ($i == 1 && isset($suggestions[$suggestionIndex])) {
-             $feed[] = [
-                 'type' => 'suggestion',
-                 'data' => $suggestions[$suggestionIndex]
-             ];
-             $suggestionIndex++;
-         }
- 
-         // 👉 Setelah itu setiap 8 postingan → inject suggestion lagi
-         if ($i > 1 && (($i - 1) % 8 == 0) && isset($suggestions[$suggestionIndex])) {
-             $feed[] = [
-                 'type' => 'suggestion',
-                 'data' => $suggestions[$suggestionIndex]
-             ];
-             $suggestionIndex++;
+             $suggestions = $suggestions->merge($users);
          }
      }
  
-     return response()->json($feed);
+     // Kalau mutual < 10 → tambahkan random
+     if ($suggestions->count() < 10) {
+         $need = 10 - $suggestions->count();
+ 
+         $randomUsers = \App\Models\User::where('user_id', '!=', $authUser->user_id)
+             ->whereNotIn('user_id', $followingIds)
+             ->whereNotIn('user_id', $suggestions->pluck('user_id'))
+             ->inRandomOrder()
+             ->take($need)
+             ->get();
+ 
+         $suggestions = $suggestions->merge($randomUsers);
+     }
+ 
+     // tandai suggestion supaya bisa dibedakan di frontend
+     $suggestionBlock = [
+         'type' => 'suggestion',
+         'users' => $suggestions
+     ];
+ 
+     // =============================
+     // Gabungkan posts + suggestion
+     // =============================
+     $feed = collect();
+     $postCount = 0;
+ 
+     foreach ($posts as $post) {
+         $feed->push($post);
+         $postCount++;
+ 
+         // Setelah 2 post pertama → insert suggestion sekali
+         if ($postCount === 2) {
+             $feed->push($suggestionBlock);
+         }
+ 
+         // Setelah itu tiap 8 postingan → insert suggestion
+         if ($postCount > 2 && $postCount % 8 === 0) {
+             $feed->push($suggestionBlock);
+         }
+     }
+ 
+     return response()->json([
+         'feed' => $feed
+     ]);
  }
+ 
+
     
     public function show($id)
     {
