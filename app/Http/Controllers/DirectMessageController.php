@@ -8,6 +8,8 @@ use Illuminate\Support\Facades\DB;
 use App\Models\User;
 use App\Models\DirectMessage;
 use Illuminate\Support\Facades\Storage;
+use App\Models\Group;
+use App\Models\GroupMember;
 
 class DirectMessageController extends Controller
 {
@@ -94,7 +96,7 @@ public function chatList()
 {
     $auth_id = Auth::id();
 
-    // Subquery untuk ambil sent_at terakhir tiap lawan bicara
+    // 🔹 1. Ambil chat pribadi (sama seperti sebelumnya)
     $subQuery = DirectMessage::select(
             DB::raw("CASE 
                         WHEN sender_id = $auth_id THEN receiver_id 
@@ -108,7 +110,6 @@ public function chatList()
         })
         ->groupBy('user_id');
 
-    // Join ke direct_messages untuk ambil detail pesan terakhir
     $lastChats = DB::table('direct_messages as dm')
         ->joinSub($subQuery, 'sq', function($join) use ($auth_id) {
             $join->on(DB::raw("CASE WHEN dm.sender_id = $auth_id THEN dm.receiver_id ELSE dm.sender_id END"), '=', 'sq.user_id')
@@ -121,32 +122,67 @@ public function chatList()
             'dm.sent_at',
             'dm.is_read'
         )
-        ->orderBy('dm.sent_at', 'desc') // urutkan chat list berdasarkan terbaru
+        ->orderBy('dm.sent_at', 'desc')
         ->get();
 
-    // Ambil user data
     $userIds = $lastChats->pluck('user_id')->toArray();
     $users = User::whereIn('user_id', $userIds)
         ->select('user_id','username','full_name','profile_picture_url')
         ->get()
         ->keyBy('user_id');
 
-    // Gabungkan hasil
-    $result = $lastChats->map(function($chat) use ($users) {
+    $chatUsers = $lastChats->map(function($chat) use ($users) {
         $user = $users[$chat->user_id] ?? null;
         return [
-            'user_id'             => (int) $chat->user_id,
-            'username'            => $user->username ?? null,
-            'full_name'           => $user->full_name ?? null,
-            'profile_picture_url' => $user->profile_picture_url ?? null,
-            'last_message'        => $chat->content ?? '📎 Media',
-            'last_media'          => $chat->media_url,
-            'sent_at'             => $chat->sent_at,
-            'is_read'             => $chat->is_read,
+            'type'               => 'user',
+            'id'                 => (int) $chat->user_id,
+            'name'               => $user->full_name ?? $user->username,
+            'username'           => $user->username ?? null,
+            'profile_picture_url'=> $user->profile_picture_url ?? null,
+            'last_message'       => $chat->content ?? '📎 Media',
+            'last_media'         => $chat->media_url,
+            'sent_at'            => $chat->sent_at,
+            'is_read'            => $chat->is_read,
         ];
     });
 
-    return response()->json($result->values());
+    // 🔹 2. Ambil grup + last message
+    $groups = \App\Models\GroupMember::with('group')
+        ->where('user_id', $auth_id)
+        ->get()
+        ->map(function ($member) {
+            // cari pesan terakhir di grup ini
+            $lastMsg = \App\Models\GroupMessage::where('group_id', $member->group_id)
+                ->orderByDesc('sent_at')
+                ->first();
+
+            return [
+                'type'        => 'group',
+                'id'          => $member->group->id,
+                'name'        => $member->group->name,
+                'description' => $member->group->description,
+                'avatar_url'  => $member->group->avatar_url,
+                'cover_url'   => $member->group->cover_url,
+                'role'        => $member->role,
+                'joined_at'   => $member->joined_at,
+                'is_muted'    => (bool) $member->is_muted,
+
+                // tambahan last message
+                'last_message'=> $lastMsg ? ($lastMsg->is_deleted ? '[Pesan telah dihapus]' : ($lastMsg->content ?? '📎 Media')) : null,
+                'last_media'  => $lastMsg && !$lastMsg->is_deleted ? $lastMsg->media_url : null,
+                'sent_at'     => $lastMsg ? $lastMsg->sent_at : null,
+                'sender'      => $lastMsg ? User::select('user_id','username')->find($lastMsg->sender_id) : null,
+            ];
+        });
+
+    // 🔹 3. Gabungkan user chat + group chat
+    $result = $chatUsers->merge($groups);
+
+    // 🔹 4. Urutkan berdasarkan waktu terbaru (sent_at)
+    $result = $result->sortByDesc('sent_at')->values();
+
+    return response()->json($result);
 }
+
 
 }
