@@ -87,7 +87,7 @@ class GroupMessageController extends Controller
                     'media_url' => $msg->is_deleted ? null : $msg->media_url,
                     'is_pinned' => $msg->is_pinned,
                     'is_edited' => $msg->is_edited,
-                    'sent_at' => $msg->sent_at,
+                    'sent_at' => $msg->sent_at ? $msg->sent_at->toIso8601String() : null,
                     'mentions' => $msg->mentions->map(function ($mention) {
                         return [
                             'user_id' => $mention->mentioned->user_id,
