@@ -12,47 +12,81 @@ use Illuminate\Support\Facades\Storage;
 
 class GroupController extends Controller
 {
-    // 🔹 1. Buat grup
-    public function store(Request $request)
-    {
-        $user = Auth::user();
+// 🔹 1. Buat grup + tambah member langsung
+public function store(Request $request)
+{
+    $user = Auth::user();
 
-        if (!$user->is_verified) {
-            return response()->json(['message' => 'Hanya user terverifikasi (centang biru) yang bisa membuat grup.'], 403);
-        }
-
-        $request->validate([
-            'name' => 'required|string|max:255',
-            'description' => 'nullable|string',
-            'avatar' => 'nullable|file|image|mimes:jpg,jpeg,png|max:2048',
-            'cover' => 'nullable|file|image|mimes:jpg,jpeg,png|max:2048',
-        ]);
-
-        $group = new Group();
-        $group->owner_id = $user->user_id;
-        $group->name = $request->name;
-        $group->description = $request->description;
-
-        if ($request->hasFile('avatar')) {
-            $path = $request->file('avatar')->store('uploads/group-avatars', 'public');
-            $group->avatar_url = asset('storage/' . $path);
-        }
-
-        if ($request->hasFile('cover')) {
-            $path = $request->file('cover')->store('uploads/group-covers', 'public');
-            $group->cover_url = asset('storage/' . $path);
-        }
-
-        $group->save();
-
-        GroupMember::create([
-            'group_id' => $group->id,
-            'user_id' => $user->user_id,
-            'role' => 'admin',
-        ]);
-
-        return response()->json(['message' => 'Grup berhasil dibuat.', 'group' => $group]);
+    if (!$user->is_verified) {
+        return response()->json(['message' => 'Hanya user terverifikasi (centang biru) yang bisa membuat grup.'], 403);
     }
+
+    $request->validate([
+        'name' => 'required|string|max:255',
+        'description' => 'nullable|string',
+        'avatar' => 'nullable|file|image|mimes:jpg,jpeg,png|max:2048',
+        'cover' => 'nullable|file|image|mimes:jpg,jpeg,png|max:2048',
+        'members' => 'nullable|array',
+        'members.*' => 'string', // username atau email
+    ]);
+
+    $group = new Group();
+    $group->owner_id = $user->user_id;
+    $group->name = $request->name;
+    $group->description = $request->description;
+
+    if ($request->hasFile('avatar')) {
+        $path = $request->file('avatar')->store('uploads/group-avatars', 'public');
+        $group->avatar_url = asset('storage/' . $path);
+    }
+
+    if ($request->hasFile('cover')) {
+        $path = $request->file('cover')->store('uploads/group-covers', 'public');
+        $group->cover_url = asset('storage/' . $path);
+    }
+
+    $group->save();
+
+    // Tambah owner sebagai admin
+    GroupMember::create([
+        'group_id' => $group->id,
+        'user_id' => $user->user_id,
+        'role' => 'admin',
+        'joined_at' => now(),
+        'is_muted' => false,
+    ]);
+
+    // Jika ada members dari request
+    if ($request->filled('members')) {
+        foreach ($request->members as $identifier) {
+            $target = User::where('username', $identifier)
+                ->orWhere('email', $identifier)
+                ->first();
+
+            if (!$target) {
+                continue; // skip kalau user tidak ditemukan
+            }
+
+            // Skip kalau sudah ada di grup
+            if (GroupMember::where('group_id', $group->id)
+                ->where('user_id', $target->user_id)
+                ->exists()) {
+                continue;
+            }
+
+            GroupMember::create([
+                'group_id' => $group->id,
+                'user_id' => $target->user_id,
+                'role' => 'member',
+                'joined_at' => now(),
+                'is_muted' => false,
+            ]);
+        }
+    }
+
+    return response()->json(['message' => 'Grup berhasil dibuat.', 'group' => $group->load('members.user')]);
+}
+
 
     // 🔹 2. Join grup
     public function join(Group $group)
