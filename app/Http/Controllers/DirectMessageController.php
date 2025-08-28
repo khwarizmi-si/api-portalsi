@@ -148,32 +148,34 @@ public function chatList()
 
     // 🔹 2. Ambil grup + last message
     $groups = \App\Models\GroupMember::with('group')
-        ->where('user_id', $auth_id)
-        ->get()
-        ->map(function ($member) {
-            // cari pesan terakhir di grup ini
-            $lastMsg = \App\Models\GroupMessage::where('group_id', $member->group_id)
-                ->orderByDesc('sent_at')
-                ->first();
+    ->where('user_id', $auth_id)
+    ->get()
+    ->map(function ($member) {
+        // cari last message
+        $lastMessage = GroupMessage::where('group_id', $member->group->id)
+            ->orderBy('sent_at', 'desc')
+            ->first();
 
-            return [
-                'type'        => 'group',
-                'id'          => $member->group->id,
-                'name'        => $member->group->name,
-                'description' => $member->group->description,
-                'avatar_url'  => $member->group->avatar_url,
-                'cover_url'   => $member->group->cover_url,
-                'role'        => $member->role,
-                'joined_at'   => $member->joined_at,
-                'is_muted'    => (bool) $member->is_muted,
+        return [
+            'type'        => 'group',
+            'id'          => $member->group->id,
+            'name'        => $member->group->name,
+            'description' => $member->group->description ?? '',
+            'avatar_url'  => $member->group->avatar_url ?? '',
+            'cover_url'   => $member->group->cover_url ?? '',
+            'role'        => $member->role,
+            'joined_at'   => $member->joined_at,
+            'is_muted'    => (bool) $member->is_muted,
 
-                // tambahan last message
-                'last_message'=> $lastMsg ? ($lastMsg->is_deleted ? '[Pesan telah dihapus]' : ($lastMsg->content ?? '📎 Media')) : null,
-                'last_media'  => $lastMsg && !$lastMsg->is_deleted ? $lastMsg->media_url : null,
-                'sent_at'     => $lastMsg ? $lastMsg->sent_at : null,
-                'sender'      => $lastMsg ? User::select('user_id','username')->find($lastMsg->sender_id) : null,
-            ];
-        });
+            // 🔹 jaga jangan ada null
+            'last_message'=> $lastMessage 
+                                ? ($lastMessage->is_deleted ? '[Pesan telah dihapus]' : ($lastMessage->content ?: '📎 Media'))
+                                : '',
+            'last_media'  => $lastMessage && !$lastMessage->is_deleted ? ($lastMessage->media_url ?? '') : '',
+            'sent_at'     => $lastMessage ? $lastMessage->sent_at : '',
+        ];
+    });
+
 
     // 🔹 3. Gabungkan user chat + group chat
     $result = $chatUsers->merge($groups);
