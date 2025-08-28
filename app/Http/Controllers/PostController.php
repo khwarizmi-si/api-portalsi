@@ -18,26 +18,46 @@ class PostController extends Controller
     {
         $authUser = Auth::user();
     
-        $posts = Post::with(['user', 'tags', 'mentions'])
-            ->withCount(['likes', 'comments'])
-            ->where(function ($query) use ($authUser) {
-                $query->whereHas('user.followers', function ($q) use ($authUser) {
-                    $q->where('follower_id', $authUser->user_id)
-                      ->where('status', 'accepted');
+        // cek apakah user sudah follow siapapun
+        $isFollowing = $authUser->following()
+            ->where('status', 'accepted')
+            ->exists();
+    
+        if ($isFollowing) {
+            // 🚀 Timeline normal (dari following + self)
+            $posts = Post::with(['user', 'tags', 'mentions'])
+                ->withCount(['likes', 'comments'])
+                ->where(function ($query) use ($authUser) {
+                    $query->whereHas('user.followers', function ($q) use ($authUser) {
+                        $q->where('follower_id', $authUser->user_id)
+                          ->where('status', 'accepted');
+                    })
+                    ->orWhereHas('user', function ($q) use ($authUser) {
+                        $q->where('user_id', $authUser->user_id);
+                    });
                 })
-                ->orWhereHas('user', function ($q) use ($authUser) {
-                    $q->where('user_id', $authUser->user_id);
+                ->latest()
+                ->get()
+                ->map(function ($post) use ($authUser) {
+                    $post->is_liked = $post->likes()->where('user_id', $authUser->user_id)->exists();
+                    return $post;
                 });
-            })
-            ->latest()
-            ->get()
-            ->map(function ($post) use ($authUser) {
-                $post->is_liked = $post->likes()->where('user_id', $authUser->user_id)->exists();
-                return $post;
-            });
+        } else {
+            // 🎯 Belum follow siapapun → tampilkan random suggestion (urutan newest)
+            $posts = Post::with(['user', 'tags'])
+                ->withCount(['likes', 'comments'])
+                ->latest() // urutkan terbaru
+                ->take(20) // limit biar nggak kebanyakan
+                ->get()
+                ->map(function ($post) use ($authUser) {
+                    $post->is_liked = $post->likes()->where('user_id', $authUser->user_id)->exists();
+                    return $post;
+                });
+        }
     
         return response()->json($posts);
     }
+    
     
     public function show($id)
     {
