@@ -118,6 +118,9 @@ class PostController extends Controller
             return $user;
         });
 
+        // 📌 Urutkan agar yang follow back tampil duluan
+        $suggestions = $suggestions->sortByDesc('is_follow_back')->values();
+
         // tandai suggestion supaya bisa dibedakan di frontend
         $suggestionBlock = [
             'type' => 'suggestion',
