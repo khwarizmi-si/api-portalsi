@@ -2,30 +2,37 @@
 
 namespace App\Http\Controllers;
 
+// 🔽 IMPORT SEMUA EVENT YANG DIPERLUKAN
+use App\Events\NewDirectMessage;
+// Jika Anda ingin membuat fitur 'read receipt' dan 'delete' real-time:
+// use App\Events\MessageRead; 
+// use App\Events\MessageDeleted;
+
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\DB;
 use App\Models\User;
+use App\Events\ChatListUpdated;
 use App\Models\DirectMessage;
 use App\Models\Group;
 use App\Models\GroupMember;
 use App\Models\GroupMessage;
 use Illuminate\Support\Facades\Storage;
 
-
 class DirectMessageController extends Controller
 {
-    // ✅ Kirim pesan dengan teks / media
+    /**
+     * Kirim pesan dengan teks / media
+     */
     public function send(Request $request)
     {
         $request->validate([
             'receiver_id' => 'required|exists:users,user_id',
             'content'     => 'nullable|string',
-            'media'       => 'nullable|file|mimes:jpg,jpeg,png,mp4,pdf|max:51200', // maksimal 10MB
+            'media'       => 'nullable|file|mimes:jpg,jpeg,png,mp4,pdf|max:51200',
         ]);
 
         $mediaUrl = null;
-
         if ($request->hasFile('media')) {
             $mediaPath = $request->file('media')->store('uploads/direct_messages', 'public');
             $mediaUrl = asset('storage/' . $mediaPath);
@@ -40,13 +47,49 @@ class DirectMessageController extends Controller
             'is_read'     => false
         ]);
 
+        // ✨ SIARKAN PESAN BARU
+        broadcast(new NewDirectMessage($message))->toOthers();
+        
+          // ✨ 2. SIAPKAN DAN SIARKAN UPDATE UNTUK CHAT LIST
+        $sender = Auth::user();
+        $receiver = User::find($request->receiver_id);
+
+        // Buat format data yang sama seperti di fungsi chatList() Anda
+        $conversationData = [
+            'type' => 'user',
+            'id' => $receiver->user_id,
+            'name' => $receiver->full_name ?? $receiver->username,
+            'username' => $receiver->username,
+            'profile_picture_url' => $receiver->profile_picture_url,
+            'last_message' => $message->content ?? '📎 Media',
+            'last_media' => $message->media_url,
+            'sent_at' => $message->sent_at->toIso8601String(),
+            'is_read' => $message->is_read,
+        ];
+        
+        // ✨ 3. PANGGIL BROADCAST UNTUK PENERIMA
+        $dataForReceiver = $conversationData;
+        $dataForReceiver['id'] = $sender->user_id; // Dari sudut pandang penerima, lawan bicaranya adalah pengirim
+        $dataForReceiver['name'] = $sender->full_name ?? $sender->username;
+        $dataForReceiver['username'] = $sender->username;
+        $dataForReceiver['profile_picture_url'] = $sender->profile_picture_url;
+        $dataForReceiver['recipient_id'] = $receiver->user_id; // Tentukan target siaran
+        broadcast(new ChatListUpdated($dataForReceiver));
+
+        // ✨ 4. PANGGIL BROADCAST UNTUK PENGIRIM
+        $dataForSender = $conversationData;
+        $dataForSender['recipient_id'] = $sender->user_id; // Tentukan target siaran
+        broadcast(new ChatListUpdated($dataForSender));
+
         return response()->json([
             'message' => 'Pesan berhasil dikirim.',
             'data' => $message
         ], 201);
     }
 
-    // ✅ Ambil semua chat antara 2 user
+    /**
+     * Ambil semua chat antara 2 user
+     */
     public function conversation($user_id)
     {
         $auth_id = Auth::id();
@@ -63,7 +106,9 @@ class DirectMessageController extends Controller
         return response()->json($messages);
     }
 
-    // ✅ Tandai pesan sebagai terbaca
+    /**
+     * Tandai pesan sebagai terbaca
+     */
     public function markAsRead($id)
     {
         $message = DirectMessage::where('message_id', $id)
@@ -72,29 +117,39 @@ class DirectMessageController extends Controller
 
         $message->update(['is_read' => true]);
 
+        // ✨ [OPSIONAL] SIARKAN EVENT 'READ RECEIPT'
+        // broadcast(new MessageRead($message))->toOthers();
+
         return response()->json(['message' => 'Pesan ditandai sebagai telah dibaca.']);
     }
 
-    // ✅ Hapus pesan (oleh pengirim saja)
-public function destroy($id)
-{
-    $message = DirectMessage::where('message_id', $id)
-        ->where('sender_id', Auth::id()) // hanya pengirim yang boleh menghapus
-        ->firstOrFail();
+    /**
+     * Hapus pesan (oleh pengirim saja)
+     */
+    public function destroy($id)
+    {
+        $message = DirectMessage::where('message_id', $id)
+            ->where('sender_id', Auth::id())
+            ->firstOrFail();
 
-    // Hapus file media jika ada
-    if ($message->media_url) {
-        $path = str_replace(asset('storage') . '/', '', $message->media_url);
-        Storage::disk('public')->delete($path);
+        // Hapus file media jika ada
+        if ($message->media_url) {
+            $path = str_replace(asset('storage') . '/', '', $message->media_url);
+            Storage::disk('public')->delete($path);
+        }
+
+        // ✨ [OPSIONAL] SIARKAN EVENT PENGHAPUSAN PESAN
+        // broadcast(new MessageDeleted($message))->toOthers();
+        
+        $message->delete();
+
+        return response()->json(['message' => 'Pesan berhasil dihapus.']);
     }
 
-    $message->delete();
-
-    return response()->json(['message' => 'Pesan berhasil dihapus.']);
-}
-
-// ✅ List user yang pernah di-chat
-public function chatList()
+    /**
+     * List user yang pernah di-chat
+     */
+   public function chatList()
 {
     $auth_id = Auth::id();
 
@@ -187,6 +242,5 @@ public function chatList()
 
     return response()->json($result);
 }
-
 
 }

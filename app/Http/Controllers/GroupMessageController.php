@@ -2,13 +2,20 @@
 
 namespace App\Http\Controllers;
 
+// 🔽 IMPORT SEMUA EVENT YANG DIPERLUKAN
+use App\Events\NewGroupMessage;
+use App\Events\GroupMessageUpdated;
+use App\Events\NewNotification; // Jika Anda ingin notifikasi mention grup
+
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\Storage;
+use App\Events\ChatListUpdated;
 use App\Models\Group;
 use App\Models\GroupMessage;
 use App\Models\GroupMessageMention;
 use App\Models\User;
+use App\Models\Notification; // Tambahkan ini jika membuat notifikasi
 
 class GroupMessageController extends Controller
 {
@@ -29,10 +36,9 @@ class GroupMessageController extends Controller
         if ($request->hasFile('media')) {
             $media = $request->file('media');
             $path = $media->store('group-media', 'public');
-            $mediaUrl = asset('storage/' . $path); // ✅ gunakan URL publik penuh
+            $mediaUrl = asset('storage/' . $path);
         }
         
-
         $message = GroupMessage::create([
             'group_id' => $group->id,
             'sender_id' => $user->user_id,
@@ -40,6 +46,28 @@ class GroupMessageController extends Controller
             'media_url' => $mediaUrl,
             'sent_at' => now(),
         ]);
+
+        // ✨ SIARKAN PESAN BARU KE CHANNEL GRUP
+        broadcast(new NewGroupMessage($message))->toOthers();
+
+
+        // ✨ 2. SIAPKAN DAN SIARKAN UPDATE UNTUK CHAT LIST SEMUA ANGGOTA
+        $conversationData = [
+            'type' => 'group',
+            'id' => $group->id,
+            'name' => $group->name,
+            'avatar_url' => $group->avatar_url,
+            'last_message' => $message->content ?: '📎 Media',
+            'last_media' => $message->media_url,
+            'sent_at' => $message->sent_at->toIso8601String(),
+        ];
+
+        // ✨ 3. LOOPING & PANGGIL BROADCAST UNTUK SETIAP ANGGOTA
+        foreach ($group->members as $member) {
+            $dataForMember = $conversationData;
+            $dataForMember['recipient_id'] = $member->user_id; // Tentukan target siaran
+            broadcast(new ChatListUpdated($dataForMember));
+        }
 
         if ($request->filled('content')) {
             preg_match_all('/@([a-zA-Z0-9_]+)/', $request->content, $matches);
@@ -52,12 +80,17 @@ class GroupMessageController extends Controller
                         'group_message_id' => $message->id,
                         'mentioned_user_id' => $mentionedUser->user_id,
                     ]);
+
+                    // ✨ [OPSIONAL] BUAT DAN SIARKAN NOTIFIKASI MENTION
+                    // $notification = Notification::create([...]); // Buat notifikasi di DB
+                    // broadcast(new NewNotification($notification));
                 }
             }
         }
 
         return response()->json([
-            'message' => 'Pesan berhasil dikirim.'
+            'message' => 'Pesan berhasil dikirim.',
+            'data' => $message->load('sender'),
         ]);
     }
 
@@ -114,17 +147,24 @@ class GroupMessageController extends Controller
         $message->is_deleted = true;
         $message->save();
 
+        // ✨ SIARKAN UPDATE PESAN (KARENA is_deleted BERUBAH)
+        broadcast(new GroupMessageUpdated($message))->toOthers();
+
         return response()->json(['message' => 'Pesan berhasil disembunyikan (soft delete).']);
     }
 
     public function togglePin(Request $request, Group $group, GroupMessage $message)
     {
+        // Anda bisa menambahkan logika otorisasi yang lebih baik di sini, misal admin grup
         if ($group->owner_id !== auth()->user()->user_id) {
             return response()->json(['message' => 'Hanya pemilik grup yang bisa pin/unpin pesan.'], 403);
         }
 
         $message->is_pinned = !$message->is_pinned;
         $message->save();
+
+        // ✨ SIARKAN UPDATE PESAN (KARENA is_pinned BERUBAH)
+        broadcast(new GroupMessageUpdated($message))->toOthers();
 
         return response()->json([
             'message' => $message->is_pinned ? 'Pesan berhasil dipin.' : 'Pin dihapus.',
