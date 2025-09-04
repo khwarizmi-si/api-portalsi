@@ -4,6 +4,7 @@ use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Route;
 use Illuminate\Support\Facades\Hash;
 use Illuminate\Support\Facades\Password;
+use Illuminate\Support\Facades\Broadcast;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Validation\ValidationException;
 use Illuminate\Auth\Events\PasswordReset;
@@ -163,6 +164,7 @@ Route::get('/profile/{username}', [ProfileController::class, 'show']);
 
 // 🔐 PROTECTED ROUTES
 Route::middleware(['auth:sanctum'])->group(function () {
+    Broadcast::routes();
     Route::post('/logout', function (Request $request) {
         $request->user()->currentAccessToken()->delete();
         return response()->json(['message' => 'Logged out']);
