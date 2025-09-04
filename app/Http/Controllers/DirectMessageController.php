@@ -243,4 +243,20 @@ class DirectMessageController extends Controller
     return response()->json($result);
 }
 
+// 🔹 List pesan belum dibaca
+public function unreadMessages()
+{
+    $auth_id = Auth::id();
+
+    $messages = DirectMessage::where('receiver_id', $auth_id)
+        ->where('is_read', false)
+        ->orderBy('sent_at', 'asc')
+        ->get();
+
+    return response()->json([
+        'unread_count' => $messages->count(),
+        'messages' => $messages
+    ]);
+}
+
 }
