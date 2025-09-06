@@ -7,6 +7,8 @@ use App\Events\CommentPublished;
 use App\Events\CommentUpdated;
 use App\Events\CommentDeleted;
 use App\Events\NewNotification;
+use App\Events\CommentCreated;
+use App\Events\NotificationCreated;
 
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
@@ -36,20 +38,22 @@ class CommentController extends Controller
 
         // ✨ SIARKAN EVENT KOMENTAR BARU
         broadcast(new CommentPublished($comment))->toOthers();
+        broadcast(new CommentCreated($comment));
 
         // 🔔 Notifikasi COMMENT ke pemilik POST
         if (!$request->filled('parent_comment_id') && $post->user_id != $user_id) {
             $notification = Notification::create([
-                'recipient_id'       => $post->user_id,
-                'type'               => 'comment',
-                'related_user_id'    => $user_id,
-                'related_post_id'    => $post_id,
+                'recipient_id' => $post->user_id,
+                'type' => 'comment',
+                'related_user_id' => $user_id,
+                'related_post_id' => $post_id,
                 'related_comment_id' => $comment->comment_id,
-                'created_at'         => now(),
-                'is_read'            => false,
+                'created_at' => now(),
+                'is_read' => false,
             ]);
             // ✨ SIARKAN EVENT NOTIFIKASI
             broadcast(new NewNotification($notification));
+            broadcast(new NotificationCreated($notification));
         }
 
         // 🔁 Notifikasi REPLY ke pemilik komentar (kalau ada parent)
@@ -57,16 +61,17 @@ class CommentController extends Controller
             $parent = Comment::where('comment_id', $request->parent_comment_id)->first();
             if ($parent && $parent->user_id != $user_id) {
                 $notification = Notification::create([
-                    'recipient_id'       => $parent->user_id,
-                    'type'               => 'reply',
-                    'related_user_id'    => $user_id,
-                    'related_post_id'    => $post_id,
+                    'recipient_id' => $parent->user_id,
+                    'type' => 'reply',
+                    'related_user_id' => $user_id,
+                    'related_post_id' => $post_id,
                     'related_comment_id' => $comment->comment_id,
-                    'created_at'         => now(),
-                    'is_read'            => false,
+                    'created_at' => now(),
+                    'is_read' => false,
                 ]);
                 // ✨ SIARKAN EVENT NOTIFIKASI
                 broadcast(new NewNotification($notification));
+                broadcast(new NotificationCreated($notification));
             }
         }
 
@@ -79,16 +84,17 @@ class CommentController extends Controller
             $mentionedUser = User::where('username', $username)->first();
             if ($mentionedUser && $mentionedUser->user_id != $user_id) {
                 $notification = Notification::create([
-                    'recipient_id'       => $mentionedUser->user_id,
-                    'type'               => 'mention',
-                    'related_user_id'    => $user_id,
-                    'related_post_id'    => $post_id,
+                    'recipient_id' => $mentionedUser->user_id,
+                    'type' => 'mention',
+                    'related_user_id' => $user_id,
+                    'related_post_id' => $post_id,
                     'related_comment_id' => $comment->comment_id,
-                    'created_at'         => now(),
-                    'is_read'            => false,
+                    'created_at' => now(),
+                    'is_read' => false,
                 ]);
                 // ✨ SIARKAN EVENT NOTIFIKASI
                 broadcast(new NewNotification($notification));
+                broadcast(new NotificationCreated($notification));
             }
         }
 
@@ -138,11 +144,11 @@ class CommentController extends Controller
     public function destroy($comment_id)
     {
         $comment = Comment::findOrFail($comment_id);
-        
+
         if ($comment->user_id !== Auth::id()) {
             return response()->json(['message' => 'Kamu tidak punya izin untuk menghapus komentar ini.'], 403);
         }
-        
+
         $postId = $comment->post_id; // Simpan ID post sebelum dihapus
 
         if ($comment->parent_comment_id === null) {
@@ -152,7 +158,7 @@ class CommentController extends Controller
         $comment->delete();
 
         // ✨ SIARKAN EVENT HAPUS KOMENTAR
-        broadcast(new CommentDeleted((int)$comment_id, $postId))->toOthers();
+        broadcast(new CommentDeleted((int) $comment_id, $postId))->toOthers();
 
         return response()->json(['message' => 'Komentar berhasil dihapus.']);
     }

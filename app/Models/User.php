@@ -41,6 +41,9 @@ class User extends Authenticatable implements MustVerifyEmail
         'is_private',
         'role',              // dev, teacher, parent, student
         'email_verified_at', // verifikasi email
+        'is_online',         // online status
+        'last_seen',         // last seen timestamp
+        'last_activity',     // last activity timestamp
     ];
 
     /**
@@ -58,6 +61,9 @@ class User extends Authenticatable implements MustVerifyEmail
         'email_verified_at' => 'datetime',
         'is_verified' => 'boolean',
         'is_private' => 'boolean',
+        'is_online' => 'boolean',
+        'last_seen' => 'datetime',
+        'last_activity' => 'datetime',
     ];
 
     /**
@@ -87,18 +93,18 @@ class User extends Authenticatable implements MustVerifyEmail
         return $this->hasMany(Like::class, 'user_id');
     }
 
-// User.php
-public function followers()
-{
-    return $this->belongsToMany(User::class, 'follows', 'followed_id', 'follower_id')
-        ->withPivot('followed_at', 'status'); // tanpa withTimestamps
-}
+    // User.php
+    public function followers()
+    {
+        return $this->belongsToMany(User::class, 'follows', 'followed_id', 'follower_id')
+            ->withPivot('followed_at', 'status'); // tanpa withTimestamps
+    }
 
-public function following()
-{
-    return $this->belongsToMany(User::class, 'follows', 'follower_id', 'followed_id')
-        ->withPivot('followed_at', 'status'); // tanpa withTimestamps
-}
+    public function following()
+    {
+        return $this->belongsToMany(User::class, 'follows', 'follower_id', 'followed_id')
+            ->withPivot('followed_at', 'status'); // tanpa withTimestamps
+    }
 
 
     public function stories()
@@ -123,25 +129,25 @@ public function following()
 
     public function sendEmailVerificationNotification()
     {
-    $this->notify(new CustomVerifyEmail);
+        $this->notify(new CustomVerifyEmail);
     }
 
     public function sendPasswordResetNotification($token)
     {
-    $this->notify(new CustomResetPassword($token));
+        $this->notify(new CustomResetPassword($token));
     }
     public function ownedGroups()
     {
-    return $this->hasMany(Group::class, 'owner_id', 'user_id');
+        return $this->hasMany(Group::class, 'owner_id', 'user_id');
     }
 
     public function groupMemberships()
     {
-    return $this->hasMany(GroupMember::class, 'user_id', 'user_id');
+        return $this->hasMany(GroupMember::class, 'user_id', 'user_id');
     }
 
     public function groupMessages()
     {
-    return $this->hasMany(GroupMessage::class, 'sender_id', 'user_id');
+        return $this->hasMany(GroupMessage::class, 'sender_id', 'user_id');
     }
 }
