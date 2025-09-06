@@ -218,7 +218,7 @@ Route::middleware(['auth:sanctum'])->group(function () {
         Route::patch('/notifications/{id}/read', [NotificationController::class, 'markAsRead']);
         Route::patch('/notifications/read/all', [NotificationController::class, 'markAllAsRead']);
 
-        // DM
+        // DMs
         Route::get('/messages/conversation/{user_id}', [DirectMessageController::class, 'conversation']);
         Route::post('/messages/send', [DirectMessageController::class, 'send']);
         Route::patch('/messages/{id}/read', [DirectMessageController::class, 'markAsRead']);
