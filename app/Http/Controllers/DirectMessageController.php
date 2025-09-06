@@ -148,16 +148,19 @@ class DirectMessageController extends Controller
     {
         $auth_id = Auth::id();
 
-        // update semua pesan yang dikirim user lawan bicara ke kita
-        DirectMessage::where('sender_id', $user_id)
-            ->where('receiver_id', $auth_id)
-            ->where('is_read', false)
-            ->update(['is_read' => true]);
 
-        return response()->json([
-            'message' => "Semua pesan dari user {$user_id} telah ditandai sebagai dibaca."
-        ]);
-    }
+    $updated = DirectMessage::where('sender_id', $user_id)   // harus dari lawan bicara
+        ->where('receiver_id', $auth_id)                     // dan masuk ke kita
+        ->where('is_read', false)
+        ->update(['is_read' => true]);
+
+    return response()->json([
+        'message' => "Semua pesan dari user {$user_id} ke {$auth_id} ditandai sebagai dibaca.",
+        'updated_count' => $updated
+    ]);
+}
+
+
 
 
     /**
