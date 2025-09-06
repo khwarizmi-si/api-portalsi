@@ -146,8 +146,8 @@ public function markAsReadByUser($user_id)
 {
     $auth_id = Auth::id();
 
-    $updated = DirectMessage::where('sender_id', $user_id) // pesan dari lawan bicara
-        ->where('receiver_id', $auth_id)                  // ke kita
+    $updated = DirectMessage::where('sender_id', $user_id)   // harus dari lawan bicara
+        ->where('receiver_id', $auth_id)                     // dan masuk ke kita
         ->where('is_read', false)
         ->update(['is_read' => true]);
 
@@ -156,6 +156,7 @@ public function markAsReadByUser($user_id)
         'updated_count' => $updated
     ]);
 }
+
 
 
     /**
