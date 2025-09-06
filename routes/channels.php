@@ -24,3 +24,32 @@ Broadcast::channel('dm.{conversationId}', function ($user, $conversationId) {
 Broadcast::channel('group.{group}', function ($user, Group $group) {
     return $group->members()->where('user_id', $user->user_id)->exists();
 });
+
+// ===== NEW WEBSOCKET CHANNELS =====
+
+// Private channel for user notifications
+Broadcast::channel('user.{userId}', function ($user, $userId) {
+    return (int) $user->user_id === (int) $userId;
+});
+
+// Private channel for direct messages
+Broadcast::channel('chat.direct.{roomId}', function ($user, $roomId) {
+    $userIds = explode('-', $roomId);
+    return in_array($user->user_id, $userIds);
+});
+
+// Private channel for group messages
+Broadcast::channel('chat.group.{groupId}', function ($user, $groupId) {
+    return Group::find($groupId)->members()->where('user_id', $user->user_id)->exists();
+});
+
+// Presence channel for story viewers
+Broadcast::channel('story.{storyId}', function ($user, $storyId) {
+    // Allow any authenticated user to join story presence channel
+    return $user !== null;
+});
+
+// Private channel for post updates (likes, comments)
+Broadcast::channel('post.{postId}', function ($user, $postId) {
+    return $user !== null;
+});

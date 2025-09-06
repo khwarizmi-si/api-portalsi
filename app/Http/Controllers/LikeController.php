@@ -5,6 +5,8 @@ namespace App\Http\Controllers;
 use App\Models\Like;
 use App\Models\Post;
 use App\Models\Notification;
+use App\Events\LikeCreated;
+use App\Events\NotificationCreated;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
 use Carbon\Carbon;
@@ -35,10 +37,13 @@ class LikeController extends Controller
             $like->delete();
             return response()->json(['message' => 'Post unliked']);
         } else {
-            Like::create([
+            $like = Like::create([
                 'user_id' => $user_id,
                 'post_id' => $post_id,
             ]);
+
+            // Broadcast like event
+            broadcast(new LikeCreated($like));
 
             // Kirim notifikasi jika user bukan pemilik post
             if ($post->user_id != $user_id) {
@@ -63,14 +68,17 @@ class LikeController extends Controller
                 }
 
                 if ($allowNotify) {
-                    Notification::create([
-                        'recipient_id'     => $post->user_id,
-                        'type'             => 'like',
-                        'related_user_id'  => $user_id,
-                        'related_post_id'  => $post_id,
-                        'created_at'       => now(),
-                        'is_read'          => false,
+                    $notification = Notification::create([
+                        'recipient_id' => $post->user_id,
+                        'type' => 'like',
+                        'related_user_id' => $user_id,
+                        'related_post_id' => $post_id,
+                        'created_at' => now(),
+                        'is_read' => false,
                     ]);
+
+                    // Broadcast notification event
+                    broadcast(new NotificationCreated($notification));
                 }
             }
 
