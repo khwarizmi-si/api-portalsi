@@ -225,6 +225,7 @@ Route::middleware(['auth:sanctum'])->group(function () {
         Route::delete('/messages/{id}', [DirectMessageController::class, 'destroy']);
         Route::get('/messages/chat-list', [DirectMessageController::class, 'chatList']);
         Route::get('/messages/unread/{user_id}', [DirectMessageController::class, 'unreadConversation']);
+        Route::get('/messages/conversation-from/{user_id}', [DirectMessageController::class, 'conversationFromUser']);
 
         // Account
         Route::post('/account/settings', [AccountController::class, 'update']);

@@ -106,6 +106,22 @@ class DirectMessageController extends Controller
         return response()->json($messages);
     }
 
+ /**
+ * Ambil semua chat dari lawan bicara (tidak termasuk pesan kita sendiri)
+ */
+public function conversationFromUser($user_id)
+{
+    $auth_id = Auth::id();
+
+    $messages = DirectMessage::where('sender_id', $user_id) // hanya pesan yg dikirim user lawan
+        ->where('receiver_id', $auth_id)                   // penerimanya kita
+        ->orderBy('sent_at', 'asc')
+        ->get();
+
+    return response()->json($messages);
+}
+
+
     /**
      * Tandai pesan sebagai terbaca
      */
