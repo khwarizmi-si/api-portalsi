@@ -6,6 +6,7 @@ namespace App\Http\Controllers;
 use App\Events\NewGroupMessage;
 use App\Events\GroupMessageUpdated;
 use App\Events\NewNotification; // Jika Anda ingin notifikasi mention grup
+use App\Events\MessageSent;
 
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
@@ -38,7 +39,7 @@ class GroupMessageController extends Controller
             $path = $media->store('group-media', 'public');
             $mediaUrl = asset('storage/' . $path);
         }
-        
+
         $message = GroupMessage::create([
             'group_id' => $group->id,
             'sender_id' => $user->user_id,
@@ -49,6 +50,7 @@ class GroupMessageController extends Controller
 
         // ✨ SIARKAN PESAN BARU KE CHANNEL GRUP
         broadcast(new NewGroupMessage($message))->toOthers();
+        broadcast(new MessageSent($message, 'group'));
 
 
         // ✨ 2. SIAPKAN DAN SIARKAN UPDATE UNTUK CHAT LIST SEMUA ANGGOTA

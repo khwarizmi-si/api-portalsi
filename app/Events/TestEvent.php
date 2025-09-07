@@ -4,8 +4,6 @@ namespace App\Events;
 
 use Illuminate\Broadcasting\Channel;
 use Illuminate\Broadcasting\InteractsWithSockets;
-use Illuminate\Broadcasting\PresenceChannel;
-use Illuminate\Broadcasting\PrivateChannel;
 use Illuminate\Contracts\Broadcasting\ShouldBroadcast;
 use Illuminate\Foundation\Events\Dispatchable;
 use Illuminate\Queue\SerializesModels;
@@ -14,40 +12,22 @@ class TestEvent implements ShouldBroadcast
 {
     use Dispatchable, InteractsWithSockets, SerializesModels;
 
-    public string $message;
+    public $message;
 
-    /**
-     * Create a new event instance.
-     */
-    public function __construct(string $message)
+    public function __construct($message)
     {
         $this->message = $message;
     }
 
-    /**
-     * The event's broadcast channel.
-     */
-    public function broadcastOn(): Channel|array
+    // Channel publik
+    public function broadcastOn()
     {
-        // bisa ganti ke PresenceChannel/PrivateChannel sesuai kebutuhan
         return new Channel('test-channel');
     }
 
-    /**
-     * Nama event saat broadcast.
-     */
-    public function broadcastAs(): string
+    // Nama event di frontend (default: nama class, tapi bisa override)
+    public function broadcastAs()
     {
         return 'test-event';
-    }
-
-    /**
-     * Data yang dikirim ke frontend.
-     */
-    public function broadcastWith(): array
-    {
-        return [
-            'message' => $this->message,
-        ];
     }
 }

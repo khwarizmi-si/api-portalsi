@@ -29,7 +29,8 @@ use App\Http\Controllers\{
     GroupController,
     GroupMessageController,
     AnnouncementController,
-    PortfolioController
+    PortfolioController,
+    WebSocketController
 };
 
 // 🚀 PUBLIC ROUTES
@@ -42,9 +43,9 @@ Route::post('/register', function (Request $request) {
             'regex:/^[a-zA-Z0-9._]+$/'
         ],
         'full_name' => 'required|string',
-        'email'     => 'required|email|unique:users',
-        'password'  => 'required|min:6',
-        'role'      => 'in:teacher,parent,student,other'
+        'email' => 'required|email|unique:users',
+        'password' => 'required|min:6',
+        'role' => 'in:teacher,parent,student,other'
     ], [
         'username.regex' => 'Username hanya boleh berisi huruf, angka, titik, dan underscore tanpa spasi atau simbol lain.'
     ]);
@@ -56,11 +57,11 @@ Route::post('/register', function (Request $request) {
     }
 
     $user = User::create([
-        'username'            => strtolower($request->username), // 👈 Lowercase username
-        'full_name'           => $request->full_name,
-        'email'               => strtolower($request->email),     // 👈 Lowercase email
-        'password_hash'       => bcrypt($request->password),
-        'role'                => $request->role ?? 'student',
+        'username' => strtolower($request->username), // 👈 Lowercase username
+        'full_name' => $request->full_name,
+        'email' => strtolower($request->email),     // 👈 Lowercase email
+        'password_hash' => bcrypt($request->password),
+        'role' => $request->role ?? 'student',
         'profile_picture_url' => 'https://api-new.portalsi.com/storage/default-profile.png'
     ]);
 
@@ -70,24 +71,24 @@ Route::post('/register', function (Request $request) {
 
     return response()->json([
         'message' => 'User registered successfully. Please verify your email.',
-        'token'   => $token,
-        'user'    => $user
+        'token' => $token,
+        'user' => $user
     ], 201);
 });
 
 // 🔑 Login
 Route::post('/login', function (Request $request) {
     $request->validate([
-        'login'    => 'required|string', // bisa username atau email
+        'login' => 'required|string', // bisa username atau email
         'password' => 'required|string',
     ]);
 
     // Coba cari berdasarkan email dulu, jika tidak ketemu cari sebagai username
     $user = User::where('email', $request->login)
-                ->orWhere('username', $request->login)
-                ->first();
+        ->orWhere('username', $request->login)
+        ->first();
 
-    if (! $user || ! Hash::check($request->password, $user->password_hash)) {
+    if (!$user || !Hash::check($request->password, $user->password_hash)) {
         throw ValidationException::withMessages([
             'login' => ['The provided credentials are incorrect.'],
         ]);
@@ -97,19 +98,19 @@ Route::post('/login', function (Request $request) {
 
     return response()->json([
         'message' => 'Login successful',
-        'token'   => $token,
-        'user'    => $user
+        'token' => $token,
+        'user' => $user
     ]);
 });
 
 // 📩 Email Verification
 Route::get('/email/verify/{id}/{hash}', function (Request $request, $id, $hash) {
     $user = \App\Models\User::findOrFail($id);
-    if (! hash_equals((string) $hash, sha1($user->getEmailForVerification()))) {
+    if (!hash_equals((string) $hash, sha1($user->getEmailForVerification()))) {
         return response()->json(['message' => 'Invalid verification link.'], 403);
     }
 
-    if (! $user->hasVerifiedEmail()) {
+    if (!$user->hasVerifiedEmail()) {
         $user->markEmailAsVerified();
         event(new Verified($user));
     }
@@ -242,7 +243,7 @@ Route::middleware(['auth:sanctum'])->group(function () {
             Route::match(['put', 'post'], '{group}', [GroupController::class, 'update']);
             Route::delete('{group}', [GroupController::class, 'destroy']); // ✅ tambahkan ini
         });
-        
+
 
         // Group Messages
         Route::prefix('groups/{group}')->group(function () {
@@ -256,7 +257,7 @@ Route::middleware(['auth:sanctum'])->group(function () {
         Route::middleware('auth:sanctum')->group(function () {
             Route::get('/announcements', [AnnouncementController::class, 'index']);
             Route::get('/announcements/pinned', [AnnouncementController::class, 'pinned']); // hanya pinned
-        
+
             // Khusus user centang biru
             Route::middleware('onlyVerified')->group(function () {
                 Route::post('/announcements', [AnnouncementController::class, 'store']);
@@ -275,7 +276,7 @@ Route::middleware(['auth:sanctum'])->group(function () {
             Route::post('/members/{user}/mute', [GroupController::class, 'muteMember']); // 🔹 Mute
             Route::post('/members/{user}/unmute', [GroupController::class, 'unmuteMember']); // 🔹 Unmute
         });
-        
+
         // Portfolios
         Route::middleware('auth:sanctum')->group(function () {
             Route::get('/portfolios', [PortfolioController::class, 'index']);
@@ -290,11 +291,20 @@ Route::middleware(['auth:sanctum'])->group(function () {
             Route::post('/followers/{follower_id}/reject', [FollowController::class, 'rejectFollowRequest']);
             Route::get('/followers/pending', [FollowController::class, 'pendingFollowRequests']);
         });
-        
+
         // GET Private atau tidak
         Route::get('/account/is-private', [AccountController::class, 'checkPrivateStatus'])
-        ->middleware('auth:sanctum');
+            ->middleware('auth:sanctum');
 
+        // WebSocket Routes
+        Route::prefix('websocket')->group(function () {
+            Route::post('/authenticate', [WebSocketController::class, 'authenticate']);
+            Route::post('/disconnect', [WebSocketController::class, 'disconnect']);
+            Route::get('/online-status/{userId}', [WebSocketController::class, 'getOnlineStatus']);
+            Route::get('/online-followers', [WebSocketController::class, 'getOnlineFollowersCount']);
+            Route::get('/online-count', [WebSocketController::class, 'getTotalOnlineCount']);
+            Route::post('/update-activity', [WebSocketController::class, 'updateActivity']);
+        });
 
     });
 });
