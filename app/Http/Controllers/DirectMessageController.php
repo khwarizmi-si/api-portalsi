@@ -24,68 +24,72 @@ class DirectMessageController extends Controller
     /**
      * Kirim pesan dengan teks / media
      */
-    public function send(Request $request)
-    {
-        $request->validate([
-            'receiver_id' => 'required|exists:users,user_id',
-            'content'     => 'nullable|string',
-            'media'       => 'nullable|file|mimes:jpg,jpeg,png,mp4,pdf|max:51200',
-        ]);
+public function send(Request $request)
+{
+    $request->validate([
+        'receiver_id' => 'required|exists:users,user_id',
+        'content'     => 'nullable|string',
+        'media'       => 'nullable|file|mimes:jpg,jpeg,png,mp4,pdf|max:51200',
+    ]);
 
-        $mediaUrl = null;
-        if ($request->hasFile('media')) {
-            $mediaPath = $request->file('media')->store('uploads/direct_messages', 'public');
-            $mediaUrl = asset('storage/' . $mediaPath);
-        }
-
-        $message = DirectMessage::create([
-            'sender_id'   => Auth::id(),
-            'receiver_id' => $request->receiver_id,
-            'content'     => $request->content,
-            'media_url'   => $mediaUrl,
-            'sent_at'     => now(),
-            'is_read'     => false
-        ]);
-
-        // ✨ SIARKAN PESAN BARU
-        broadcast(new NewDirectMessage($message))->toOthers();
-        
-          // ✨ 2. SIAPKAN DAN SIARKAN UPDATE UNTUK CHAT LIST
-        $sender = Auth::user();
-        $receiver = User::find($request->receiver_id);
-
-        // Buat format data yang sama seperti di fungsi chatList() Anda
-        $conversationData = [
-            'type' => 'user',
-            'id' => $receiver->user_id,
-            'name' => $receiver->full_name ?? $receiver->username,
-            'username' => $receiver->username,
-            'profile_picture_url' => $receiver->profile_picture_url,
-            'last_message' => $message->content ?? '📎 Media',
-            'last_media' => $message->media_url,
-            'sent_at' => $message->sent_at->toIso8601String(),
-            'is_read' => $message->is_read,
-        ];
-        
-        // ✨ 3. PANGGIL BROADCAST UNTUK PENERIMA
-        $dataForReceiver = $conversationData;
-        $dataForReceiver['id'] = $sender->user_id; // Dari sudut pandang penerima, lawan bicaranya adalah pengirim
-        $dataForReceiver['name'] = $sender->full_name ?? $sender->username;
-        $dataForReceiver['username'] = $sender->username;
-        $dataForReceiver['profile_picture_url'] = $sender->profile_picture_url;
-        $dataForReceiver['recipient_id'] = $receiver->user_id; // Tentukan target siaran
-        broadcast(new ChatListUpdated($dataForReceiver));
-
-        // ✨ 4. PANGGIL BROADCAST UNTUK PENGIRIM
-        $dataForSender = $conversationData;
-        $dataForSender['recipient_id'] = $sender->user_id; // Tentukan target siaran
-        broadcast(new ChatListUpdated($dataForSender));
-
-        return response()->json([
-            'message' => 'Pesan berhasil dikirim.',
-            'data' => $message
-        ], 201);
+    $mediaUrl = null;
+    if ($request->hasFile('media')) {
+        $mediaPath = $request->file('media')->store('uploads/direct_messages', 'public');
+        $mediaUrl = asset('storage/' . $mediaPath);
     }
+
+    $message = DirectMessage::create([
+        'sender_id'   => Auth::id(),
+        'receiver_id' => $request->receiver_id,
+        'content'     => $request->content,
+        'media_url'   => $mediaUrl,
+        'sent_at'     => now(),
+        'is_read'     => false
+    ]);
+
+    // pastikan nilai cast datetime langsung terbaca
+    $message->refresh();
+
+    // ✨ SIARKAN PESAN BARU
+    broadcast(new NewDirectMessage($message))->toOthers();
+    
+    // ✨ 2. SIAPKAN DAN SIARKAN UPDATE UNTUK CHAT LIST
+    $sender   = Auth::user();
+    $receiver = User::findOrFail($request->receiver_id);
+
+    $conversationData = [
+        'type'                => 'user',
+        'id'                  => $receiver->user_id,
+        'name'                => $receiver->full_name ?? $receiver->username,
+        'username'            => $receiver->username,
+        'profile_picture_url' => $receiver->profile_picture_url,
+        'last_message'        => $message->content ?? '📎 Media',
+        'last_media'          => $message->media_url,
+        // ⬇️ null-safe biar gak error walau kosong
+        'sent_at'             => $message->sent_at?->toIso8601String(),
+        'is_read'             => $message->is_read,
+    ];
+    
+    // ✨ 3. PANGGIL BROADCAST UNTUK PENERIMA
+    $dataForReceiver = $conversationData;
+    $dataForReceiver['id']              = $sender->user_id; 
+    $dataForReceiver['name']            = $sender->full_name ?? $sender->username;
+    $dataForReceiver['username']        = $sender->username;
+    $dataForReceiver['profile_picture_url'] = $sender->profile_picture_url;
+    $dataForReceiver['recipient_id']    = $receiver->user_id;
+    broadcast(new ChatListUpdated($dataForReceiver));
+
+    // ✨ 4. PANGGIL BROADCAST UNTUK PENGIRIM
+    $dataForSender = $conversationData;
+    $dataForSender['recipient_id'] = $sender->user_id;
+    broadcast(new ChatListUpdated($dataForSender));
+
+    return response()->json([
+        'message' => 'Pesan berhasil dikirim.',
+        'data'    => $message
+    ], 201);
+}
+
 
     /**
      * Ambil semua chat antara 2 user
