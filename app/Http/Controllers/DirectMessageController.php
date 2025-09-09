@@ -239,20 +239,21 @@ public function conversation($user_id)
             ->get()
             ->keyBy('user_id');
 
-        $chatUsers = $lastChats->map(function ($chat) use ($users) {
-            $user = $users[$chat->user_id] ?? null;
-            return [
-                'type' => 'user',
-                'id' => (int) $chat->user_id,
-                'name' => $user->full_name ?? $user->username,
-                'username' => $user->username ?? null,
-                'profile_picture_url' => $user->profile_picture_url ?? null,
-                'last_message' => $chat->content ?? '📎 Media',
-                'last_media' => $chat->media_url,
-                'sent_at' => $chat->sent_at,
-                'is_read' => $chat->is_read,
-            ];
-        });
+$chatUsers = $lastChats->map(function ($chat) use ($users, $auth_id) {
+    $user = $users[$chat->user_id] ?? null;
+    return [
+        'type' => 'user',
+        'id' => (int) $chat->user_id,
+        'name' => $user->full_name ?? $user->username,
+        'username' => $user->username ?? null,
+        'profile_picture_url' => $user->profile_picture_url ?? null,
+        'last_message' => $chat->content ?? '📎 Media',
+        'last_media' => $chat->media_url,
+        'sent_at' => $chat->sent_at,
+        'is_read' => ($chat->sender_id == $auth_id) ? true : $chat->is_read, // ✅ fix disini
+    ];
+});
+
 
         // 🔹 2. Ambil grup + last message
         $groups = \App\Models\GroupMember::with('group')
