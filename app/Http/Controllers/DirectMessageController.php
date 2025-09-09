@@ -95,21 +95,29 @@ public function send(Request $request)
     /**
      * Ambil semua chat antara 2 user
      */
-    public function conversation($user_id)
-    {
-        $auth_id = Auth::id();
+public function conversation($user_id)
+{
+    $auth_id = Auth::id();
 
-        $messages = DirectMessage::where(function ($q) use ($auth_id, $user_id) {
-            $q->where('sender_id', $auth_id)->where('receiver_id', $user_id);
+    $messages = DirectMessage::where(function ($q) use ($auth_id, $user_id) {
+        $q->where('sender_id', $auth_id)->where('receiver_id', $user_id);
+    })
+        ->orWhere(function ($q) use ($auth_id, $user_id) {
+            $q->where('sender_id', $user_id)->where('receiver_id', $auth_id);
         })
-            ->orWhere(function ($q) use ($auth_id, $user_id) {
-                $q->where('sender_id', $user_id)->where('receiver_id', $auth_id);
-            })
-            ->orderBy('sent_at', 'asc')
-            ->get();
+        ->orderBy('sent_at', 'asc')
+        ->get()
+        ->map(function ($msg) use ($auth_id) {
+            // kalau message dari kita sendiri, selalu is_read = true
+            if ($msg->sender_id == $auth_id) {
+                $msg->is_read = true;
+            }
+            return $msg;
+        });
 
-        return response()->json($messages);
-    }
+    return response()->json($messages);
+}
+
 
     /**
      * Ambil semua chat dari lawan bicara (tidak termasuk pesan kita sendiri)
