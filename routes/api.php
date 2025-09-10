@@ -30,6 +30,7 @@ use App\Http\Controllers\{
     GroupMessageController,
     AnnouncementController,
     PortfolioController,
+    BookmarkController,
     WebSocketController
 };
 
@@ -295,6 +296,13 @@ Route::middleware(['auth:sanctum'])->group(function () {
         // GET Private atau tidak
         Route::get('/account/is-private', [AccountController::class, 'checkPrivateStatus'])
             ->middleware('auth:sanctum');
+
+        // Bookmarks
+        Route::middleware('auth:sanctum')->group(function () {
+        Route::get('/bookmarks', [BookmarkController::class, 'index']);
+        Route::post('/bookmarks/{postId}', [BookmarkController::class, 'store']);
+        Route::delete('/bookmarks/{postId}', [BookmarkController::class, 'destroy']);
+        });
 
         // WebSocket Routes
         Route::prefix('websocket')->group(function () {

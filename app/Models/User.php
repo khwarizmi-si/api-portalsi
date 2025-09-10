@@ -150,4 +150,14 @@ class User extends Authenticatable implements MustVerifyEmail
     {
         return $this->hasMany(GroupMessage::class, 'sender_id', 'user_id');
     }
+
+    public function bookmarks()
+    {
+    return $this->hasMany(Bookmark::class);
+    }
+
+    public function bookmarkedPosts()
+    {
+    return $this->belongsToMany(Post::class, 'bookmarks');
+    }
 }
