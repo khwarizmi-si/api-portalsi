@@ -3,6 +3,8 @@
 use Illuminate\Support\Facades\Route;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Http;
+use App\Http\Controllers\PusherController;
+
 
 // ✅ GET: Menampilkan form reset password
 Route::get('/reset-password', function (Request $request) {
@@ -53,3 +55,7 @@ Route::get('/reset-password-error', function () {
         'error' => session('error') ?? 'Terjadi kesalahan saat mengubah password.'
     ]);
 });
+
+
+Route::post('/pusher/user-auth', [PusherController::class, 'pusherAuth'])
+    ->middleware('auth:sanctum'); // atau auth:api sesuai yang kamu pakai
