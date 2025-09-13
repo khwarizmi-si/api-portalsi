@@ -4,6 +4,36 @@ use Illuminate\Support\Facades\Route;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Http;
 use App\Http\Controllers\PusherController;
+use App\Events\NewDirectMessage;
+use App\Models\User;
+
+
+Route::get('/test-reverb', function () {
+    // Ambil user pertama sebagai contoh
+    $user = User::first();
+
+    if (!$user) {
+        return response()->json(['message' => 'Belum ada user di database.'], 400);
+    }
+
+    // Buat data dummy pesan
+    $messageData = [
+        'sender_id' => $user->id,
+        'receiver_id' => $user->id,
+        'content' => 'Test broadcast Reverb ✅',
+        'media_url' => null,
+        'sent_at' => now(),
+        'is_read' => false,
+    ];
+
+    // Broadcast event
+    broadcast(new NewDirectMessage((object) $messageData))->toOthers();
+
+    return response()->json([
+        'message' => 'Test broadcast berhasil dikirim.',
+        'data' => $messageData
+    ]);
+});
 
 
 // ✅ GET: Menampilkan form reset password
