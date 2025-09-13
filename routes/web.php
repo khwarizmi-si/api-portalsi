@@ -16,7 +16,7 @@ Route::get('/test-reverb', function () {
         return response()->json(['message' => 'Belum ada user di database.'], 400);
     }
 
-    // Buat pesan baru di DB
+    // Buat pesan di DB
     $message = DirectMessage::create([
         'sender_id' => $user->id,
         'receiver_id' => $user->id,
@@ -26,7 +26,7 @@ Route::get('/test-reverb', function () {
         'sent_at' => now(),
     ]);
 
-    // Broadcast event
+    // Broadcast
     broadcast(new NewDirectMessage($message))->toOthers();
 
     return response()->json([
