@@ -53,3 +53,8 @@ Broadcast::channel('story.{storyId}', function ($user, $storyId) {
 Broadcast::channel('post.{postId}', function ($user, $postId) {
     return $user !== null;
 });
+Broadcast::channel('test-channel', function ($user) {
+    // Kode ini mengizinkan SEMUA user yang sudah login untuk mengakses channel ini.
+    // Jika $user tidak null (artinya login berhasil), maka otorisasi diberikan (return true).
+    return $user !== null;
+});

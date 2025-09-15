@@ -19,15 +19,13 @@ class TestEvent implements ShouldBroadcast
         $this->message = $message;
     }
 
-    // Channel publik
     public function broadcastOn()
     {
         return new Channel('test-channel');
     }
 
-    // Nama event di frontend (default: nama class, tapi bisa override)
     public function broadcastAs()
     {
-        return 'test-event';
+        return 'test.event';
     }
 }

@@ -3,7 +3,35 @@
 use Illuminate\Support\Facades\Route;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Http;
+use App\Http\Controllers\PusherController;
 
+
+Route::get('/test-reverb-connection', function () {
+    try {
+        // Test basic broadcasting
+        broadcast(new \App\Events\TestEvent('Test message from Reverb'));
+        
+        return response()->json([
+            'status' => 'success',
+            'message' => 'Event broadcasted successfully',
+            'config' => [
+                'host' => env('REVERB_HOST'),
+                'port' => env('REVERB_PORT'),
+                'scheme' => env('REVERB_SCHEME')
+            ]
+        ]);
+    } catch (\Exception $e) {
+        return response()->json([
+            'status' => 'error',
+            'message' => 'Broadcast failed: ' . $e->getMessage(),
+            'config' => [
+                'host' => env('REVERB_HOST'),
+                'port' => env('REVERB_PORT'),
+                'scheme' => env('REVERB_SCHEME')
+            ]
+        ], 500);
+    }
+});
 // ✅ GET: Menampilkan form reset password
 Route::get('/reset-password', function (Request $request) {
     $token = $request->query('token');
@@ -53,3 +81,7 @@ Route::get('/reset-password-error', function () {
         'error' => session('error') ?? 'Terjadi kesalahan saat mengubah password.'
     ]);
 });
+
+
+Route::post('/pusher/user-auth', [PusherController::class, 'pusherAuth'])
+    ->middleware('auth:sanctum'); // atau auth:api sesuai yang kamu pakai
