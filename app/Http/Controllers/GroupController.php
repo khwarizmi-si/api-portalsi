@@ -271,6 +271,7 @@ public function addMember(Request $request, Group $group)
         'joined_at' => now(),
         'is_muted' => false,
     ]);
+    broadcast(new \App\Events\MemberAdded($group, $target))->toOthers();
 
     return response()->json(['message' => 'User added to group'], 201);
 }
@@ -347,6 +348,11 @@ public function removeMember(Group $group, User $user)
     $deleted = GroupMember::where('group_id', $group->id)
         ->where('user_id', $user->user_id)
         ->delete();
+         if ($deleted) {
+        // 👇 TAMBAHKAN INI: Siarkan bahwa seorang anggota telah dihapus
+        // Anda perlu membuat Event 'MemberRemoved'
+        broadcast(new \App\Events\MemberRemoved($group, $user))->toOthers();
+    }
 
     return response()->json(['message' => $deleted ? 'Removed' : 'Not found']);
 }
