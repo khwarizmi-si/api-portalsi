@@ -83,15 +83,22 @@ Route::post('/login', function (Request $request) {
         'password' => 'required|string',
     ]);
 
-    // Coba cari berdasarkan email dulu, jika tidak ketemu cari sebagai username
-    $user = User::where('email', $request->login)
-        ->orWhere('username', $request->login)
+    // Cari user berdasarkan email atau username
+    $user = User::where('email', strtolower($request->login))
+        ->orWhere('username', strtolower($request->login))
         ->first();
 
     if (!$user || !Hash::check($request->password, $user->password_hash)) {
         throw ValidationException::withMessages([
             'login' => ['The provided credentials are incorrect.'],
         ]);
+    }
+
+    // 🚨 Cek verifikasi email dulu
+    if (!$user->hasVerifiedEmail()) {
+        return response()->json([
+            'message' => 'Akun Anda belum diverifikasi. Silakan cek email untuk verifikasi.'
+        ], 403);
     }
 
     $token = $user->createToken('api-token')->plainTextToken;
@@ -102,6 +109,7 @@ Route::post('/login', function (Request $request) {
         'user' => $user
     ]);
 });
+
 
 // 📩 Email Verification
 Route::get('/email/verify/{id}/{hash}', function (Request $request, $id, $hash) {
