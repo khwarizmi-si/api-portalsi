@@ -42,7 +42,7 @@ class Handler extends ExceptionHandler
             // Handle validation error (422)
             if ($exception instanceof ValidationException) {
                 return response()->json([
-                    'message' => 'Validation failed',
+                    'message' => 'Validasi gagal, silakan coba kembali.',
                     'errors' => $exception->errors(),
                 ], 422);
             }
