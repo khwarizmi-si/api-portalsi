@@ -97,7 +97,7 @@ Route::post('/login', function (Request $request) {
     // 🚨 Cek verifikasi email dulu
     if (!$user->hasVerifiedEmail()) {
         return response()->json([
-            'message' => 'Akun Anda belum diverifikasi. Silakan cek email untuk verifikasi.'
+            'message' => 'Akun Anda belum diverifikasi. Silakan cek email Anda untuk melakukan verifikasi.'
         ], 403);
     }
 
