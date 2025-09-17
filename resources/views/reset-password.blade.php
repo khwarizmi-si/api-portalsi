@@ -125,8 +125,8 @@
       <input type="hidden" name="token" value="{{ $token }}">
       <input type="hidden" name="email" value="{{ $email }}">
 
-      <input type="password" name="password" id="password" placeholder="Password baru" required>
-      <input type="password" name="password_confirmation" id="password_confirmation" placeholder="Konfirmasi password" required>
+      <input type="password" name="password" id="password" placeholder="Password baru" autocomplete="off" required>
+      <input type="password" name="password_confirmation" id="password_confirmation" placeholder="Konfirmasi password" autocomplete="off" required>
       <p id="errorMessage" class="message">Konfirmasi password tidak cocok.</p>
 
       <button type="submit" id="submitBtn" disabled>Ubah Password</button>
