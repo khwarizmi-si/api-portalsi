@@ -77,7 +77,7 @@ class Notification extends Model
     /**
      * Post yang terkait dengan notifikasi.
      */
-    public function post(): BelongsTo
+    public function relatedPost(): BelongsTo
     {
         return $this->belongsTo(Post::class, 'related_post_id');
     }
