@@ -19,7 +19,7 @@ class Notification extends Model
      * Primary key custom.
      */
     protected $primaryKey = 'notification_id';
-    protected $keyType = 'int';
+    protected $keyType    = 'int';
 
     /**
      * Kolom yang bisa diisi mass-assignment.
@@ -29,6 +29,7 @@ class Notification extends Model
         'type',
         'related_user_id',
         'related_post_id',
+        'related_comment_id',
         'comment_id',
         'reply_id',
         'created_at',
@@ -40,7 +41,7 @@ class Notification extends Model
      */
     protected $casts = [
         'is_read'    => 'boolean',
-        'created_at' => 'datetime', // bisa pakai ->diffInSeconds(), ->format(), dll.
+        'created_at' => 'datetime',
     ];
 
     /*
@@ -50,11 +51,11 @@ class Notification extends Model
     */
 
     /**
-     * Penerima notifikasi (user yang dapat notifikasi).
+     * Penerima notifikasi (user yang menerima notifikasi).
      */
     public function recipient(): BelongsTo
     {
-        return $this->belongsTo(User::class, 'recipient_id');
+        return $this->belongsTo(User::class, 'recipient_id', 'user_id');
     }
 
     /**
@@ -62,18 +63,19 @@ class Notification extends Model
      */
     public function sender(): BelongsTo
     {
-        return $this->belongsTo(User::class, 'related_user_id');
+        return $this->belongsTo(User::class, 'related_user_id', 'user_id');
     }
 
     /**
-     * Alias untuk sender, biar kode lama `$notification->relatedUser` tetap jalan.
+     * Alias untuk sender, agar kode lama $notification->relatedUser tetap jalan.
      */
-public function relatedUser()
-{
-    return $this->belongsTo(User::class, 'related_user_id', 'user_id');
-}
+    public function relatedUser(): BelongsTo
+    {
+        return $this->belongsTo(User::class, 'related_user_id', 'user_id');
+    }
+
     /**
-     * Post yang terkait.
+     * Post yang terkait dengan notifikasi.
      */
     public function post(): BelongsTo
     {
@@ -81,7 +83,7 @@ public function relatedUser()
     }
 
     /**
-     * Komentar yang terkait.
+     * Komentar yang terkait dengan notifikasi.
      */
     public function comment(): BelongsTo
     {
@@ -89,7 +91,7 @@ public function relatedUser()
     }
 
     /**
-     * Reply yang terkait (balasan komentar).
+     * Balasan komentar yang terkait.
      */
     public function reply(): BelongsTo
     {
