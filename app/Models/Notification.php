@@ -85,7 +85,7 @@ class Notification extends Model
     /**
      * Komentar yang terkait dengan notifikasi.
      */
-    public function comment(): BelongsTo
+    public function relatedComment(): BelongsTo
     {
         return $this->belongsTo(Comment::class, 'comment_id', 'comment_id');
     }

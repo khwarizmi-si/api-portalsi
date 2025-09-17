@@ -52,9 +52,6 @@ class CommentController extends Controller
                 'is_read' => false,
             ]);
 
-            // 🚀 load relasi pengirim agar event bisa akses $notification->relatedUser
-            $notification->load('relatedUser');
-
             // ✨ SIARKAN EVENT NOTIFIKASI
             broadcast(new NewNotification($notification));
             broadcast(new NotificationCreated($notification));
