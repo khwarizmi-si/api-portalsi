@@ -174,7 +174,7 @@ Route::get('/profile/{username}', [ProfileController::class, 'show']);
 
 // 🔐 PROTECTED ROUTES
 Route::middleware(['auth:sanctum'])->group(function () {
-    Broadcast::routes();
+     Broadcast::routes(['middleware' => ['auth:sanctum']]);
     Route::post('/logout', function (Request $request) {
         $request->user()->currentAccessToken()->delete();
         return response()->json(['message' => 'Logged out']);

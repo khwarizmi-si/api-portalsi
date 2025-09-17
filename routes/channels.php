@@ -3,58 +3,55 @@
 use Illuminate\Support\Facades\Broadcast;
 use App\Models\Group;
 
-// 🔽 INI ADALAH KODE LAMA ANDA, TETAP DIPERLUKAN!
+// Channel default untuk user
 Broadcast::channel('App.Models.User.{id}', function ($user, $id) {
-    return (int) $user->user_id === (int) $id; // (Pastikan menggunakan user_id jika itu primary key Anda)
+    return (int) $user->user_id === (int) $id; // ganti ke $user->id kalau primary key default
 });
 
-// ➕ KODE TAMBAHAN UNTUK FITUR LAIN
-// Channel untuk update komentar di sebuah post
+// Channel untuk update komentar & like post
 Broadcast::channel('post.{postId}', function ($user, $postId) {
     return $user !== null;
 });
 
-// Channel untuk Direct Message antara 2 user
+// Channel untuk Direct Message (private)
 Broadcast::channel('dm.{conversationId}', function ($user, $conversationId) {
     $userIds = explode('-', $conversationId);
     return in_array($user->user_id, $userIds);
 });
 
-// Channel untuk update pesan di sebuah grup
+// Channel untuk update pesan di grup
 Broadcast::channel('group.{group}', function ($user, Group $group) {
     return $group->members()->where('user_id', $user->user_id)->exists();
 });
 
-// ===== NEW WEBSOCKET CHANNELS =====
-
-// Private channel for user notifications
+// Private channel untuk notifikasi user
 Broadcast::channel('user.{userId}', function ($user, $userId) {
     return (int) $user->user_id === (int) $userId;
 });
 
-// Private channel for direct messages
+// Private channel direct chat
 Broadcast::channel('chat.direct.{roomId}', function ($user, $roomId) {
     $userIds = explode('-', $roomId);
     return in_array($user->user_id, $userIds);
 });
 
-// Private channel for group messages
+// Private channel group chat
 Broadcast::channel('chat.group.{groupId}', function ($user, $groupId) {
-    return Group::find($groupId)->members()->where('user_id', $user->user_id)->exists();
+    return Group::find($groupId)
+        ?->members()
+        ->where('user_id', $user->user_id)
+        ->exists() ?? false;
 });
 
-// Presence channel for story viewers
+// Presence channel untuk story viewers
 Broadcast::channel('story.{storyId}', function ($user, $storyId) {
-    // Allow any authenticated user to join story presence channel
-    return $user !== null;
+    return [
+        'id' => $user->user_id,
+        'name' => $user->username,
+    ];
 });
 
-// Private channel for post updates (likes, comments)
-Broadcast::channel('post.{postId}', function ($user, $postId) {
-    return $user !== null;
-});
+// Test channel (semua user login bisa akses)
 Broadcast::channel('test-channel', function ($user) {
-    // Kode ini mengizinkan SEMUA user yang sudah login untuk mengakses channel ini.
-    // Jika $user tidak null (artinya login berhasil), maka otorisasi diberikan (return true).
     return $user !== null;
 });
