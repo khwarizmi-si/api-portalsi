@@ -68,11 +68,10 @@ class Notification extends Model
     /**
      * Alias untuk sender, biar kode lama `$notification->relatedUser` tetap jalan.
      */
-    public function relatedUser(): BelongsTo
-    {
-        return $this->belongsTo(User::class, 'related_user_id');
-    }
-
+public function relatedUser()
+{
+    return $this->belongsTo(User::class, 'related_user_id', 'user_id');
+}
     /**
      * Post yang terkait.
      */
