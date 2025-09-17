@@ -17,7 +17,7 @@ class NewNotification implements ShouldBroadcast
     public function __construct(Notification $notification)
     {
         // Muat semua relasi yang mungkin dibutuhkan di frontend
-        $this->notification = $notification->load(['relatedUser', 'relatedPost', 'relatedComment.user']);
+        $this->notification = $notification->load(['user', 'post', 'relatedComment.user']);
     }
 
     public function broadcastOn(): array

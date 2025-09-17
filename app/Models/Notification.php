@@ -69,7 +69,7 @@ class Notification extends Model
     /**
      * Alias untuk sender, agar kode lama $notification->relatedUser tetap jalan.
      */
-    public function relatedUser(): BelongsTo
+    public function user(): BelongsTo
     {
         return $this->belongsTo(User::class, 'related_user_id', 'user_id');
     }
@@ -77,7 +77,7 @@ class Notification extends Model
     /**
      * Post yang terkait dengan notifikasi.
      */
-    public function relatedPost(): BelongsTo
+    public function post(): BelongsTo
     {
         return $this->belongsTo(Post::class, 'related_post_id');
     }
@@ -85,7 +85,7 @@ class Notification extends Model
     /**
      * Komentar yang terkait dengan notifikasi.
      */
-    public function relatedComment(): BelongsTo
+    public function comment(): BelongsTo
     {
         return $this->belongsTo(Comment::class, 'comment_id', 'comment_id');
     }
