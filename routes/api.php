@@ -236,6 +236,7 @@ Route::middleware(['auth:sanctum'])->group(function () {
         Route::get('/messages/chat-list', [DirectMessageController::class, 'chatList']);
         Route::get('/messages/unread/{user_id}', [DirectMessageController::class, 'unreadConversation']);
         Route::get('/messages/conversation-from/{user_id}', [DirectMessageController::class, 'conversationFromUser']);
+        Route::get('/messages/channels', [DirectMessageController::class, 'channels']);
 
         // Account
         Route::post('/account/settings', [AccountController::class, 'update']);

@@ -314,4 +314,36 @@ $chatUsers = $lastChats->map(function ($chat) use ($users, $auth_id) {
         ]);
     }
 
+    public function channels()
+{
+    $auth_id = Auth::id();
+    $channels = [];
+
+    // 🔹 Ambil semua lawan chat (DM)
+    $chatUserIds = DirectMessage::where('sender_id', $auth_id)
+        ->orWhere('receiver_id', $auth_id)
+        ->selectRaw("CASE WHEN sender_id = ? THEN receiver_id ELSE sender_id END as user_id", [$auth_id])
+        ->distinct()
+        ->pluck('user_id');
+
+    foreach ($chatUserIds as $uid) {
+        // supaya konsisten urutan id kecil duluan
+        $ids = [$auth_id, $uid];
+        sort($ids);
+        $channels[] = "private-dm.{$ids[0]}-{$ids[1]}";
+    }
+
+    // 🔹 Ambil semua group yg diikuti user
+    $groupIds = GroupMember::where('user_id', $auth_id)
+        ->pluck('group_id');
+
+    foreach ($groupIds as $gid) {
+        $channels[] = "group.{$gid}";
+    }
+
+    return response()->json($channels);
 }
+
+
+}
+
