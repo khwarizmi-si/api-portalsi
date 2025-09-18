@@ -55,3 +55,13 @@ Broadcast::channel('story.{storyId}', function ($user, $storyId) {
 Broadcast::channel('test-channel', function ($user) {
     return $user !== null;
 });
+
+
+// Channel untuk pengumuman publik
+Broadcast::channel('announcements', function ($user) {
+    // Semua user, termasuk yang tidak login (guest), bisa mendengarkan pengumuman
+    // return true;
+
+    // Atau, jika hanya user yang login yang bisa menerima pengumuman
+    return $user !== null;
+});

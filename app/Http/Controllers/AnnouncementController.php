@@ -67,6 +67,7 @@ public function pinned()
 
         $announcement = Announcement::create($data);
         $announcement->load('creator:user_id,full_name,username,profile_picture_url');
+        event(new \App\Events\NewAnnouncement($announcement));
         return response()->json($announcement, 201);
     }
 
@@ -110,6 +111,7 @@ public function pinned()
 
         $announcement->update($data);
         $announcement->load('creator:user_id,full_name,username,profile_picture_url');
+        event(new \App\Events\NewAnnouncement($announcement));
         return response()->json($announcement);
     }
 
