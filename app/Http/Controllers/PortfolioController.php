@@ -49,7 +49,6 @@ class PortfolioController extends Controller
                   ->orderBy('users.name', $sortDir)
                   ->select('portfolios.*');
         } else {
-            // Kalau pakai inRandomOrder karena aspect, jangan timpa orderBy lagi
             if (!$request->has('aspect')) {
                 $query->orderBy($sortBy, $sortDir);
             }
@@ -57,7 +56,6 @@ class PortfolioController extends Controller
 
         $portfolios = $query->get();
 
-        // 🔹 Format respon
         $result = $portfolios->map(function ($item) {
             return [
                 'id' => $item->id,
@@ -77,10 +75,10 @@ class PortfolioController extends Controller
         ]);
     }
 
-    // 🔹 Tambah portfolio (hanya teacher/dev)
+    // 🔹 Tambah portfolio
     public function store(Request $request)
     {
-        $this->authorizeTeacherOrDev();
+        $this->authorizePortfolioAccess();
 
         $validator = Validator::make($request->all(), [
             'user_id' => 'required|exists:users,user_id',
@@ -119,7 +117,7 @@ class PortfolioController extends Controller
     // 🔹 Update portfolio
     public function update(Request $request, Portfolio $portfolio)
     {
-        $this->authorizeTeacherOrDev();
+        $this->authorizePortfolioAccess();
 
         $validator = Validator::make($request->all(), [
             'aspect' => 'nullable|in:quran,it,bahasa,karakter',
@@ -133,7 +131,6 @@ class PortfolioController extends Controller
             return response()->json($validator->errors(), 422);
         }
 
-        // Ganti media jika ada file baru
         if ($request->hasFile('media')) {
             if ($portfolio->media_url) {
                 $oldPath = str_replace('/storage/', '', parse_url($portfolio->media_url, PHP_URL_PATH));
@@ -155,7 +152,7 @@ class PortfolioController extends Controller
     // 🔹 Hapus portfolio
     public function destroy(Portfolio $portfolio)
     {
-        $this->authorizeTeacherOrDev();
+        $this->authorizePortfolioAccess();
 
         if ($portfolio->media_url) {
             $path = str_replace('/storage/', '', parse_url($portfolio->media_url, PHP_URL_PATH));
@@ -169,11 +166,13 @@ class PortfolioController extends Controller
         ]);
     }
 
-    // 🔐 Validasi role teacher/dev
-    protected function authorizeTeacherOrDev()
+    // 🔐 Validasi role teacher/dev atau user is_verified
+    protected function authorizePortfolioAccess()
     {
-        if (!Auth::check() || !in_array(Auth::user()->role, ['teacher', 'dev'])) {
-            abort(403, 'Hanya teacher atau dev yang diizinkan.');
+        if (!Auth::check() || 
+            !(in_array(Auth::user()->role, ['teacher', 'dev']) || Auth::user()->is_verified == 1)
+        ) {
+            abort(403, 'Hanya teacher, dev, atau user terverifikasi yang diizinkan.');
         }
     }
 }
