@@ -7,7 +7,8 @@ use Illuminate\Support\Facades\Auth;
 use App\Models\User;
 use App\Models\Notification;
 use Carbon\Carbon;
-
+use App\Events\Followed; 
+use App\Events\NotificationCreated;
 class FollowController extends Controller
 {
     // ✅ FOLLOW USER
@@ -37,6 +38,8 @@ class FollowController extends Controller
 
         // 🔔 Kirim notifikasi hanya jika statusnya accepted
         if ($status === 'accepted') {
+
+
             $lastNotif = Notification::where('recipient_id', $userToFollow->user_id)
                 ->where('related_user_id', $authUser->user_id)
                 ->where('type', 'follow')
@@ -63,7 +66,9 @@ class FollowController extends Controller
                     'created_at'       => now(),
                     'is_read'          => false,
                 ]);
+                broadcast(new Followed($authUser, $userToFollow));
             }
+            
         }
 
         return response()->json([
@@ -85,6 +90,7 @@ class FollowController extends Controller
         }
 
         $authUser->following()->detach($userToUnfollow->user_id);
+        broadcast(new UserUnfollowed($authUser, $userToUnfollow));
 
         return response()->json(['message' => 'Berhasil unfollow user.'], 200);
     }
@@ -151,6 +157,20 @@ public function acceptFollowRequest($followerId)
         'created_at'       => now(),
         'is_read'          => false,
     ]);
+        $notification = Notification::create([
+        'recipient_id'      => $followerId,
+        'type'              => 'follow_accepted',
+        'related_user_id'   => $authUser->user_id,
+        'related_post_id'   => null,
+        'created_at'        => now(),
+        'is_read'           => false,
+    ]);
+    broadcast(new NotificationCreated($notification)); // Menggunakan event notifikasi umum
+    
+    // ✨ Pemicu event real-time untuk memberitahu user yang menerima
+    $follower = User::find($followerId);
+    broadcast(new Followed($follower, $authUser)); // Menggunakan event follow khusus
+    
 
     return response()->json(['message' => 'Permintaan follow diterima.'], 200);
 }
