@@ -10,38 +10,53 @@ use Illuminate\Support\Facades\Validator;
 
 class PortfolioController extends Controller
 {
-    // 🔹 Tampilkan semua portfolio (opsional filter by aspek / user)
+    // 🔹 Tampilkan semua portfolio dengan filter & search
     public function index(Request $request)
     {
         $query = Portfolio::with('user');
-    
-        // 🔹 Filter
+
+        // 🔹 Filter aspect → random jika filter digunakan
         if ($request->has('aspect')) {
-            $query->where('aspect', $request->aspect);
+            $query->where('aspect', $request->aspect)
+                  ->inRandomOrder();
         }
-    
+
+        // 🔹 Filter user_id
         if ($request->has('user_id')) {
             $query->where('user_id', $request->user_id);
         }
-    
-        if ($request->has('title')) {
-            $query->where('title', 'like', '%' . $request->title . '%');
+
+        // 🔹 Filter tahun
+        if ($request->has('year')) {
+            $query->where('year', $request->year);
         }
-    
-        // 🔹 Sorting
+
+        // 🔹 Search by title or description
+        if ($request->has('search')) {
+            $search = $request->search;
+            $query->where(function ($q) use ($search) {
+                $q->where('title', 'like', "%$search%")
+                  ->orWhere('description', 'like', "%$search%");
+            });
+        }
+
+        // 🔹 Sorting (default created_at desc)
         $sortBy = $request->input('sort_by', 'created_at');
         $sortDir = $request->input('sort_dir', 'desc');
-    
+
         if ($sortBy === 'user_name') {
             $query->join('users', 'users.user_id', '=', 'portfolios.user_id')
                   ->orderBy('users.name', $sortDir)
                   ->select('portfolios.*');
         } else {
-            $query->orderBy($sortBy, $sortDir);
+            // Kalau pakai inRandomOrder karena aspect, jangan timpa orderBy lagi
+            if (!$request->has('aspect')) {
+                $query->orderBy($sortBy, $sortDir);
+            }
         }
-    
+
         $portfolios = $query->get();
-    
+
         // 🔹 Format respon
         $result = $portfolios->map(function ($item) {
             return [
@@ -56,17 +71,16 @@ class PortfolioController extends Controller
                 'created_at' => $item->created_at,
             ];
         });
-    
+
         return response()->json([
             'portfolios' => $result
         ]);
     }
-    
 
-    // 🔹 Tambah portfolio (hanya admin)
+    // 🔹 Tambah portfolio (hanya teacher/dev)
     public function store(Request $request)
     {
-        $this->authorizeAdmin();
+        $this->authorizeTeacherOrDev();
 
         $validator = Validator::make($request->all(), [
             'user_id' => 'required|exists:users,user_id',
@@ -102,10 +116,10 @@ class PortfolioController extends Controller
         ]);
     }
 
-    // 🔹 Update portfolio (pakai POST agar support form-data)
+    // 🔹 Update portfolio
     public function update(Request $request, Portfolio $portfolio)
     {
-        $this->authorizeAdmin();
+        $this->authorizeTeacherOrDev();
 
         $validator = Validator::make($request->all(), [
             'aspect' => 'nullable|in:quran,it,bahasa,karakter',
@@ -141,7 +155,7 @@ class PortfolioController extends Controller
     // 🔹 Hapus portfolio
     public function destroy(Portfolio $portfolio)
     {
-        $this->authorizeAdmin();
+        $this->authorizeTeacherOrDev();
 
         if ($portfolio->media_url) {
             $path = str_replace('/storage/', '', parse_url($portfolio->media_url, PHP_URL_PATH));
@@ -155,11 +169,11 @@ class PortfolioController extends Controller
         ]);
     }
 
-    // 🔐 Validasi admin (gunakan is_verified sebagai indikator)
-    protected function authorizeAdmin()
+    // 🔐 Validasi role teacher/dev
+    protected function authorizeTeacherOrDev()
     {
-        if (!Auth::check() || !Auth::user()->is_verified) {
-            abort(403, 'Hanya admin yang diizinkan.');
+        if (!Auth::check() || !in_array(Auth::user()->role, ['teacher', 'dev'])) {
+            abort(403, 'Hanya teacher atau dev yang diizinkan.');
         }
     }
 }
