@@ -218,43 +218,49 @@ public function conversation($user_id)
             })
             ->groupBy('user_id');
 
-$lastChats = DB::table('direct_messages as dm')
-    ->joinSub($subQuery, 'sq', function ($join) use ($auth_id) {
-        $join->on(DB::raw("CASE WHEN dm.sender_id = $auth_id THEN dm.receiver_id ELSE dm.sender_id END"), '=', 'sq.user_id')
-            ->on('dm.sent_at', '=', 'sq.last_sent_at');
-    })
-    ->select(
-        DB::raw("CASE WHEN dm.sender_id = $auth_id THEN dm.receiver_id ELSE dm.sender_id END as user_id"),
-        'dm.sender_id', // ✅ tambahin ini
-        'dm.content',
-        'dm.media_url',
-        'dm.sent_at',
-        'dm.is_read'
-    )
-    ->orderBy('dm.sent_at', 'desc')
-    ->get();
+            $lastChats = DB::table('direct_messages as dm')
+                ->joinSub($subQuery, 'sq', function ($join) use ($auth_id) {
+                    $join->on(DB::raw("CASE WHEN dm.sender_id = $auth_id THEN dm.receiver_id ELSE dm.sender_id END"), '=', 'sq.user_id')
+                        ->on('dm.sent_at', '=', 'sq.last_sent_at');
+                })
+                ->select(
+                    DB::raw("CASE WHEN dm.sender_id = $auth_id THEN dm.receiver_id ELSE dm.sender_id END as user_id"),
+                    'dm.sender_id', // ✅ tambahin ini
+                    'dm.content',
+                    'dm.media_url',
+                    'dm.sent_at',
+                    'dm.is_read'
+                )
+                ->orderBy('dm.sent_at', 'desc')
+                ->get();
 
 
-        $userIds = $lastChats->pluck('user_id')->toArray();
-        $users = User::whereIn('user_id', $userIds)
-            ->select('user_id', 'username', 'full_name', 'profile_picture_url')
-            ->get()
-            ->keyBy('user_id');
+   $userIds = $lastChats->pluck('user_id')->toArray();
+    $users = User::whereIn('user_id', $userIds)
+        ->select('user_id', 'username', 'full_name', 'profile_picture_url')
+        ->get()
+        ->keyBy('user_id');
 
-$chatUsers = $lastChats->map(function ($chat) use ($users, $auth_id) {
-    $user = $users[$chat->user_id] ?? null;
-    return [
-        'type' => 'user',
-        'id' => (int) $chat->user_id,
-        'name' => $user->full_name ?? $user->username,
-        'username' => $user->username ?? null,
-        'profile_picture_url' => $user->profile_picture_url ?? null,
-        'last_message' => $chat->content ?? '📎 Media',
-        'last_media' => $chat->media_url,
-        'sent_at' => $chat->sent_at,
-        'is_read' => ($chat->sender_id == $auth_id) ? true : $chat->is_read, // ✅ fix disini
-    ];
-});
+    $chatUsers = $lastChats->map(function ($chat) use ($users, $auth_id) {
+        $user = $users[$chat->user_id] ?? null;
+
+        // 👇 PERUBAHAN UTAMA: Buat objek terpisah
+        return [
+            'type' => 'user',
+            'conversation' => [
+                'id' => (int) $chat->user_id,
+                'name' => $user->full_name ?? $user->username,
+                'username' => $user->username ?? null,
+                'profile_picture_url' => $user->profile_picture_url ?? null,
+            ],
+            'last_chat' => [
+                'content' => $chat->content ?? '📎 Media',
+                'media' => $chat->media_url,
+                'sent_at' => $chat->sent_at,
+                'is_read' => ($chat->sender_id == $auth_id) ? true : $chat->is_read,
+            ],
+        ];
+    });
 
 
         // 🔹 2. Ambil grup + last message
