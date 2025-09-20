@@ -28,6 +28,7 @@ class NotificationController extends Controller
                         'user_id' => $notif->sender->user_id,
                         'username' => $notif->sender->username,
                         'full_name' => $notif->sender->full_name,
+                        'profile_picture_url' => $notif->sender->profile_picture_url,
                     ] : null,
                     'related_post_id' => $notif->related_post_id,
                     'is_read' => $notif->is_read,
