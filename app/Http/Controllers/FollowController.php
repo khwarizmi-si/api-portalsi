@@ -81,20 +81,31 @@ class FollowController extends Controller
     }
 
     // ✅ UNFOLLOW USER
-    public function unfollow($id)
-    {
-        $userToUnfollow = User::findOrFail($id);
-        $authUser = Auth::user();
+// ✅ UNFOLLOW USER
+public function unfollow($id)
+{
+    $userToUnfollow = User::findOrFail($id);
+    $authUser = Auth::user();
 
-        if (!$authUser->following()->where('followed_id', $id)->exists()) {
-            return response()->json(['message' => 'Belum di-follow.'], 404);
-        }
-
-        $authUser->following()->detach($userToUnfollow->user_id);
-        broadcast(new UserUnfollowed($authUser, $userToUnfollow));
-
-        return response()->json(['message' => 'Berhasil unfollow user.'], 200);
+    if (!$authUser->following()->where('followed_id', $id)->exists()) {
+        return response()->json(['message' => 'Belum di-follow.'], 404);
     }
+
+    // Hapus relasi follow
+    $authUser->following()->detach($userToUnfollow->user_id);
+
+    // 🗑️ Hapus notifikasi terkait follow
+    Notification::where('recipient_id', $userToUnfollow->user_id)
+        ->where('related_user_id', $authUser->user_id)
+        ->whereIn('type', ['follow', 'follow_accepted'])
+        ->delete();
+
+    // Broadcast event unfollow
+    broadcast(new UserUnfollowed($authUser, $userToUnfollow));
+
+    return response()->json(['message' => 'Berhasil unfollow user.'], 200);
+}
+
 
     // ✅ LIHAT FOLLOWERS
     public function followers($id)
