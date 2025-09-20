@@ -4,12 +4,10 @@ namespace App\Http\Controllers;
 
 use App\Events\NewGroupMessage;
 use App\Events\GroupMessageUpdated;
-use App\Events\NewNotification; 
 use App\Events\MessageSent;
 use App\Events\ChatListUpdated;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
-use Illuminate\Support\Facades\Storage;
 use App\Models\Group;
 use App\Models\GroupMessage;
 use App\Models\GroupMessageMention;
@@ -18,7 +16,7 @@ use App\Models\User;
 class GroupMessageController extends Controller
 {
     /**
-     * Simpan pesan baru ke dalam grupsss
+     * Simpan pesan baru ke dalam grup
      */
     public function store(Request $request, Group $group)
     {
@@ -52,7 +50,8 @@ class GroupMessageController extends Controller
             'sent_at'   => now(),
         ]);
 
-        $message->load('sender'); // pastikan relasi sender ikut diambil
+        // ✅ refresh agar cast sent_at -> Carbon dan relasi sender ikut
+        $message = $message->fresh(['sender']);
 
         // Broadcast ke channel realtime
         broadcast(new NewGroupMessage($message))->toOthers();
@@ -60,18 +59,18 @@ class GroupMessageController extends Controller
 
         // Update chat list semua anggota
         $conversationData = [
-            'type'       => 'group',
-            'id'         => $group->id,
-            'name'       => $group->name,
-            'avatar_url' => $group->avatar_url,
-            'last_message' => $message->content ?: '📎 Media',
-            'last_media'   => $message->media_url,
-            'sent_at'      => $message->sent_at?->toIso8601String() ?? now()->toIso8601String(),
+            'type'        => 'group',
+            'id'          => $group->id,
+            'name'        => $group->name,
+            'avatar_url'  => $group->avatar_url,
+            'last_message'=> $message->content ?: '📎 Media',
+            'last_media'  => $message->media_url,
+            'sent_at'     => optional($message->sent_at)->toIso8601String() ?? now()->toIso8601String(),
         ];
 
         foreach ($group->members as $member) {
             $dataForMember = $conversationData;
-            $dataForMember['recipient_id'] = (int) $member->user_id; // pastikan int
+            $dataForMember['recipient_id'] = (int) $member->user_id;
             broadcast(new ChatListUpdated($dataForMember));
         }
 
@@ -84,17 +83,14 @@ class GroupMessageController extends Controller
                 $mentionedUser = User::where('username', $username)->first();
                 if ($mentionedUser) {
                     GroupMessageMention::create([
-                        'group_message_id'   => $message->id,
-                        'mentioned_user_id'  => $mentionedUser->user_id,
+                        'group_message_id'  => $message->id,
+                        'mentioned_user_id' => $mentionedUser->user_id,
                     ]);
-
-                    // Bisa tambahkan notifikasi mention di sini
-                    // broadcast(new NewNotification($notification));
                 }
             }
         }
 
-        // ✅ Return response manual (supaya tidak error toIso8601String())
+        // ✅ Return response aman
         return response()->json([
             'message' => 'Pesan berhasil dikirim.',
             'data'    => [
@@ -109,7 +105,7 @@ class GroupMessageController extends Controller
                 'is_pinned' => (bool) $message->is_pinned,
                 'is_edited' => (bool) $message->is_edited,
                 'is_deleted'=> (bool) $message->is_deleted,
-                'sent_at'   => $message->sent_at?->toIso8601String() ?? now()->toIso8601String(),
+                'sent_at'   => optional($message->sent_at)->toIso8601String() ?? now()->toIso8601String(),
             ]
         ]);
     }
@@ -144,7 +140,7 @@ class GroupMessageController extends Controller
                     'is_pinned' => (bool) $msg->is_pinned,
                     'is_edited' => (bool) $msg->is_edited,
                     'is_deleted'=> (bool) $msg->is_deleted,
-                    'sent_at'   => $msg->sent_at?->toIso8601String(),
+                    'sent_at'   => optional($msg->sent_at)->toIso8601String(),
                     'mentions'  => $msg->mentions->map(function ($mention) {
                         return [
                             'user_id'  => $mention->mentioned->user_id,
