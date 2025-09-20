@@ -42,12 +42,12 @@ class LikeController extends Controller
                 'post_id' => $post_id,
             ]);
 
-            // Broadcast like event
+            // Broadcast like event.
+            // This is for real-time updates on the post's like count.
             broadcast(new LikeCreated($like))->toOthers();
 
-            // Kirim notifikasi jika user bukan pemilik post
+            // Kirim notifikasi HANYA jika user bukan pemilik post
             if ($post->user_id != $user_id) {
-
                 // Cek notifikasi terakhir untuk like
                 $lastNotif = Notification::where('recipient_id', $post->user_id)
                     ->where('related_user_id', $user_id)
@@ -61,7 +61,6 @@ class LikeController extends Controller
                 if ($lastNotif) {
                     $lastCreated = Carbon::parse($lastNotif->created_at);
                     $diff = now()->diffInSeconds($lastCreated);
-
                     if ($diff < 60) {
                         $allowNotify = false;
                     }
@@ -78,6 +77,7 @@ class LikeController extends Controller
                     ]);
 
                     // Broadcast notification event
+                    // This is for real-time updates to the notification bell
                     broadcast(new NotificationCreated($notification));
                 }
             }
