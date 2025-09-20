@@ -13,240 +13,247 @@ use Illuminate\Support\Facades\Storage;
 
 class PostController extends Controller
 {
-public function index()
-{
-    $authUser = Auth::user();
+    public function index()
+    {
+        $authUser = Auth::user();
 
-    $followingIds = $authUser->following()
-        ->where('status', 'accepted')
-        ->pluck('followed_id');
-
-    // ========== PINNED: Post terbaru dari following ==========
-    $pinnedPosts = collect();
-
-    if ($followingIds->isNotEmpty()) {
-        $pinnedPosts = Post::with(['user', 'tags', 'mentions'])
-            ->withCount(['likes', 'comments'])
-            ->whereIn('user_id', $followingIds)
-            ->whereHas('user', fn($q) => $q->where('is_private', 0))
-            ->orderByDesc('created_at')
-            ->take(5)
-            ->get()
-            ->map(function ($post) use ($authUser) {
-                $post->is_liked = $post->likes()->where('user_id', $authUser->user_id)->exists();
-                $post->type = 'post';
-                $post->is_pinned = true;
-                return $post;
-            });
-    }
-
-    // Ambil id post pinned supaya tidak dobel
-    $pinnedIds = $pinnedPosts->pluck('post_id');
-
-    // ========== FEED POST (50/10/25/15) ==========
-    if ($followingIds->isEmpty()) {
-        $allPosts = Post::with(['user', 'tags', 'mentions'])
-            ->withCount(['likes', 'comments'])
-            ->whereHas('user', fn($q) => $q->where('is_private', 0))
-            ->whereNotIn('post_id', $pinnedIds) // hindari duplikat
-            ->inRandomOrder()
-            ->take(50)
-            ->get()
-            ->map(function ($post) use ($authUser) {
-                $post->is_liked = $post->likes()->where('user_id', $authUser->user_id)->exists();
-                $post->type = 'post';
-                return $post;
-            });
-    } else {
-        $total = 100;
-        $countTimeline  = (int) round($total * 0.50);
-        $countRelasi    = (int) round($total * 0.10);
-        $countRandom    = (int) round($total * 0.25);
-        $countLiked     = (int) round($total * 0.15);
-
-        // 50% timeline
-        $timelinePosts = Post::with(['user', 'tags', 'mentions'])
-            ->withCount(['likes', 'comments'])
-            ->whereIn('user_id', $followingIds->push($authUser->user_id))
-            ->whereHas('user', fn($q) => $q->where('is_private', 0))
-            ->whereNotIn('post_id', $pinnedIds) // hindari duplikat
-            ->inRandomOrder()
-            ->take($countTimeline)
-            ->get();
-
-        // 10% relasi
-        $secondDegreeIds = \DB::table('follows')
-            ->whereIn('follower_id', $followingIds)
-            ->whereNotIn('followed_id', $followingIds)
-            ->where('followed_id', '!=', $authUser->user_id)
+        $followingIds = $authUser->following()
+            ->where('status', 'accepted')
             ->pluck('followed_id');
 
-        $relasiPosts = Post::with(['user', 'tags', 'mentions'])
-            ->withCount(['likes', 'comments'])
-            ->whereIn('user_id', $secondDegreeIds)
-            ->whereHas('user', fn($q) => $q->where('is_private', 0))
-            ->whereNotIn('post_id', $pinnedIds)
-            ->inRandomOrder()
-            ->take($countRelasi)
-            ->get();
+        // ========== PINNED: Post terbaru dari following ==========
+        $pinnedPosts = collect();
 
-        // 25% random
-        $randomPosts = Post::with(['user', 'tags', 'mentions'])
-            ->withCount(['likes', 'comments'])
-            ->whereNotIn('user_id', $followingIds)
-            ->where('user_id', '!=', $authUser->user_id)
-            ->whereHas('user', fn($q) => $q->where('is_private', 0))
-            ->whereNotIn('post_id', $pinnedIds)
-            ->inRandomOrder()
-            ->take($countRandom)
-            ->get();
+        if ($followingIds->isNotEmpty()) {
+            $pinnedPosts = Post::with(['user', 'tags', 'mentions'])
+                ->withCount(['likes', 'comments'])
+                ->whereIn('user_id', $followingIds)
+                ->whereHas('user', fn($q) => $q->where('is_private', 0))
+                ->orderByDesc('created_at')
+                ->take(5)
+                ->get()
+                ->map(function ($post) use ($authUser) {
+                    $post->is_liked = $post->likes()->where('user_id', $authUser->user_id)->exists();
+                    $post->is_bookmarked = $post->bookmarks()->where('user_id', $authUser->user_id)->exists(); // 🆕
+                    $post->type = 'post';
+                    $post->is_pinned = true;
+                    return $post;
+                });
+        }
 
-        // 15% liked by following
-        $likedByFollowingIds = \DB::table('likes')
-            ->whereIn('user_id', $followingIds)
-            ->pluck('post_id');
+        // Ambil id post pinned supaya tidak dobel
+        $pinnedIds = $pinnedPosts->pluck('post_id');
 
-        $likedPosts = Post::with(['user', 'tags', 'mentions'])
-            ->withCount(['likes', 'comments'])
-            ->whereIn('post_id', $likedByFollowingIds)
-            ->whereHas('user', fn($q) => $q->where('is_private', 0))
-            ->whereNotIn('post_id', $pinnedIds)
-            ->inRandomOrder()
-            ->take($countLiked)
-            ->get();
+        // ========== FEED POST (50/10/25/15) ==========
+        if ($followingIds->isEmpty()) {
+            $allPosts = Post::with(['user', 'tags', 'mentions'])
+                ->withCount(['likes', 'comments'])
+                ->whereHas('user', fn($q) => $q->where('is_private', 0))
+                ->whereNotIn('post_id', $pinnedIds) // hindari duplikat
+                ->inRandomOrder()
+                ->take(50)
+                ->get()
+                ->map(function ($post) use ($authUser) {
+                    $post->is_liked = $post->likes()->where('user_id', $authUser->user_id)->exists();
+                    $post->is_bookmarked = $post->bookmarks()->where('user_id', $authUser->user_id)->exists(); // 🆕
+                    $post->type = 'post';
+                    return $post;
+                });
+        } else {
+            $total = 100;
+            $countTimeline  = (int) round($total * 0.50);
+            $countRelasi    = (int) round($total * 0.10);
+            $countRandom    = (int) round($total * 0.25);
+            $countLiked     = (int) round($total * 0.15);
 
-        $allPosts = $timelinePosts
-            ->merge($relasiPosts)
-            ->merge($randomPosts)
-            ->merge($likedPosts)
-            ->map(function ($post) use ($authUser) {
-                $post->is_liked = $post->likes()->where('user_id', $authUser->user_id)->exists();
-                $post->type = 'post';
-                return $post;
-            })
-            ->shuffle()
-            ->values();
-    }
-
-    // ========== SUGGESTION ==========
-    $suggestions = collect();
-
-    if ($followingIds->isNotEmpty()) {
-        $mutuals = \DB::table('follows')
-            ->select('followed_id', \DB::raw('COUNT(*) as mutual_count'))
-            ->whereIn('follower_id', $followingIds)
-            ->whereNotIn('followed_id', $followingIds)
-            ->where('followed_id', '!=', $authUser->user_id)
-            ->groupBy('followed_id')
-            ->orderByDesc('mutual_count')
-            ->take(10)
-            ->get();
-
-        $userIds = $mutuals->pluck('followed_id');
-
-        if ($userIds->isNotEmpty()) {
-            $users = \App\Models\User::whereIn('user_id', $userIds)
-                ->where('is_private', 0)
-                ->orderByRaw("FIELD(user_id, " . implode(',', $userIds->toArray()) . ")")
+            // 50% timeline
+            $timelinePosts = Post::with(['user', 'tags', 'mentions'])
+                ->withCount(['likes', 'comments'])
+                ->whereIn('user_id', $followingIds->push($authUser->user_id))
+                ->whereHas('user', fn($q) => $q->where('is_private', 0))
+                ->whereNotIn('post_id', $pinnedIds) // hindari duplikat
+                ->inRandomOrder()
+                ->take($countTimeline)
                 ->get();
 
-            $suggestions = $suggestions->merge($users);
+            // 10% relasi
+            $secondDegreeIds = \DB::table('follows')
+                ->whereIn('follower_id', $followingIds)
+                ->whereNotIn('followed_id', $followingIds)
+                ->where('followed_id', '!=', $authUser->user_id)
+                ->pluck('followed_id');
+
+            $relasiPosts = Post::with(['user', 'tags', 'mentions'])
+                ->withCount(['likes', 'comments'])
+                ->whereIn('user_id', $secondDegreeIds)
+                ->whereHas('user', fn($q) => $q->where('is_private', 0))
+                ->whereNotIn('post_id', $pinnedIds)
+                ->inRandomOrder()
+                ->take($countRelasi)
+                ->get();
+
+            // 25% random
+            $randomPosts = Post::with(['user', 'tags', 'mentions'])
+                ->withCount(['likes', 'comments'])
+                ->whereNotIn('user_id', $followingIds)
+                ->where('user_id', '!=', $authUser->user_id)
+                ->whereHas('user', fn($q) => $q->where('is_private', 0))
+                ->whereNotIn('post_id', $pinnedIds)
+                ->inRandomOrder()
+                ->take($countRandom)
+                ->get();
+
+            // 15% liked by following
+            $likedByFollowingIds = \DB::table('likes')
+                ->whereIn('user_id', $followingIds)
+                ->pluck('post_id');
+
+            $likedPosts = Post::with(['user', 'tags', 'mentions'])
+                ->withCount(['likes', 'comments'])
+                ->whereIn('post_id', $likedByFollowingIds)
+                ->whereHas('user', fn($q) => $q->where('is_private', 0))
+                ->whereNotIn('post_id', $pinnedIds)
+                ->inRandomOrder()
+                ->take($countLiked)
+                ->get();
+
+            $allPosts = $timelinePosts
+                ->merge($relasiPosts)
+                ->merge($randomPosts)
+                ->merge($likedPosts)
+                ->map(function ($post) use ($authUser) {
+                    $post->is_liked = $post->likes()->where('user_id', $authUser->user_id)->exists();
+                    $post->is_bookmarked = $post->bookmarks()->where('user_id', $authUser->user_id)->exists(); // 🆕
+                    $post->type = 'post';
+                    return $post;
+                })
+                ->shuffle()
+                ->values();
         }
-    }
 
-    if ($suggestions->count() < 10) {
-        $need = 10 - $suggestions->count();
+        // ========== SUGGESTION ==========
+        $suggestions = collect();
 
-        $randomUsers = \App\Models\User::where('user_id', '!=', $authUser->user_id)
-            ->whereNotIn('user_id', $followingIds)
-            ->whereNotIn('user_id', $suggestions->pluck('user_id'))
-            ->where('is_private', 0)
-            ->inRandomOrder()
-            ->take($need)
-            ->get();
+        if ($followingIds->isNotEmpty()) {
+            $mutuals = \DB::table('follows')
+                ->select('followed_id', \DB::raw('COUNT(*) as mutual_count'))
+                ->whereIn('follower_id', $followingIds)
+                ->whereNotIn('followed_id', $followingIds)
+                ->where('followed_id', '!=', $authUser->user_id)
+                ->groupBy('followed_id')
+                ->orderByDesc('mutual_count')
+                ->take(10)
+                ->get();
 
-        $suggestions = $suggestions->merge($randomUsers);
-    }
+            $userIds = $mutuals->pluck('followed_id');
 
-    $suggestions = $suggestions->map(function ($user) use ($authUser) {
-        $isFollowBack = \DB::table('follows')
-            ->where('follower_id', $user->user_id)
-            ->where('followed_id', $authUser->user_id)
-            ->where('status', 'accepted')
-            ->exists();
+            if ($userIds->isNotEmpty()) {
+                $users = \App\Models\User::whereIn('user_id', $userIds)
+                    ->where('is_private', 0)
+                    ->orderByRaw("FIELD(user_id, " . implode(',', $userIds->toArray()) . ")")
+                    ->get();
 
-        $user->is_follow_back = $isFollowBack;
-        return $user;
-    })->sortByDesc('is_follow_back')->values();
-
-    // ========== GABUNGKAN POST + SUGGESTION ==========
-    $feed = collect();
-    $postCount = 0;
-
-    // Tambahkan pinned posts dulu
-    foreach ($pinnedPosts as $pinned) {
-        $feed->push($pinned);
-        $postCount++;
-    }
-
-    // Lanjut isi dengan allPosts + suggestion
-    foreach ($allPosts as $post) {
-        $feed->push($post);
-        $postCount++;
-
-        if ($postCount === 2) {
-            $feed->push([
-                'type' => 'suggestion',
-                'users' => $suggestions->shuffle()->values() // acak tiap kali muncul
-            ]);
+                $suggestions = $suggestions->merge($users);
+            }
         }
 
-        if ($postCount > 2 && $postCount % 8 === 0) {
-            $feed->push([
-                'type' => 'suggestion',
-                'users' => $suggestions->shuffle()->values()
-            ]);
+        if ($suggestions->count() < 10) {
+            $need = 10 - $suggestions->count();
+
+            $randomUsers = \App\Models\User::where('user_id', '!=', $authUser->user_id)
+                ->whereNotIn('user_id', $followingIds)
+                ->whereNotIn('user_id', $suggestions->pluck('user_id'))
+                ->where('is_private', 0)
+                ->inRandomOrder()
+                ->take($need)
+                ->get();
+
+            $suggestions = $suggestions->merge($randomUsers);
         }
-    }
 
-    return response()->json([
-        'feed' => $feed
-    ]);
-}
-
-public function show($id)
-{
-    $authUser = Auth::user();
-
-    $post = Post::with(['user', 'tags', 'mentions'])
-        ->withCount(['likes', 'comments'])
-        ->findOrFail($id);
-
-    $owner = $post->user;
-
-    // 🔒 Cek apakah post bisa dilihat
-    $canView = !$owner->is_private ||
-        ($authUser && (
-            $authUser->user_id === $owner->user_id ||
-            $owner->followers()
-                ->where('follower_id', $authUser->user_id)
+        $suggestions = $suggestions->map(function ($user) use ($authUser) {
+            $isFollowBack = \DB::table('follows')
+                ->where('follower_id', $user->user_id)
+                ->where('followed_id', $authUser->user_id)
                 ->where('status', 'accepted')
-                ->exists()
-        ));
+                ->exists();
 
-    if (!$canView) {
+            $user->is_follow_back = $isFollowBack;
+            return $user;
+        })->sortByDesc('is_follow_back')->values();
+
+        // ========== GABUNGKAN POST + SUGGESTION ==========
+        $feed = collect();
+        $postCount = 0;
+
+        // Tambahkan pinned posts dulu
+        foreach ($pinnedPosts as $pinned) {
+            $feed->push($pinned);
+            $postCount++;
+        }
+
+        // Lanjut isi dengan allPosts + suggestion
+        foreach ($allPosts as $post) {
+            $feed->push($post);
+            $postCount++;
+
+            if ($postCount === 2) {
+                $feed->push([
+                    'type' => 'suggestion',
+                    'users' => $suggestions->shuffle()->values() // acak tiap kali muncul
+                ]);
+            }
+
+            if ($postCount > 2 && $postCount % 8 === 0) {
+                $feed->push([
+                    'type' => 'suggestion',
+                    'users' => $suggestions->shuffle()->values()
+                ]);
+            }
+        }
+
         return response()->json([
-            'message' => 'Post ini hanya bisa dilihat oleh followers yang telah diterima.'
-        ], 403);
+            'feed' => $feed
+        ]);
     }
 
-    // ❤️ Tambahkan informasi apakah sudah di-like oleh user login
-    $post->is_liked = $authUser 
-        ? $post->likes()->where('user_id', $authUser->user_id)->exists()
-        : false;
+    public function show($id)
+    {
+        $authUser = Auth::user();
 
-    return response()->json($post);
-}
+        $post = Post::with(['user', 'tags', 'mentions'])
+            ->withCount(['likes', 'comments'])
+            ->findOrFail($id);
+
+        $owner = $post->user;
+
+        // 🔒 Cek apakah post bisa dilihat
+        $canView = !$owner->is_private ||
+            ($authUser && (
+                $authUser->user_id === $owner->user_id ||
+                $owner->followers()
+                    ->where('follower_id', $authUser->user_id)
+                    ->where('status', 'accepted')
+                    ->exists()
+            ));
+
+        if (!$canView) {
+            return response()->json([
+                'message' => 'Post ini hanya bisa dilihat oleh followers yang telah diterima.'
+            ], 403);
+        }
+
+        // ❤️ Tambahkan informasi apakah sudah di-like / di-bookmark oleh user login
+        $post->is_liked = $authUser 
+            ? $post->likes()->where('user_id', $authUser->user_id)->exists()
+            : false;
+
+        $post->is_bookmarked = $authUser 
+            ? $post->bookmarks()->where('user_id', $authUser->user_id)->exists()
+            : false;
+
+        return response()->json($post);
+    }
 
 
     public function explore(Request $request)
