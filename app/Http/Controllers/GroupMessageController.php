@@ -18,7 +18,7 @@ use App\Models\User;
 class GroupMessageController extends Controller
 {
     /**
-     * Simpan pesan baru ke dalam grup
+     * Simpan pesan baru ke dalam grupsss
      */
     public function store(Request $request, Group $group)
     {
