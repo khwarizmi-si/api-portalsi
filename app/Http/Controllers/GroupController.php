@@ -283,17 +283,19 @@ public function listMembers(Group $group)
         ->get()
         ->map(function ($member) {
             return [
-                'user_id' => $member->user_id,
-                'name' => $member->user->name,
+                'id' => $member->user->id,
                 'username' => $member->user->username,
-                'role' => $member->role,
-                'joined_at' => $member->joined_at,
-                'is_muted' => (bool) $member->is_muted,
+                'profile_picture_url' => $member->user->profile_picture_url,
+                'is_online' => (bool) $member->user->is_online,
+                'last_seen' => $member->user->last_seen,
             ];
         });
 
-    return response()->json($members);
+    return response()->json([
+        'data' => $members
+    ]);
 }
+
 
 public function promoteToAdmin(Group $group, User $user)
 {
