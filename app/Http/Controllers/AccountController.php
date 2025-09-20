@@ -27,7 +27,7 @@ class AccountController extends Controller
             'email' => 'nullable|email|unique:users,email,' . $user->user_id . ',user_id',
             'bio' => 'nullable|string',
             'is_private' => 'nullable|boolean',
-            'profile_picture' => 'nullable|image|max:2048', // upload file, bukan URL
+            'profile_picture' => 'nullable|image|max:10240', // upload file, bukan URL
         ], [
             'username.regex' => 'Username hanya boleh berisi huruf, angka, titik, dan underscore tanpa spasi atau simbol lain.'
         ]);

@@ -24,8 +24,8 @@ public function store(Request $request)
     $request->validate([
         'name' => 'required|string|max:255',
         'description' => 'nullable|string',
-        'avatar' => 'nullable|file|image|mimes:jpg,jpeg,png|max:2048',
-        'cover' => 'nullable|file|image|mimes:jpg,jpeg,png|max:2048',
+        'avatar' => 'nullable|file|image|mimes:jpg,jpeg,png|max:10240',
+        'cover' => 'nullable|file|image|mimes:jpg,jpeg,png|max:10240',
         'members' => 'nullable|array',
         'members.*' => 'string', // username atau email
     ]);
@@ -170,8 +170,8 @@ public function store(Request $request)
         $validatedData = $request->validate([
             'name' => 'required|string|max:100',
             'description' => 'nullable|string',
-            'avatar' => 'nullable|file|image|mimes:jpg,jpeg,png|max:2048',
-            'cover' => 'nullable|file|image|mimes:jpg,jpeg,png|max:2048',
+            'avatar' => 'nullable|file|image|mimes:jpg,jpeg,png|max:10240',
+            'cover' => 'nullable|file|image|mimes:jpg,jpeg,png|max:10240',
         ]);
 
         $group->name = $validatedData['name'];
