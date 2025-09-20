@@ -5,6 +5,9 @@ namespace App\Http\Controllers;
 use Illuminate\Http\Request;
 use App\Models\Story;
 use App\Models\StoryView;
+use App\Models\StoryMention;
+use App\Models\Notification;
+use App\Models\User;
 use App\Events\StoryCreated;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\Storage;
@@ -58,6 +61,31 @@ class StoryController extends Controller
             'created_at' => now(),
             'expires_at' => Carbon::now()->addHours(24),
         ]);
+
+// 👥 Tangani mention di caption
+if ($request->filled('caption')) {
+    preg_match_all('/@(\w+)/', $request->caption, $mentions);
+
+    foreach ($mentions[1] as $username) {
+        $mentionedUser = User::where('username', $username)->first();
+        if ($mentionedUser && $mentionedUser->user_id !== $user->user_id) {
+            StoryMention::create([
+                'story_id' => $story->story_id,
+                'mentioned_user_id' => $mentionedUser->user_id
+            ]);
+
+            Notification::create([
+                'recipient_id'     => $mentionedUser->user_id,
+                'type'             => 'story_mention',
+                'related_user_id'  => $user->user_id,
+                'related_story_id' => $story->story_id,
+                'created_at'       => now(),
+                'is_read'          => false,
+            ]);
+        }
+    }
+}
+
 
         // Broadcast story created event
         broadcast(new StoryCreated($story));

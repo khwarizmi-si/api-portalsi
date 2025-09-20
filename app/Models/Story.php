@@ -44,4 +44,10 @@ class Story extends Model
     {
         return $this->belongsTo(User::class, 'user_id', 'user_id');
     }
+
+    public function mentions()
+{
+    return $this->hasMany(StoryMention::class, 'story_id');
+}
+
 }
