@@ -46,14 +46,17 @@ class Post extends Model
         return $this->hasMany(PostMention::class, 'post_id');
     }
 
-    public function bookmarks()
-    {
-    return $this->hasMany(Bookmark::class);
-    }
+public function bookmarks()
+{
+    return $this->hasMany(Bookmark::class, 'post_id');
+}
 
-    public function bookmarkedByUsers()
-    {
-    return $this->belongsToMany(User::class, 'bookmarks');
-    }
+
+public function bookmarkedByUsers()
+{
+    return $this->belongsToMany(User::class, 'bookmarks', 'post_id', 'user_id')
+                ->withTimestamps();
+}
+
 
 }

@@ -151,13 +151,16 @@ class User extends Authenticatable implements MustVerifyEmail
         return $this->hasMany(GroupMessage::class, 'sender_id', 'user_id');
     }
 
-    public function bookmarks()
-    {
-    return $this->hasMany(Bookmark::class);
-    }
+public function bookmarks()
+{
+    return $this->hasMany(Bookmark::class, 'user_id');
+}
 
-    public function bookmarkedPosts()
-    {
-    return $this->belongsToMany(Post::class, 'bookmarks');
-    }
+
+public function bookmarkedPosts()
+{
+    return $this->belongsToMany(Post::class, 'bookmarks', 'user_id', 'post_id')
+                ->withTimestamps();
+}
+
 }
