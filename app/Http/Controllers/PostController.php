@@ -21,6 +21,25 @@ public function index()
         ->where('status', 'accepted')
         ->pluck('followed_id');
 
+    // ========== PINNED: Post terbaru dari following ==========
+    $pinnedPosts = collect();
+
+    if ($followingIds->isNotEmpty()) {
+        $pinnedPosts = Post::with(['user', 'tags', 'mentions'])
+            ->withCount(['likes', 'comments'])
+            ->whereIn('user_id', $followingIds)
+            ->whereHas('user', fn($q) => $q->where('is_private', 0))
+            ->orderByDesc('created_at')
+            ->take(5) // ambil 5 post terbaru teman
+            ->get()
+            ->map(function ($post) use ($authUser) {
+                $post->is_liked = $post->likes()->where('user_id', $authUser->user_id)->exists();
+                $post->type = 'post';
+                $post->is_pinned = true; // tandai pinned
+                return $post;
+            });
+    }
+
     // ========== FEED POST (50/10/25/15) ==========
     if ($followingIds->isEmpty()) {
         // fallback: random
@@ -162,6 +181,13 @@ public function index()
     $feed = collect();
     $postCount = 0;
 
+    // 🔹 Tambahkan pinned posts dulu
+    foreach ($pinnedPosts as $pinned) {
+        $feed->push($pinned);
+        $postCount++;
+    }
+
+    // 🔹 Lanjut isi dengan allPosts + suggestion
     foreach ($allPosts as $post) {
         $feed->push($post);
         $postCount++;
