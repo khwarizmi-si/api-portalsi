@@ -9,6 +9,7 @@ use App\Models\Notification;
 use Carbon\Carbon;
 use App\Events\Followed; 
 use App\Events\NotificationCreated;
+use App\Events\UserUnfollowed;
 class FollowController extends Controller
 {
     // ✅ FOLLOW USER
@@ -66,7 +67,7 @@ class FollowController extends Controller
                     'created_at'       => now(),
                     'is_read'          => false,
                 ]);
-                broadcast(new Followed($authUser, $userToFollow));
+                broadcast(new Followed($authUser, $userToFollow))->toOthers();
             }
             
         }

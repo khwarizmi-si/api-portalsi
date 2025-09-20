@@ -43,7 +43,7 @@ class LikeController extends Controller
             ]);
 
             // Broadcast like event
-            broadcast(new LikeCreated($like));
+            broadcast(new LikeCreated($like))->toOthers();
 
             // Kirim notifikasi jika user bukan pemilik post
             if ($post->user_id != $user_id) {

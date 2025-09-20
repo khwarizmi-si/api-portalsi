@@ -38,7 +38,7 @@ class CommentController extends Controller
 
         // ✨ SIARKAN EVENT KOMENTAR BARU
         broadcast(new CommentPublished($comment))->toOthers();
-        broadcast(new CommentCreated($comment));
+        broadcast(new CommentCreated($comment))->toOthers();
 
         // 🔔 Notifikasi COMMENT ke pemilik POST
         if (!$request->filled('parent_comment_id') && $post->user_id != $user_id) {
