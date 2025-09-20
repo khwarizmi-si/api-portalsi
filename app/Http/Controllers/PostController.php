@@ -214,6 +214,40 @@ public function index()
     ]);
 }
 
+public function show($id)
+{
+    $authUser = Auth::user();
+
+    $post = Post::with(['user', 'tags', 'mentions'])
+        ->withCount(['likes', 'comments'])
+        ->findOrFail($id);
+
+    $owner = $post->user;
+
+    // 🔒 Cek apakah post bisa dilihat
+    $canView = !$owner->is_private ||
+        ($authUser && (
+            $authUser->user_id === $owner->user_id ||
+            $owner->followers()
+                ->where('follower_id', $authUser->user_id)
+                ->where('status', 'accepted')
+                ->exists()
+        ));
+
+    if (!$canView) {
+        return response()->json([
+            'message' => 'Post ini hanya bisa dilihat oleh followers yang telah diterima.'
+        ], 403);
+    }
+
+    // ❤️ Tambahkan informasi apakah sudah di-like oleh user login
+    $post->is_liked = $authUser 
+        ? $post->likes()->where('user_id', $authUser->user_id)->exists()
+        : false;
+
+    return response()->json($post);
+}
+
 
     public function explore(Request $request)
     {
