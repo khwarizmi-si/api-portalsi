@@ -52,9 +52,11 @@ public function bookmarks()
 }
 
 
-    public function bookmarkedByUsers()
-    {
-    return $this->belongsToMany(User::class, 'bookmarks');
-    }
+public function bookmarkedByUsers()
+{
+    return $this->belongsToMany(User::class, 'bookmarks', 'post_id', 'user_id')
+                ->withTimestamps();
+}
+
 
 }

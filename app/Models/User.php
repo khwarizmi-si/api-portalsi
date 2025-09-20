@@ -157,8 +157,10 @@ public function bookmarks()
 }
 
 
-    public function bookmarkedPosts()
-    {
-    return $this->belongsToMany(Post::class, 'bookmarks');
-    }
+public function bookmarkedPosts()
+{
+    return $this->belongsToMany(Post::class, 'bookmarks', 'user_id', 'post_id')
+                ->withTimestamps();
+}
+
 }
