@@ -83,7 +83,7 @@ public function index()
 
         $likedPosts = Post::with(['user', 'tags', 'mentions'])
             ->withCount(['likes', 'comments'])
-            ->whereIn('id', $likedByFollowingIds)
+            ->whereIn('post_id', $likedByFollowingIds)
             ->whereHas('user', fn($q) => $q->where('is_private', 0))
             ->inRandomOrder()
             ->take($countLiked)
