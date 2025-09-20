@@ -4,7 +4,7 @@ namespace App\Http\Controllers;
 
 use App\Events\NewGroupMessage;
 use App\Events\GroupMessageUpdated;
-use App\Events\NewNotification;
+use App\Events\NewNotification; 
 use App\Events\MessageSent;
 use App\Events\ChatListUpdated;
 use Illuminate\Http\Request;
@@ -14,26 +14,28 @@ use App\Models\Group;
 use App\Models\GroupMessage;
 use App\Models\GroupMessageMention;
 use App\Models\User;
-use App\Models\Notification;
 
 class GroupMessageController extends Controller
 {
+    /**
+     * Simpan pesan baru ke dalam grup
+     */
     public function store(Request $request, Group $group)
     {
         $user = Auth::user();
 
-        // 🚨 Cek apakah user anggota grup
+        // Validasi anggota grup
         if (!$group->members()->where('user_id', $user->user_id)->exists()) {
             return response()->json(['message' => 'Kamu bukan anggota grup ini.'], 403);
         }
 
-        // ✅ Validasi input
+        // Validasi request
         $request->validate([
-            'content' => 'nullable|string',
+            'content' => 'required|string',
             'media'   => 'nullable|file|mimes:jpg,jpeg,png,pdf|max:51200',
         ]);
 
-        // ✅ Upload media jika ada
+        // Upload media (jika ada)
         $mediaUrl = null;
         if ($request->hasFile('media')) {
             $media = $request->file('media');
@@ -41,40 +43,39 @@ class GroupMessageController extends Controller
             $mediaUrl = asset('storage/' . $path);
         }
 
-        // ✅ Buat pesan
+        // Simpan pesan
         $message = GroupMessage::create([
             'group_id'  => $group->id,
             'sender_id' => $user->user_id,
             'content'   => $request->content,
             'media_url' => $mediaUrl,
-            'sent_at'   => now(), // selalu isi sent_at
+            'sent_at'   => now(),
         ]);
 
-        // Refresh supaya cast ke Carbon aktif
-        $message->refresh();
+        $message->load('sender'); // pastikan relasi sender ikut diambil
 
-        // ✅ Broadcast pesan baru ke channel realtime
+        // Broadcast ke channel realtime
         broadcast(new NewGroupMessage($message))->toOthers();
         broadcast(new MessageSent($message, 'group'));
 
-        // ✅ Update chat list semua anggota
+        // Update chat list semua anggota
         $conversationData = [
-            'type'        => 'group',
-            'id'          => $group->id,
-            'name'        => $group->name,
-            'avatar_url'  => $group->avatar_url,
-            'last_message'=> $message->content ?: '📎 Media',
-            'last_media'  => $message->media_url,
-            'sent_at'     => $message->sent_at?->toIso8601String() ?? now()->toIso8601String(),
+            'type'       => 'group',
+            'id'         => $group->id,
+            'name'       => $group->name,
+            'avatar_url' => $group->avatar_url,
+            'last_message' => $message->content ?: '📎 Media',
+            'last_media'   => $message->media_url,
+            'sent_at'      => $message->sent_at?->toIso8601String() ?? now()->toIso8601String(),
         ];
 
         foreach ($group->members as $member) {
-            $dataForMember             = $conversationData;
-            $dataForMember['recipient_id'] = (int) $member->user_id;
+            $dataForMember = $conversationData;
+            $dataForMember['recipient_id'] = (int) $member->user_id; // pastikan int
             broadcast(new ChatListUpdated($dataForMember));
         }
 
-        // ✅ Deteksi mention
+        // Cek mention di konten
         if ($request->filled('content')) {
             preg_match_all('/@([a-zA-Z0-9_]+)/', $request->content, $matches);
             $mentionedUsernames = $matches[1] ?? [];
@@ -88,28 +89,42 @@ class GroupMessageController extends Controller
                     ]);
 
                     // Bisa tambahkan notifikasi mention di sini
-                    // $notification = Notification::create([...]);
                     // broadcast(new NewNotification($notification));
                 }
             }
         }
 
+        // ✅ Return response manual (supaya tidak error toIso8601String())
         return response()->json([
             'message' => 'Pesan berhasil dikirim.',
-            'data'    => $message->load('sender'),
+            'data'    => [
+                'id'        => $message->id,
+                'group_id'  => $message->group_id,
+                'sender'    => [
+                    'user_id'  => $message->sender->user_id,
+                    'username' => $message->sender->username,
+                ],
+                'content'   => $message->content,
+                'media_url' => $message->media_url,
+                'is_pinned' => (bool) $message->is_pinned,
+                'is_edited' => (bool) $message->is_edited,
+                'is_deleted'=> (bool) $message->is_deleted,
+                'sent_at'   => $message->sent_at?->toIso8601String() ?? now()->toIso8601String(),
+            ]
         ]);
     }
 
+    /**
+     * Ambil daftar pesan grup
+     */
     public function index(Request $request, Group $group)
     {
         $user = Auth::user();
 
-        // 🚨 Cek anggota
         if (!$group->members()->where('user_id', $user->user_id)->exists()) {
             return response()->json(['message' => 'Kamu bukan anggota grup ini.'], 403);
         }
 
-        // ✅ Ambil pesan dengan relasi
         $messages = $group->messages()
             ->with(['sender:user_id,username', 'mentions.mentioned:user_id,username'])
             ->orderByDesc('sent_at')
@@ -128,6 +143,7 @@ class GroupMessageController extends Controller
                     'media_url' => $msg->is_deleted ? null : $msg->media_url,
                     'is_pinned' => (bool) $msg->is_pinned,
                     'is_edited' => (bool) $msg->is_edited,
+                    'is_deleted'=> (bool) $msg->is_deleted,
                     'sent_at'   => $msg->sent_at?->toIso8601String(),
                     'mentions'  => $msg->mentions->map(function ($mention) {
                         return [
@@ -146,6 +162,9 @@ class GroupMessageController extends Controller
         ]);
     }
 
+    /**
+     * Soft delete pesan
+     */
     public function destroy(Request $request, Group $group, GroupMessage $message)
     {
         if ($message->sender_id !== auth()->user()->user_id) {
@@ -160,6 +179,9 @@ class GroupMessageController extends Controller
         return response()->json(['message' => 'Pesan berhasil disembunyikan (soft delete).']);
     }
 
+    /**
+     * Pin / Unpin pesan
+     */
     public function togglePin(Request $request, Group $group, GroupMessage $message)
     {
         if ($group->owner_id !== auth()->user()->user_id) {
