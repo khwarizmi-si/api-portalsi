@@ -1,4 +1,3 @@
-// app/Events/UserUnfollowed.php
 <?php
 
 namespace App\Events;
