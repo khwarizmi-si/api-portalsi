@@ -89,14 +89,16 @@ Route::post('/login', function (Request $request) {
         ->first();
 
     if (!$user || !Hash::check($request->password, $user->password_hash)) {
-        throw ValidationException::withMessages([
-            'login' => ['The provided credentials are incorrect.'],
-        ]);
+        return response()->json([
+            'code' => 2001,
+            'message' => 'The provided credentials are incorrect.'
+        ], 401);
     }
 
     // 🚨 Cek verifikasi email dulu
     if (!$user->hasVerifiedEmail()) {
         return response()->json([
+            'code' => 2002,
             'message' => 'Akun Anda belum diverifikasi. Silakan cek email Anda untuk melakukan verifikasi.'
         ], 403);
     }
@@ -104,11 +106,13 @@ Route::post('/login', function (Request $request) {
     $token = $user->createToken('api-token')->plainTextToken;
 
     return response()->json([
+        'code' => 1001,
         'message' => 'Login successful',
         'token' => $token,
         'user' => $user
-    ]);
+    ], 200);
 });
+
 
 
 // 📩 Email Verification
