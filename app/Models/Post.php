@@ -46,10 +46,11 @@ class Post extends Model
         return $this->hasMany(PostMention::class, 'post_id');
     }
 
-    public function bookmarks()
-    {
-    return $this->hasMany(Bookmark::class);
-    }
+public function bookmarks()
+{
+    return $this->hasMany(Bookmark::class, 'post_id');
+}
+
 
     public function bookmarkedByUsers()
     {
