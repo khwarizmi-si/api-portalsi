@@ -55,7 +55,7 @@ class GroupMessageController extends Controller
 
         // Broadcast ke channel realtime
         broadcast(new NewGroupMessage($message))->toOthers();
-        broadcast(new MessageSent($message, 'group'));
+
 
         // Update chat list semua anggota
         $conversationData = [
