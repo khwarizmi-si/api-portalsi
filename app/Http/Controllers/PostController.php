@@ -13,174 +13,173 @@ use Illuminate\Support\Facades\Storage;
 
 class PostController extends Controller
 {
-    // 🔍 List semua post + suggestion follow
-    public function index()
-    {
-        $authUser = Auth::user();
+public function index()
+{
+    $authUser = Auth::user();
 
-        // =========================
-        // Ambil postingan utama
-        // =========================
-        $isFollowing = $authUser->following()
+    $followingIds = $authUser->following()
+        ->where('status', 'accepted')
+        ->pluck('followed_id');
+
+    // ========== FEED POST (50/10/25/15) ==========
+    if ($followingIds->isEmpty()) {
+        // fallback: random
+        $allPosts = Post::with(['user', 'tags', 'mentions'])
+            ->withCount(['likes', 'comments'])
+            ->whereHas('user', fn($q) => $q->where('is_private', 0))
+            ->inRandomOrder()
+            ->take(50)
+            ->get()
+            ->map(function ($post) use ($authUser) {
+                $post->is_liked = $post->likes()->where('user_id', $authUser->user_id)->exists();
+                $post->type = 'post';
+                return $post;
+            });
+    } else {
+        $total = 100;
+        $countTimeline  = (int) round($total * 0.50);
+        $countRelasi    = (int) round($total * 0.10);
+        $countRandom    = (int) round($total * 0.25);
+        $countLiked     = (int) round($total * 0.15);
+
+        // 50% timeline
+        $timelinePosts = Post::with(['user', 'tags', 'mentions'])
+            ->withCount(['likes', 'comments'])
+            ->whereIn('user_id', $followingIds->push($authUser->user_id))
+            ->whereHas('user', fn($q) => $q->where('is_private', 0))
+            ->inRandomOrder()
+            ->take($countTimeline)
+            ->get();
+
+        // 10% relasi
+        $secondDegreeIds = \DB::table('follows')
+            ->whereIn('follower_id', $followingIds)
+            ->whereNotIn('followed_id', $followingIds)
+            ->where('followed_id', '!=', $authUser->user_id)
+            ->pluck('followed_id');
+
+        $relasiPosts = Post::with(['user', 'tags', 'mentions'])
+            ->withCount(['likes', 'comments'])
+            ->whereIn('user_id', $secondDegreeIds)
+            ->whereHas('user', fn($q) => $q->where('is_private', 0))
+            ->inRandomOrder()
+            ->take($countRelasi)
+            ->get();
+
+        // 25% random
+        $randomPosts = Post::with(['user', 'tags', 'mentions'])
+            ->withCount(['likes', 'comments'])
+            ->whereNotIn('user_id', $followingIds)
+            ->where('user_id', '!=', $authUser->user_id)
+            ->whereHas('user', fn($q) => $q->where('is_private', 0))
+            ->inRandomOrder()
+            ->take($countRandom)
+            ->get();
+
+        // 15% liked by following
+        $likedByFollowingIds = \DB::table('likes')
+            ->whereIn('user_id', $followingIds)
+            ->pluck('post_id');
+
+        $likedPosts = Post::with(['user', 'tags', 'mentions'])
+            ->withCount(['likes', 'comments'])
+            ->whereIn('id', $likedByFollowingIds)
+            ->whereHas('user', fn($q) => $q->where('is_private', 0))
+            ->inRandomOrder()
+            ->take($countLiked)
+            ->get();
+
+        $allPosts = $timelinePosts
+            ->merge($relasiPosts)
+            ->merge($randomPosts)
+            ->merge($likedPosts)
+            ->map(function ($post) use ($authUser) {
+                $post->is_liked = $post->likes()->where('user_id', $authUser->user_id)->exists();
+                $post->type = 'post';
+                return $post;
+            })
+            ->shuffle()
+            ->values();
+    }
+
+    // ========== SUGGESTION ==========
+    $suggestions = collect();
+
+    if ($followingIds->isNotEmpty()) {
+        $mutuals = \DB::table('follows')
+            ->select('followed_id', \DB::raw('COUNT(*) as mutual_count'))
+            ->whereIn('follower_id', $followingIds)
+            ->whereNotIn('followed_id', $followingIds)
+            ->where('followed_id', '!=', $authUser->user_id)
+            ->groupBy('followed_id')
+            ->orderByDesc('mutual_count')
+            ->take(10)
+            ->get();
+
+        $userIds = $mutuals->pluck('followed_id');
+
+        if ($userIds->isNotEmpty()) {
+            $users = \App\Models\User::whereIn('user_id', $userIds)
+                ->where('is_private', 0)
+                ->orderByRaw("FIELD(user_id, " . implode(',', $userIds->toArray()) . ")")
+                ->get();
+
+            $suggestions = $suggestions->merge($users);
+        }
+    }
+
+    if ($suggestions->count() < 10) {
+        $need = 10 - $suggestions->count();
+
+        $randomUsers = \App\Models\User::where('user_id', '!=', $authUser->user_id)
+            ->whereNotIn('user_id', $followingIds)
+            ->whereNotIn('user_id', $suggestions->pluck('user_id'))
+            ->where('is_private', 0)
+            ->inRandomOrder()
+            ->take($need)
+            ->get();
+
+        $suggestions = $suggestions->merge($randomUsers);
+    }
+
+    $suggestions = $suggestions->map(function ($user) use ($authUser) {
+        $isFollowBack = \DB::table('follows')
+            ->where('follower_id', $user->user_id)
+            ->where('followed_id', $authUser->user_id)
             ->where('status', 'accepted')
             ->exists();
 
-        if ($isFollowing) {
-            // 🚀 Timeline normal (dari following + self)
-            $posts = Post::with(['user', 'tags', 'mentions'])
-                ->withCount(['likes', 'comments'])
-                ->where(function ($query) use ($authUser) {
-                    $query->whereHas('user.followers', function ($q) use ($authUser) {
-                        $q->where('follower_id', $authUser->user_id)
-                          ->where('status', 'accepted');
-                    })
-                    ->orWhereHas('user', function ($q) use ($authUser) {
-                        $q->where('user_id', $authUser->user_id);
-                    });
-                })
-                ->latest()
-                ->take(50)
-                ->get()
-                ->map(function ($post) use ($authUser) {
-                    $post->is_liked = $post->likes()->where('user_id', $authUser->user_id)->exists();
-                    $post->type = 'post'; // tandai sebagai post
-                    return $post;
-                });
-        } else {
-            // 🎯 Belum follow siapapun → tampilkan random postingan
-            $posts = Post::with(['user', 'tags'])
-                ->withCount(['likes', 'comments'])
-                ->latest()
-                ->take(50)
-                ->get()
-                ->map(function ($post) use ($authUser) {
-                    $post->is_liked = $post->likes()->where('user_id', $authUser->user_id)->exists();
-                    $post->type = 'post';
-                    return $post;
-                });
+        $user->is_follow_back = $isFollowBack;
+        return $user;
+    })->sortByDesc('is_follow_back')->values();
+
+    $suggestionBlock = [
+        'type' => 'suggestion',
+        'users' => $suggestions
+    ];
+
+    // ========== GABUNGKAN POST + SUGGESTION ==========
+    $feed = collect();
+    $postCount = 0;
+
+    foreach ($allPosts as $post) {
+        $feed->push($post);
+        $postCount++;
+
+        if ($postCount === 2) {
+            $feed->push($suggestionBlock);
         }
 
-        // =============================
-        // 🚀 Ambil suggestion follow
-        // =============================
-        $followingIds = $authUser->following()
-            ->where('status', 'accepted')
-            ->pluck('followed_id');
-
-        $suggestions = collect();
-
-        if ($followingIds->isNotEmpty()) {
-            // Cari "teman dari teman"
-            $mutuals = \DB::table('follows')
-                ->select('followed_id', \DB::raw('COUNT(*) as mutual_count'))
-                ->whereIn('follower_id', $followingIds)
-                ->whereNotIn('followed_id', $followingIds)
-                ->where('followed_id', '!=', $authUser->user_id)
-                ->groupBy('followed_id')
-                ->orderByDesc('mutual_count')
-                ->take(10)
-                ->get();
-
-            $userIds = $mutuals->pluck('followed_id');
-
-            if ($userIds->isNotEmpty()) {
-                $users = \App\Models\User::whereIn('user_id', $userIds)
-                    ->orderByRaw("FIELD(user_id, " . implode(',', $userIds->toArray()) . ")")
-                    ->get();
-
-                $suggestions = $suggestions->merge($users);
-            }
+        if ($postCount > 2 && $postCount % 8 === 0) {
+            $feed->push($suggestionBlock);
         }
-
-        // Kalau mutual < 10 → tambahkan random
-        if ($suggestions->count() < 10) {
-            $need = 10 - $suggestions->count();
-
-            $randomUsers = \App\Models\User::where('user_id', '!=', $authUser->user_id)
-                ->whereNotIn('user_id', $followingIds)
-                ->whereNotIn('user_id', $suggestions->pluck('user_id'))
-                ->inRandomOrder()
-                ->take($need)
-                ->get();
-
-            $suggestions = $suggestions->merge($randomUsers);
-        }
-
-        // 🔄 Tambahkan flag follow back
-        $suggestions = $suggestions->map(function ($user) use ($authUser) {
-            $isFollowBack = \DB::table('follows')
-                ->where('follower_id', $user->user_id)
-                ->where('followed_id', $authUser->user_id)
-                ->where('status', 'accepted')
-                ->exists();
-
-            $user->is_follow_back = $isFollowBack;
-            return $user;
-        });
-
-        // 📌 Urutkan agar yang follow back tampil duluan
-        $suggestions = $suggestions->sortByDesc('is_follow_back')->values();
-
-        // tandai suggestion supaya bisa dibedakan di frontend
-        $suggestionBlock = [
-            'type' => 'suggestion',
-            'users' => $suggestions
-        ];
-
-        // =============================
-        // Gabungkan posts + suggestion
-        // =============================
-        $feed = collect();
-        $postCount = 0;
-
-        foreach ($posts as $post) {
-            $feed->push($post);
-            $postCount++;
-
-            // Setelah 2 post pertama → insert suggestion sekali
-            if ($postCount === 2) {
-                $feed->push($suggestionBlock);
-            }
-
-            // Setelah itu tiap 8 postingan → insert suggestion
-            if ($postCount > 2 && $postCount % 8 === 0) {
-                $feed->push($suggestionBlock);
-            }
-        }
-
-        return response()->json([
-            'feed' => $feed
-        ]);
     }
 
-    public function show($id)
-    {
-        $authUser = Auth::user();
-        $post = Post::with(['user', 'tags', 'mentions'])
-            ->withCount(['likes', 'comments'])
-            ->findOrFail($id);
+    return response()->json([
+        'feed' => $feed
+    ]);
+}
 
-        $owner = $post->user;
-
-        $canView = !$owner->is_private ||
-            ($authUser && (
-                $authUser->user_id === $owner->user_id ||
-                $owner->followers()
-                    ->where('follower_id', $authUser->user_id)
-                    ->where('status', 'accepted')
-                    ->exists()
-            ));
-
-        if (!$canView) {
-            return response()->json([
-                'message' => 'Post ini hanya bisa dilihat oleh followers yang telah diterima.'
-            ], 403);
-        }
-
-        $post->is_liked = $post->likes()->where('user_id', $authUser->user_id)->exists();
-
-        return response()->json($post);
-    }
 
     public function explore(Request $request)
     {
