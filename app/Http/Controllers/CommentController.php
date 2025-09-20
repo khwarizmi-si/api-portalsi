@@ -111,7 +111,7 @@ class CommentController extends Controller
         $comments = $post->comments()
             ->with(['user', 'replies.user'])
             ->whereNull('parent_comment_id')
-            ->orderBy('created_at', 'asc')
+            ->orderBy('created_at', 'desc')
             ->get();
 
         return response()->json([
