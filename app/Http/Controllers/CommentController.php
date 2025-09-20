@@ -2,20 +2,19 @@
 
 namespace App\Http\Controllers;
 
-// 🔽 PASTIKAN SEMUA EVENT DI-IMPORT
-use App\Events\CommentPublished;
-use App\Events\CommentUpdated;
-use App\Events\CommentDeleted;
-use App\Events\NewNotification;
-use App\Events\CommentCreated;
-use App\Events\NotificationCreated;
-
+// 🔽 Perbarui import
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
 use App\Models\Post;
 use App\Models\Comment;
 use App\Models\Notification;
 use App\Models\User;
+
+// ✅ Gunakan hanya satu event untuk setiap aksi
+use App\Events\CommentCreated;
+use App\Events\CommentUpdated;
+use App\Events\CommentDeleted;
+use App\Events\NotificationCreated;
 
 class CommentController extends Controller
 {
@@ -37,10 +36,11 @@ class CommentController extends Controller
         ]);
 
         // ✨ SIARKAN EVENT KOMENTAR BARU
-        broadcast(new CommentPublished($comment))->toOthers();
+        // ✅ Hanya satu event, dikirim ke semua KECUALI pengirim
         broadcast(new CommentCreated($comment))->toOthers();
 
         // 🔔 Notifikasi COMMENT ke pemilik POST
+        // ❌ Hindari notifikasi diri sendiri
         if (!$request->filled('parent_comment_id') && $post->user_id != $user_id) {
             $notification = Notification::create([
                 'recipient_id' => $post->user_id,
@@ -53,13 +53,13 @@ class CommentController extends Controller
             ]);
 
             // ✨ SIARKAN EVENT NOTIFIKASI
-            broadcast(new NewNotification($notification));
             broadcast(new NotificationCreated($notification));
         }
 
         // 🔁 Notifikasi REPLY ke pemilik komentar (kalau ada parent)
         if ($request->filled('parent_comment_id')) {
             $parent = Comment::where('comment_id', $request->parent_comment_id)->first();
+            // ❌ Hindari notifikasi diri sendiri
             if ($parent && $parent->user_id != $user_id) {
                 $notification = Notification::create([
                     'recipient_id' => $parent->user_id,
@@ -71,7 +71,6 @@ class CommentController extends Controller
                     'is_read' => false,
                 ]);
                 // ✨ SIARKAN EVENT NOTIFIKASI
-                broadcast(new NewNotification($notification));
                 broadcast(new NotificationCreated($notification));
             }
         }
@@ -83,6 +82,7 @@ class CommentController extends Controller
 
         foreach ($mentionedUsernames as $username) {
             $mentionedUser = User::where('username', $username)->first();
+            // ❌ Hindari notifikasi diri sendiri
             if ($mentionedUser && $mentionedUser->user_id != $user_id) {
                 $notification = Notification::create([
                     'recipient_id' => $mentionedUser->user_id,
@@ -94,14 +94,13 @@ class CommentController extends Controller
                     'is_read' => false,
                 ]);
                 // ✨ SIARKAN EVENT NOTIFIKASI
-                broadcast(new NewNotification($notification));
                 broadcast(new NotificationCreated($notification));
             }
         }
 
         return response()->json([
             'message' => 'Komentar berhasil dikirim.',
-            'data' => $comment->load('user') // Selalu muat relasi user untuk response
+            'data' => $comment->load('user')
         ], 201);
     }
 
