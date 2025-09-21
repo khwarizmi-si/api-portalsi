@@ -161,9 +161,9 @@ public function index(Request $request, Group $group)
         return response()->json([
             'message_id' => $message->id,
             'reads'      => $reads->map(fn($read) => [
-                'user_id'  => $read->user->user_id,
-                'username' => $read->user->username,
-                'read_at'  => $read->read_at,
+            'user_id'  => $read->user->user_id,
+            'username' => $read->user->username,
+            'read_at'  => $read->read_at,
             ])
         ]);
     }
@@ -246,4 +246,36 @@ public function index(Request $request, Group $group)
             ])
         ];
     }
+
+        /**
+     * Ambil daftar pesan yang belum dibaca oleh user saat ini dalam grup
+     */
+    public function unreadMessages(Request $request, Group $group)
+    {
+        $user = Auth::user();
+
+        // Pastikan user anggota grup
+        if (!$group->members()->where('user_id', $user->user_id)->exists()) {
+            return response()->json(['message' => 'Kamu bukan anggota grup ini.'], 403);
+        }
+
+        // Ambil pesan yang belum dibaca
+        $unreadMessages = $group->messages()
+            ->whereDoesntHave('reads', function ($q) use ($user) {
+                $q->where('user_id', $user->user_id);
+            })
+            ->with([
+                'sender:user_id,username',
+                'mentions.mentioned:user_id,username',
+                'replyTo.sender:user_id,username',
+            ])
+            ->orderBy('sent_at', 'asc')
+            ->get();
+
+        return response()->json([
+            'group_id' => $group->id,
+            'unread_messages' => $unreadMessages->map(fn($msg) => $this->formatMessage($msg, $user)),
+        ]);
+    }
+
 }

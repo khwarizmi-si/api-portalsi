@@ -306,6 +306,7 @@ Route::middleware(['auth:sanctum'])->group(function () {
             Route::post('/messages/{message}/pin', [GroupMessageController::class, 'togglePin']);
             Route::post('/messages/{message}/read', [GroupMessageController::class, 'markAsRead']);
             Route::get('/messages/{message}/read-info', [GroupMessageController::class, 'readInfo']);
+            Route::get('/messages/unread', [GroupMessageController::class, 'unreadMessages']);
         });
 
         // Announcements
