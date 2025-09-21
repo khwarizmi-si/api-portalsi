@@ -283,6 +283,11 @@ public function listMembers(Group $group)
         ->get()
         ->map(function ($member) {
             return [
+                'user_id' => $member->user_id,
+                'name' => $member->user->name,
+                'role' => $member->role,
+                'joined_at' => $member->joined_at,
+                'is_muted' => (bool) $member->is_muted,
                 'id' => $member->user->id,
                 'username' => $member->user->username,
                 'profile_picture_url' => $member->user->profile_picture_url,
