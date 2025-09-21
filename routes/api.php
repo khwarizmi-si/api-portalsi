@@ -1,4 +1,8 @@
 <?php
+use Jenssegers\Agent\Agent;
+use App\Models\LoginHistory;
+use Laravel\Sanctum\PersonalAccessToken; // untuk revoking token jika perlu
+
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Route;
 use Illuminate\Support\Facades\Hash;
@@ -79,11 +83,10 @@ Route::post('/register', function (Request $request) {
 // 🔑 Login
 Route::post('/login', function (Request $request) {
     $request->validate([
-        'login' => 'required|string', // bisa username atau email
+        'login' => 'required|string',
         'password' => 'required|string',
     ]);
 
-    // Cari user berdasarkan email atau username
     $user = User::where('email', strtolower($request->login))
         ->orWhere('username', strtolower($request->login))
         ->first();
@@ -95,7 +98,6 @@ Route::post('/login', function (Request $request) {
         ], 401);
     }
 
-    // 🚨 Cek verifikasi email dulu
     if (!$user->hasVerifiedEmail()) {
         return response()->json([
             'code' => 2002,
@@ -103,12 +105,31 @@ Route::post('/login', function (Request $request) {
         ], 403);
     }
 
-    $token = $user->createToken('api-token')->plainTextToken;
+    // buat token terlebih dahulu (Sanctum)
+    $tokenResult = $user->createToken('api-token');
+
+    // ambil info device/browser/ip
+    $agent = new Agent();
+    $ip = $request->getClientIp(); // lebih robust untuk proxied env dibanding ip()
+    $ua = $request->header('User-Agent');
+
+    LoginHistory::create([
+        'user_id' => $user->id,
+        'token_id' => $tokenResult->accessToken->id ?? null,
+        'ip_address' => $ip,
+        'user_agent' => $ua,
+        'device' => $agent->device(),
+        'browser' => $agent->browser(),
+        'platform' => $agent->platform(),
+        'login_at' => now(),
+    ]);
+
+    $plainTextToken = $tokenResult->plainTextToken;
 
     return response()->json([
         'code' => 1001,
         'message' => 'Login successful',
-        'token' => $token,
+        'token' => $plainTextToken,
         'user' => $user
     ], 200);
 });

@@ -163,4 +163,9 @@ public function bookmarkedPosts()
                 ->withTimestamps();
 }
 
+public function loginHistories()
+{
+    return $this->hasMany(\App\Models\LoginHistory::class);
+}
+
 }
