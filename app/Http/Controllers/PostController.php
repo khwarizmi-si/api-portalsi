@@ -221,7 +221,7 @@ class PostController extends Controller
             'data' => $posts
         ]);
     }
-}
+
     public function show($id)
     {
         $authUser = Auth::user();
