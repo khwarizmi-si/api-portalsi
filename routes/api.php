@@ -1,8 +1,7 @@
 <?php
 use Jenssegers\Agent\Agent;
 use App\Models\LoginHistory;
-use Laravel\Sanctum\PersonalAccessToken; // untuk revoking token jika perlu
-
+use Laravel\Sanctum\PersonalAccessToken;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Route;
 use Illuminate\Support\Facades\Hash;
