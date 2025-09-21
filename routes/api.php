@@ -87,74 +87,70 @@ Route::post('/register', function (Request $request) {
 Route::post('/login', function (Request $request) {
     // 1️⃣ Validasi input
     $request->validate([
-        'login' => 'required|string',
+        'login'    => 'required|string',
         'password' => 'required|string',
     ]);
 
-    $loginInput = strtolower($request->login);
+    // 2️⃣ Cari user by email atau username (lowercase)
+    $user = User::where(function ($query) use ($request) {
+        $query->where('email', strtolower($request->login))
+              ->orWhere('username', strtolower($request->login));
+    })->first();
 
-    // 2️⃣ Cari user case-insensitive
-    $user = User::whereRaw('LOWER(email) = ?', [$loginInput])
-                ->orWhereRaw('LOWER(username) = ?', [$loginInput])
-                ->first();
-
+    // 3️⃣ Validasi kredensial
     if (!$user || !Hash::check($request->password, $user->password_hash)) {
         return response()->json([
-            'code' => 2001,
+            'code'    => 2001,
             'message' => 'The provided credentials are incorrect.'
         ], 401);
     }
 
-    // 3️⃣ Cek email verified
+    // 4️⃣ Validasi email verification
     if (!$user->hasVerifiedEmail()) {
         return response()->json([
-            'code' => 2002,
-            'message' => 'Akun Anda belum diverifikasi. Silakan cek email Anda.'
+            'code'    => 2002,
+            'message' => 'Akun Anda belum diverifikasi. Silakan cek email Anda untuk melakukan verifikasi.'
         ], 403);
     }
 
-    // 4️⃣ Generate token Sanctum
+    // 5️⃣ Generate token Sanctum
     $tokenResult = $user->createToken('api-token');
     $plainTextToken = $tokenResult->plainTextToken;
 
-    // Ambil token ID dengan benar
-    $tokenId = $tokenResult->token->id ?? null;
+    // 6️⃣ Ambil token ID dari database
+    $tokenId = \Laravel\Sanctum\PersonalAccessToken::where('token', hash('sha256', explode('|', $plainTextToken)[1]))
+                ->first()?->id;
 
-    // 5️⃣ Catat LoginHistory dengan aman
+    // 7️⃣ Catat login history dengan aman
     try {
-        $agent = new Agent();
+        $agent = new Jenssegers\Agent\Agent();
 
-        if (!empty($user->id)) {
-            LoginHistory::create([
-                'user_id' => $user->id,
-                'token_id' => $tokenId,
-                'ip_address' => $request->ip() ?? 'unknown',
-                'user_agent' => $request->header('User-Agent') ?? 'unknown',
-                'device' => $agent->device() ?? 'unknown',
-                'browser' => $agent->browser() ?? 'unknown',
-                'platform' => $agent->platform() ?? 'unknown',
-                'login_at' => now(),
-            ]);
-            Log::info('LoginHistory recorded for user: '.$user->id);
-        } else {
-            Log::error('Skipping LoginHistory insert: user_id is null', [
-                'user' => $user,
-                'token_id' => $tokenId
-            ]);
-        }
+        LoginHistory::create([
+            'user_id'    => $user->user_id, // pastikan user_id
+            'token_id'   => $tokenId,
+            'ip_address' => $request->ip() ?? 'unknown',
+            'user_agent' => $request->header('User-Agent') ?? 'unknown',
+            'device'     => $agent->device() ?? 'unknown',
+            'browser'    => $agent->browser() ?? 'unknown',
+            'platform'   => $agent->platform() ?? 'unknown',
+            'login_at'   => now(),
+        ]);
+
+        Log::info('Login history recorded for user_id: ' . $user->user_id);
+
     } catch (\Exception $e) {
-        Log::error('LoginHistory insert failed: '.$e->getMessage(), [
-            'user_id' => $user->id ?? 'null',
+        Log::error('Skipping LoginHistory insert: '.$e->getMessage(), [
+            'user' => $user,
             'token_id' => $tokenId
         ]);
     }
 
-    // 6️⃣ Return response
+    // 8️⃣ Return response
     return response()->json([
-        'code' => 1001,
+        'code'    => 1001,
         'message' => 'Login successful',
-        'token' => $plainTextToken,
-        'user' => $user
+        'token'   => $plainTextToken,
+        'user'    => $user,
     ], 200);
 });
 
