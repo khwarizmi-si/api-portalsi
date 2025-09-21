@@ -20,7 +20,7 @@ return new class extends Migration
             
             // Tambahkan foreign key constraint kembali dengan onDelete('set null')
             $table->foreign('user_id')
-                  ->references('id')
+                  ->references('user_id')
                   ->on('users')
                   ->onDelete('set null');
         });
@@ -40,7 +40,7 @@ return new class extends Migration
             
             // Tambahkan foreign key constraint kembali dengan onDelete('cascade')
             $table->foreign('user_id')
-                  ->references('id')
+                  ->references('user_id')
                   ->on('users')
                   ->onDelete('cascade');
         });
