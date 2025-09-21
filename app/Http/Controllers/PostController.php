@@ -15,6 +15,8 @@ use Illuminate\Pagination\LengthAwarePaginator;
 
 class PostController extends Controller
 {
+use Illuminate\Pagination\LengthAwarePaginator;
+
 public function index(Request $request)
 {
     $authUser = Auth::user();
@@ -45,8 +47,9 @@ public function index(Request $request)
     }
     $pinnedIds = $pinnedPosts->pluck('post_id');
 
-    // ========== FEED POSTS ==========
-    $allPosts = collect();
+    // ========== MAIN POSTS (timeline, relasi, random, liked) ==========
+    $mainPosts = collect();
+
     if ($followingIds->isEmpty()) {
         $query = Post::with(['user', 'tags', 'mentions'])
             ->withCount(['likes', 'comments'])
@@ -54,22 +57,15 @@ public function index(Request $request)
             ->whereNotIn('post_id', $pinnedIds)
             ->inRandomOrder();
 
-        $allPosts = $query->skip(($page - 1) * $perPage)
-                          ->take($perPage)
-                          ->get()
-                          ->map(function ($post) use ($authUser) {
-                              $post->is_liked = $post->likes()->where('user_id', $authUser->user_id)->exists();
-                              $post->is_bookmarked = $post->bookmarks()->where('user_id', $authUser->user_id)->exists();
-                              $post->type = 'post';
-                              return $post;
-                          });
+        $mainPosts = $query->get();
     } else {
-        $total = $perPage;
+        $total = 100;
         $countTimeline  = (int) round($total * 0.50);
         $countRelasi    = (int) round($total * 0.10);
         $countRandom    = (int) round($total * 0.25);
         $countLiked     = (int) round($total * 0.15);
 
+        // Timeline
         $timelinePosts = Post::with(['user', 'tags', 'mentions'])
             ->withCount(['likes', 'comments'])
             ->whereIn('user_id', $followingIds->push($authUser->user_id))
@@ -79,6 +75,7 @@ public function index(Request $request)
             ->take($countTimeline)
             ->get();
 
+        // 2nd degree
         $secondDegreeIds = \DB::table('follows')
             ->whereIn('follower_id', $followingIds)
             ->whereNotIn('followed_id', $followingIds)
@@ -94,6 +91,7 @@ public function index(Request $request)
             ->take($countRelasi)
             ->get();
 
+        // Random
         $randomPosts = Post::with(['user', 'tags', 'mentions'])
             ->withCount(['likes', 'comments'])
             ->whereNotIn('user_id', $followingIds)
@@ -104,6 +102,7 @@ public function index(Request $request)
             ->take($countRandom)
             ->get();
 
+        // Liked by following
         $likedByFollowingIds = \DB::table('likes')
             ->whereIn('user_id', $followingIds)
             ->pluck('post_id');
@@ -117,7 +116,7 @@ public function index(Request $request)
             ->take($countLiked)
             ->get();
 
-        $allPosts = $timelinePosts
+        $mainPosts = $timelinePosts
             ->merge($relasiPosts)
             ->merge($randomPosts)
             ->merge($likedPosts)
@@ -131,45 +130,84 @@ public function index(Request $request)
             ->values();
     }
 
-    // ========== SUGGESTION LOGIC ==========
-    $suggestions = collect(); // bisa tetap sama
+    // ========== PAGINATOR ==========
+    $totalMainPosts = $mainPosts->count();
+    $postsSlice = $mainPosts->slice(($page - 1) * $perPage, $perPage)->values();
 
-    // ========== GABUNGKAN POST + SUGGESTION ==========
-    $feed = collect();
+    $paginator = new LengthAwarePaginator(
+        $postsSlice,
+        $totalMainPosts,
+        $perPage,
+        $page,
+        ['path' => url()->current(), 'query' => $request->query()]
+    );
+
+    // ========== SUGGESTION ==========
+    $suggestions = collect(); // sama seperti sebelumnya
+
+    // ========== MERGE PINNED + POSTS ==========
+    $feed = collect($pinnedPosts)->merge($postsSlice)->values();
+
+    // tambahkan suggestion tiap 2 dan tiap 8 post
     $postCount = 0;
-
-    foreach ($pinnedPosts as $pinned) {
-        $feed->push($pinned);
-        $postCount++;
-    }
-
-    foreach ($allPosts as $post) {
-        $feed->push($post);
+    $feedWithSuggestions = collect();
+    foreach ($feed as $item) {
+        $feedWithSuggestions->push($item);
         $postCount++;
 
         if ($postCount === 2 || ($postCount > 2 && $postCount % 8 === 0)) {
-            $feed->push([
+            $feedWithSuggestions->push([
                 'type' => 'suggestion',
                 'users' => $suggestions->shuffle()->values()
             ]);
         }
     }
 
-    // buat next page url
-    $nextPageUrl = $feed->count() >= $perPage
-        ? url()->current() . '?' . http_build_query(['page' => $page + 1, 'per_page' => $perPage])
-        : null;
-
     return response()->json([
-        'current_page' => $page,
-        'per_page' => $perPage,
-        'count' => $feed->count(),
-        'next_page_url' => $nextPageUrl,
-        'feed' => $feed
+        'current_page' => $paginator->currentPage(),
+        'per_page' => $paginator->perPage(),
+        'total' => $paginator->total(),
+        'next_page_url' => $paginator->nextPageUrl(),
+        'feed' => $feedWithSuggestions
     ]);
 }
 
 
+public function explore(Request $request)
+{
+    $page = max(1, (int) $request->input('page', 1));
+    $perPage = max(1, (int) $request->input('per_page', 10));
+
+    $query = Post::with(['user', 'tags'])
+        ->withCount(['likes', 'comments'])
+        ->where('is_archived', false);
+
+    if ($request->filled('tag')) {
+        $tagName = $request->tag;
+        $query->whereHas('tags', fn($q) => $q->where('tag_name', $tagName));
+    }
+
+    $sort = $request->input('sort', 'random');
+    if ($sort === 'popular') $query->orderByDesc('likes_count');
+    elseif ($sort === 'newest') $query->orderByDesc('created_at');
+    else $query->inRandomOrder();
+
+    $total = $query->count();
+
+    $posts = $query->skip(($page - 1) * $perPage)
+                   ->take($perPage)
+                   ->get();
+
+    $paginator = new LengthAwarePaginator(
+        $posts,
+        $total,
+        $perPage,
+        $page,
+        ['path' => url()->current(), 'query' => $request->query()]
+    );
+
+    return response()->json($paginator);
+}
 
     public function show($id)
     {
@@ -208,43 +246,6 @@ public function index(Request $request)
 
         return response()->json($post);
     }
-
-
-public function explore(Request $request)
-{
-    $page = max(1, (int) $request->input('page', 1));
-    $perPage = max(1, (int) $request->input('per_page', 10));
-
-    $query = Post::with(['user', 'tags'])
-        ->withCount(['likes', 'comments'])
-        ->where('is_archived', false);
-
-    if ($request->filled('tag')) {
-        $tagName = $request->tag;
-        $query->whereHas('tags', fn($q) => $q->where('tag_name', $tagName));
-    }
-
-    $sort = $request->input('sort', 'random');
-    if ($sort === 'popular') $query->orderByDesc('likes_count');
-    elseif ($sort === 'newest') $query->orderByDesc('created_at');
-    else $query->inRandomOrder();
-
-    $total = $query->count();
-
-    $posts = $query->skip(($page - 1) * $perPage)
-                   ->take($perPage)
-                   ->get();
-
-    $paginator = new LengthAwarePaginator(
-        $posts,
-        $total,
-        $perPage,
-        $page,
-        ['path' => url()->current(), 'query' => $request->query()]
-    );
-
-    return response()->json($paginator);
-}
 
 
     // 🆕 Buat post baru (media upload pakai file)
