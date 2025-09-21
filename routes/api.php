@@ -81,92 +81,81 @@ Route::post('/register', function (Request $request) {
 });
 
 
+
+
+// ✅ Login API aman
 Route::post('/login', function (Request $request) {
     // 1️⃣ Validasi input
     $request->validate([
-        'login'    => 'required|string',
+        'login' => 'required|string',
         'password' => 'required|string',
     ]);
 
-    // 2️⃣ Cari user by email atau username (dengan lowercase)
-    $user = User::where(function ($query) use ($request) {
-        $query->where('email', strtolower($request->login))
-              ->orWhere('username', strtolower($request->login));
-    })->first();
+    $loginInput = strtolower($request->login);
 
-    // 3️⃣ Validasi kredensial
+    // 2️⃣ Cari user case-insensitive
+    $user = User::whereRaw('LOWER(email) = ?', [$loginInput])
+                ->orWhereRaw('LOWER(username) = ?', [$loginInput])
+                ->first();
+
     if (!$user || !Hash::check($request->password, $user->password_hash)) {
         return response()->json([
-            'code'    => 2001,
+            'code' => 2001,
             'message' => 'The provided credentials are incorrect.'
         ], 401);
     }
 
-    // 4️⃣ Validasi email verification
+    // 3️⃣ Cek email verified
     if (!$user->hasVerifiedEmail()) {
         return response()->json([
-            'code'    => 2002,
-            'message' => 'Akun Anda belum diverifikasi. Silakan cek email Anda untuk melakukan verifikasi.'
+            'code' => 2002,
+            'message' => 'Akun Anda belum diverifikasi. Silakan cek email Anda.'
         ], 403);
     }
 
-    // 5️⃣ Generate token Sanctum
+    // 4️⃣ Generate token Sanctum
     $tokenResult = $user->createToken('api-token');
     $plainTextToken = $tokenResult->plainTextToken;
-    
-    // 6️⃣ Dapatkan token ID dengan benar
-    $tokenId = null;
-    if ($tokenResult->accessToken) {
-        $tokenId = $tokenResult->accessToken->id;
-    }
 
-    // 7️⃣ Catat login history dengan error handling
-    $loginHistoryError = null;
+    // Ambil token ID dengan benar
+    $tokenId = $tokenResult->token->id ?? null;
+
+    // 5️⃣ Catat LoginHistory dengan aman
     try {
         $agent = new Agent();
 
-        // Debug: pastikan user_id ada
-        if (empty($user->id)) {
-            Log::error('User ID is null or empty for user: ' . $user->email);
-            throw new \Exception('User ID cannot be null for login history');
+        if (!empty($user->id)) {
+            LoginHistory::create([
+                'user_id' => $user->id,
+                'token_id' => $tokenId,
+                'ip_address' => $request->ip() ?? 'unknown',
+                'user_agent' => $request->header('User-Agent') ?? 'unknown',
+                'device' => $agent->device() ?? 'unknown',
+                'browser' => $agent->browser() ?? 'unknown',
+                'platform' => $agent->platform() ?? 'unknown',
+                'login_at' => now(),
+            ]);
+            Log::info('LoginHistory recorded for user: '.$user->id);
+        } else {
+            Log::error('Skipping LoginHistory insert: user_id is null', [
+                'user' => $user,
+                'token_id' => $tokenId
+            ]);
         }
-
-        LoginHistory::create([
-            'user_id'    => $user->id, // ✅ Pastikan ini tidak null
-            'token_id'   => $tokenId, // ✅ Gunakan tokenId yang sudah divalidasi
-            'ip_address' => $request->ip() ?? 'unknown',
-            'user_agent' => $request->header('User-Agent') ?? 'unknown',
-            'device'     => $agent->device() ?? 'unknown',
-            'browser'    => $agent->browser() ?? 'unknown',
-            'platform'   => $agent->platform() ?? 'unknown',
-            'login_at'   => now(),
-        ]);
-
-        Log::info('Login history recorded for user: ' . $user->id);
-
     } catch (\Exception $e) {
-        $loginHistoryError = $e->getMessage();
-        Log::error('LoginHistory insert failed: '.$loginHistoryError);
-        Log::error('Error context:', [
+        Log::error('LoginHistory insert failed: '.$e->getMessage(), [
             'user_id' => $user->id ?? 'null',
-            'has_user' => !is_null($user),
             'token_id' => $tokenId
         ]);
     }
 
-    // 8️⃣ Return response
-    $response = [
-        'code'    => 1001,
+    // 6️⃣ Return response
+    return response()->json([
+        'code' => 1001,
         'message' => 'Login successful',
-        'token'   => $plainTextToken,
-        'user'    => $user,
-    ];
-
-    if ($loginHistoryError) {
-        $response['login_history_error'] = $loginHistoryError;
-    }
-
-    return response()->json($response, 200);
+        'token' => $plainTextToken,
+        'user' => $user
+    ], 200);
 });
 
 
