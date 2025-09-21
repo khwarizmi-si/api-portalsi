@@ -90,9 +90,11 @@ Route::post('/login', function (Request $request) {
     ]);
 
     // 2️⃣ Cari user by email atau username
-    $user = User::where('email', strtolower($request->login))
-        ->orWhere('username', strtolower($request->login))
-        ->first();
+$user = User::where(function ($query) use ($request) {
+    $query->where('email', strtolower($request->login))
+          ->orWhere('username', strtolower($request->login));
+})->first();
+
 
     if (!$user || !Hash::check($request->password, $user->password_hash)) {
         return response()->json([
