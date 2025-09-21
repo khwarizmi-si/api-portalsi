@@ -357,6 +357,12 @@ Route::middleware(['auth:sanctum'])->group(function () {
         Route::delete('/bookmarks/{postId}', [BookmarkController::class, 'destroy']);
         });
 
+        // 📌 Login History
+        Route::prefix('login-histories')->group(function () {
+        Route::get('/', [LoginHistoryController::class, 'index']); // list riwayat login user
+        Route::delete('/{id}', [LoginHistoryController::class, 'destroy']); // hapus riwayat tertentu
+    });
+
         // WebSocket Routes
         Route::prefix('websocket')->group(function () {
             Route::post('/authenticate', [WebSocketController::class, 'authenticate']);
