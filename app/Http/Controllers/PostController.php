@@ -10,6 +10,8 @@ use App\Models\User;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\Storage;
+use Illuminate\Pagination\LengthAwarePaginator;
+
 
 class PostController extends Controller
 {
@@ -223,30 +225,25 @@ public function explore(Request $request)
     }
 
     $sort = $request->input('sort', 'random');
+    if ($sort === 'popular') $query->orderByDesc('likes_count');
+    elseif ($sort === 'newest') $query->orderByDesc('created_at');
+    else $query->inRandomOrder();
 
-    if ($sort === 'popular') {
-        $query->orderByDesc('likes_count');
-    } elseif ($sort === 'newest') {
-        $query->orderByDesc('created_at');
-    } else {
-        $query->inRandomOrder();
-    }
+    $total = $query->count();
 
     $posts = $query->skip(($page - 1) * $perPage)
                    ->take($perPage)
                    ->get();
 
-    $nextPageUrl = $posts->count() >= $perPage
-        ? url()->current() . '?' . http_build_query(['page' => $page + 1, 'per_page' => $perPage])
-        : null;
+    $paginator = new LengthAwarePaginator(
+        $posts,
+        $total,
+        $perPage,
+        $page,
+        ['path' => url()->current(), 'query' => $request->query()]
+    );
 
-    return response()->json([
-        'current_page' => $page,
-        'per_page' => $perPage,
-        'count' => $posts->count(),
-        'next_page_url' => $nextPageUrl,
-        'posts' => $posts
-    ]);
+    return response()->json($paginator);
 }
 
 
