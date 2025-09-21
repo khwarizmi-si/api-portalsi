@@ -80,13 +80,15 @@ Route::post('/register', function (Request $request) {
     ], 201);
 });
 
-
 Route::post('/login', function (Request $request) {
+
+    // 1️⃣ Validasi input
     $request->validate([
         'login'    => 'required|string',
         'password' => 'required|string',
     ]);
 
+    // 2️⃣ Cari user by email atau username
     $user = User::where('email', strtolower($request->login))
         ->orWhere('username', strtolower($request->login))
         ->first();
@@ -105,24 +107,33 @@ Route::post('/login', function (Request $request) {
         ], 403);
     }
 
-    // ✅ generate token Sanctum
+    // 3️⃣ Generate token Sanctum
     $tokenResult    = $user->createToken('api-token');
     $plainTextToken = $tokenResult->plainTextToken;
-    $tokenModel     = $user->tokens()->latest('id')->first();
 
-    // ✅ catat login history
-    $agent = new Agent();
-    LoginHistory::create([
-        'user_id'    => $user->id,
-        'token_id'   => $tokenModel?->id,
-        'ip_address' => $request->ip(),
-        'user_agent' => $request->header('User-Agent'),
-        'device'     => $agent->device(),
-        'browser'    => $agent->browser(),
-        'platform'   => $agent->platform(),
-        'login_at'   => now(),
-    ]);
+    // 4️⃣ Ambil token model dari DB
+    $tokenModel = $user->tokens()->latest('id')->first();
 
+    // 5️⃣ Catat login history
+    try {
+        $agent = new Agent();
+
+        LoginHistory::create([
+            'user_id'    => $user->id,
+            'token_id'   => $tokenModel?->id,
+            'ip_address' => $request->ip() ?? 'unknown',
+            'user_agent' => $request->header('User-Agent') ?? 'unknown',
+            'device'     => $agent->device() ?? 'unknown',
+            'browser'    => $agent->browser() ?? 'unknown',
+            'platform'   => $agent->platform() ?? 'unknown',
+            'login_at'   => now(),
+        ]);
+    } catch (\Exception $e) {
+        // Jika insert gagal, jangan crash login
+        \Log::error('Failed to insert LoginHistory: '.$e->getMessage());
+    }
+
+    // 6️⃣ Return response
     return response()->json([
         'code'    => 1001,
         'message' => 'Login successful',
@@ -130,7 +141,6 @@ Route::post('/login', function (Request $request) {
         'user'    => $user
     ], 200);
 });
-
 
 
 
