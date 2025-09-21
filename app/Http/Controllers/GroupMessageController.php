@@ -100,35 +100,45 @@ class GroupMessageController extends Controller
     /**
      * Ambil daftar pesan grup
      */
-    public function index(Request $request, Group $group)
-    {
-        $user = Auth::user();
+public function index(Request $request, Group $group)
+{
+    $user = Auth::user();
 
-        if (!$group->members()->where('user_id', $user->user_id)->exists()) {
-            return response()->json(['message' => 'Kamu bukan anggota grup ini.'], 403);
-        }
-
-        $messages = $group->messages()
-            ->with([
-                'sender:user_id,username',
-                'mentions.mentioned:user_id,username',
-                'replyTo.sender:user_id,username',
-                'reads.user:user_id,username'
-            ])
-            ->orderBy('sent_at')
-            ->paginate(20);
-
-        return response()->json([
-            'group_id' => $group->id,
-            'messages' => $messages->map(fn($msg) => $this->formatMessage($msg, $user)),
-            'pagination' => [
-                'current_page' => $messages->currentPage(),
-                'last_page'    => $messages->lastPage(),
-                'per_page'     => $messages->perPage(),
-                'total'        => $messages->total(),
-            ]
-        ]);
+    if (!$group->members()->where('user_id', $user->user_id)->exists()) {
+        return response()->json(['message' => 'Kamu bukan anggota grup ini.'], 403);
     }
+
+    $messages = $group->messages()
+        ->with([
+            'sender:user_id,username',
+            'mentions.mentioned:user_id,username',
+            'replyTo.sender:user_id,username',
+            'reads.user:user_id,username'
+        ])
+        ->orderBy('sent_at', 'asc') // tetap ASC agar pagination urut
+        ->paginate(20);
+
+    // Cek apakah user mau data di-reverse (misalnya ?reverse=true di query string)
+    $reverse = filter_var($request->query('reverse'), FILTER_VALIDATE_BOOLEAN);
+
+    // Ambil collection dari paginator
+    $messagesCollection = $messages->getCollection();
+
+    if ($reverse) {
+        $messagesCollection = $messagesCollection->reverse()->values();
+    }
+
+    return response()->json([
+        'group_id' => $group->id,
+        'messages' => $messagesCollection->map(fn($msg) => $this->formatMessage($msg, $user)),
+        'pagination' => [
+            'current_page' => $messages->currentPage(),
+            'last_page'    => $messages->lastPage(),
+            'per_page'     => $messages->perPage(),
+            'total'        => $messages->total(),
+        ]
+    ]);
+}
 
     /**
      * Tandai pesan sebagai dibaca
