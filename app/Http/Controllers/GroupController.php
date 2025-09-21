@@ -284,11 +284,10 @@ public function listMembers(Group $group)
         ->map(function ($member) {
             return [
                 'user_id' => $member->user_id,
-                'name' => $member->user->name,
+                'full_name' => $member->user->full_name,
                 'role' => $member->role,
                 'joined_at' => $member->joined_at,
                 'is_muted' => (bool) $member->is_muted,
-                'id' => $member->user->id,
                 'username' => $member->user->username,
                 'profile_picture_url' => $member->user->profile_picture_url,
                 'is_online' => (bool) $member->user->is_online,
