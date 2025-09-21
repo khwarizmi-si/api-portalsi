@@ -113,16 +113,27 @@ Route::post('/login', function (Request $request) {
     // 5️⃣ Generate token Sanctum
     $tokenResult = $user->createToken('api-token');
     $plainTextToken = $tokenResult->plainTextToken;
-    $tokenModel = $tokenResult->accessToken;
+    
+    // 6️⃣ Dapatkan token ID dengan benar
+    $tokenId = null;
+    if ($tokenResult->accessToken) {
+        $tokenId = $tokenResult->accessToken->id;
+    }
 
-    // 6️⃣ Catat login history - PASTIKAN user_id TIDAK NULL
+    // 7️⃣ Catat login history dengan error handling
     $loginHistoryError = null;
     try {
         $agent = new Agent();
 
+        // Debug: pastikan user_id ada
+        if (empty($user->id)) {
+            Log::error('User ID is null or empty for user: ' . $user->email);
+            throw new \Exception('User ID cannot be null for login history');
+        }
+
         LoginHistory::create([
             'user_id'    => $user->id, // ✅ Pastikan ini tidak null
-            'token_id'   => $tokenModel->id ?? null,
+            'token_id'   => $tokenId, // ✅ Gunakan tokenId yang sudah divalidasi
             'ip_address' => $request->ip() ?? 'unknown',
             'user_agent' => $request->header('User-Agent') ?? 'unknown',
             'device'     => $agent->device() ?? 'unknown',
@@ -131,12 +142,19 @@ Route::post('/login', function (Request $request) {
             'login_at'   => now(),
         ]);
 
+        Log::info('Login history recorded for user: ' . $user->id);
+
     } catch (\Exception $e) {
         $loginHistoryError = $e->getMessage();
         Log::error('LoginHistory insert failed: '.$loginHistoryError);
+        Log::error('Error context:', [
+            'user_id' => $user->id ?? 'null',
+            'has_user' => !is_null($user),
+            'token_id' => $tokenId
+        ]);
     }
 
-    // 7️⃣ Return response
+    // 8️⃣ Return response
     $response = [
         'code'    => 1001,
         'message' => 'Login successful',
@@ -150,7 +168,6 @@ Route::post('/login', function (Request $request) {
 
     return response()->json($response, 200);
 });
-
 
 
 // 📩 Email Verification
