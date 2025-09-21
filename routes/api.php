@@ -80,6 +80,13 @@ Route::post('/register', function (Request $request) {
     ], 201);
 });
 
+use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Hash;
+use App\Models\User;
+use App\Models\LoginHistory;
+use Jenssegers\Agent\Agent;
+use Illuminate\Support\Facades\Log;
+
 Route::post('/login', function (Request $request) {
 
     // 1️⃣ Validasi input
@@ -114,7 +121,8 @@ Route::post('/login', function (Request $request) {
     // 4️⃣ Ambil token model dari DB
     $tokenModel = $user->tokens()->latest('id')->first();
 
-    // 5️⃣ Catat login history
+    // 5️⃣ Catat login history (debug-friendly)
+    $loginHistoryError = null;
     try {
         $agent = new Agent();
 
@@ -128,18 +136,26 @@ Route::post('/login', function (Request $request) {
             'platform'   => $agent->platform() ?? 'unknown',
             'login_at'   => now(),
         ]);
+
     } catch (\Exception $e) {
-        // Jika insert gagal, jangan crash login
-        \Log::error('Failed to insert LoginHistory: '.$e->getMessage());
+        // Simpan pesan error ke variable dan log
+        $loginHistoryError = $e->getMessage();
+        Log::error('LoginHistory insert failed: '.$loginHistoryError);
     }
 
-    // 6️⃣ Return response
-    return response()->json([
+    // 6️⃣ Return response, termasuk error login history jika ada
+    $response = [
         'code'    => 1001,
         'message' => 'Login successful',
         'token'   => $plainTextToken,
-        'user'    => $user
-    ], 200);
+        'user'    => $user,
+    ];
+
+    if ($loginHistoryError) {
+        $response['login_history_error'] = $loginHistoryError;
+    }
+
+    return response()->json($response, 200);
 });
 
 
