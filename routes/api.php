@@ -80,12 +80,6 @@ Route::post('/register', function (Request $request) {
     ], 201);
 });
 
-use Illuminate\Http\Request;
-use Illuminate\Support\Facades\Hash;
-use App\Models\User;
-use App\Models\LoginHistory;
-use Jenssegers\Agent\Agent;
-use Illuminate\Support\Facades\Log;
 
 Route::post('/login', function (Request $request) {
 
