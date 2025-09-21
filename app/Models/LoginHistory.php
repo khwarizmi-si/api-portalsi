@@ -26,16 +26,24 @@ class LoginHistory extends Model
     ];
 
     // ✅ Tambahkan boot method untuk validasi
-    protected static function boot()
-    {
-        parent::boot();
+protected static function boot()
+{
+    parent::boot();
 
-        static::creating(function ($model) {
-            if (empty($model->user_id)) {
-                throw new \Exception('User ID is required for login history');
-            }
-        });
-    }
+    static::creating(function ($model) {
+        // Ubah dari throw exception ke set default/null
+        if (empty($model->user_id)) {
+            // Log warning tapi jangan halt process
+            \Log::warning('LoginHistory created without user_id', [
+                'ip' => $model->ip_address,
+                'user_agent' => $model->user_agent
+            ]);
+            
+            // Optionally set a default or leave null jika column nullable
+            // $model->user_id = 0; // atau null jika column nullable
+        }
+    });
+}
 
     public function user()
     {
