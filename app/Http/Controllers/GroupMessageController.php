@@ -115,7 +115,7 @@ class GroupMessageController extends Controller
                 'replyTo.sender:user_id,username',
                 'reads.user:user_id,username'
             ])
-            ->orderByDesc('sent_at')
+            ->orderByAsc('sent_at')
             ->paginate(20);
 
         return response()->json([
