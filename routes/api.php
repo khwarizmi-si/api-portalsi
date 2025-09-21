@@ -34,7 +34,7 @@ use App\Http\Controllers\{
     AnnouncementController,
     PortfolioController,
     BookmarkController,
-    WebSocketController
+    WebSocketController,
 };
 
 // 🚀 PUBLIC ROUTES
