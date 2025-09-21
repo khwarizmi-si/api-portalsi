@@ -17,7 +17,7 @@ public function index(Request $request)
 {
     $authUser = Auth::user();
     $page = max(1, (int) $request->input('page', 1));
-    $perPage = max(1, (int) $request->input('per_page', 10));
+    $perPage = max(1, (int) $request->input('per_page', 20));
 
     $followingIds = $authUser->following()
         ->where('status', 'accepted')
@@ -62,8 +62,7 @@ public function index(Request $request)
                               return $post;
                           });
     } else {
-        // 50/10/25/15 logic
-        $total = $perPage; // per halaman
+        $total = $perPage;
         $countTimeline  = (int) round($total * 0.50);
         $countRelasi    = (int) round($total * 0.10);
         $countRandom    = (int) round($total * 0.25);
@@ -131,7 +130,7 @@ public function index(Request $request)
     }
 
     // ========== SUGGESTION LOGIC ==========
-    $suggestions = collect(); // sama seperti sebelumnya
+    $suggestions = collect(); // bisa tetap sama
 
     // ========== GABUNGKAN POST + SUGGESTION ==========
     $feed = collect();
@@ -154,13 +153,20 @@ public function index(Request $request)
         }
     }
 
+    // buat next page url
+    $nextPageUrl = $feed->count() >= $perPage
+        ? url()->current() . '?' . http_build_query(['page' => $page + 1, 'per_page' => $perPage])
+        : null;
+
     return response()->json([
         'current_page' => $page,
         'per_page' => $perPage,
         'count' => $feed->count(),
+        'next_page_url' => $nextPageUrl,
         'feed' => $feed
     ]);
 }
+
 
 
     public function show($id)
@@ -230,10 +236,15 @@ public function explore(Request $request)
                    ->take($perPage)
                    ->get();
 
+    $nextPageUrl = $posts->count() >= $perPage
+        ? url()->current() . '?' . http_build_query(['page' => $page + 1, 'per_page' => $perPage])
+        : null;
+
     return response()->json([
         'current_page' => $page,
         'per_page' => $perPage,
         'count' => $posts->count(),
+        'next_page_url' => $nextPageUrl,
         'posts' => $posts
     ]);
 }
