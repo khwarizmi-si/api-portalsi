@@ -173,41 +173,6 @@ public function index(Request $request)
 }
 
 
-public function explore(Request $request)
-{
-    $page = max(1, (int) $request->input('page', 1));
-    $perPage = max(1, (int) $request->input('per_page', 10));
-
-    $query = Post::with(['user', 'tags'])
-        ->withCount(['likes', 'comments'])
-        ->where('is_archived', false);
-
-    if ($request->filled('tag')) {
-        $tagName = $request->tag;
-        $query->whereHas('tags', fn($q) => $q->where('tag_name', $tagName));
-    }
-
-    $sort = $request->input('sort', 'random');
-    if ($sort === 'popular') $query->orderByDesc('likes_count');
-    elseif ($sort === 'newest') $query->orderByDesc('created_at');
-    else $query->inRandomOrder();
-
-    $total = $query->count();
-
-    $posts = $query->skip(($page - 1) * $perPage)
-                   ->take($perPage)
-                   ->get();
-
-    $paginator = new LengthAwarePaginator(
-        $posts,
-        $total,
-        $perPage,
-        $page,
-        ['path' => url()->current(), 'query' => $request->query()]
-    );
-
-    return response()->json($paginator);
-}
 
     public function show($id)
     {
@@ -246,6 +211,43 @@ public function explore(Request $request)
 
         return response()->json($post);
     }
+
+
+public function explore(Request $request)
+{
+    $page = max(1, (int) $request->input('page', 1));
+    $perPage = max(1, (int) $request->input('per_page', 10));
+
+    $query = Post::with(['user', 'tags'])
+        ->withCount(['likes', 'comments'])
+        ->where('is_archived', false);
+
+    if ($request->filled('tag')) {
+        $tagName = $request->tag;
+        $query->whereHas('tags', fn($q) => $q->where('tag_name', $tagName));
+    }
+
+    $sort = $request->input('sort', 'random');
+    if ($sort === 'popular') $query->orderByDesc('likes_count');
+    elseif ($sort === 'newest') $query->orderByDesc('created_at');
+    else $query->inRandomOrder();
+
+    $total = $query->count();
+
+    $posts = $query->skip(($page - 1) * $perPage)
+                   ->take($perPage)
+                   ->get();
+
+    $paginator = new LengthAwarePaginator(
+        $posts,
+        $total,
+        $perPage,
+        $page,
+        ['path' => url()->current(), 'query' => $request->query()]
+    );
+
+    return response()->json($paginator);
+}
 
 
     // 🆕 Buat post baru (media upload pakai file)
