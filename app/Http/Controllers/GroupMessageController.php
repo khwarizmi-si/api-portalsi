@@ -108,22 +108,28 @@ public function index(Request $request, Group $group)
         return response()->json(['message' => 'Kamu bukan anggota grup ini.'], 403);
     }
 
-    $messages = $group->messages()
+    // Hitung total halaman dulu
+    $baseQuery = $group->messages()
         ->with([
             'sender:user_id,username',
             'mentions.mentioned:user_id,username',
             'replyTo.sender:user_id,username',
             'reads.user:user_id,username'
         ])
-        ->orderBy('sent_at', 'asc') // tetap ASC agar pagination urut
-        ->paginate(20);
+        ->orderBy('sent_at', 'asc');
 
-    // Cek apakah user mau data di-reverse (misalnya ?reverse=true di query string)
+    // Kalau user tidak request ?page, langsung ambil halaman terakhir
+    $page = $request->query('page');
+    if (!$page) {
+        $lastPage = (clone $baseQuery)->paginate(20)->lastPage();
+        $page = $lastPage;
+    }
+
+    $messages = $baseQuery->paginate(20, ['*'], 'page', $page);
+
+    // Cek reverse param
     $reverse = filter_var($request->query('reverse'), FILTER_VALIDATE_BOOLEAN);
-
-    // Ambil collection dari paginator
     $messagesCollection = $messages->getCollection();
-
     if ($reverse) {
         $messagesCollection = $messagesCollection->reverse()->values();
     }
@@ -139,6 +145,7 @@ public function index(Request $request, Group $group)
         ]
     ]);
 }
+
 
     /**
      * Tandai pesan sebagai dibaca
