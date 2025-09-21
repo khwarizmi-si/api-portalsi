@@ -33,6 +33,7 @@ use App\Http\Controllers\{
     AnnouncementController,
     PortfolioController,
     BookmarkController,
+    LoginHistoryController,
     WebSocketController,
 };
 
