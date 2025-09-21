@@ -9,10 +9,11 @@ return new class extends Migration {
     {
         Schema::create('login_histories', function (Blueprint $table) {
             $table->id();
-            $table->foreignId('user_id')->constrained()->cascadeOnDelete();
-            // Menyimpan id dari personal_access_tokens (nullable)
+            $table->foreignId('user_id')
+                  ->constrained('users', 'user_id') // explicitly reference users.user_id
+                  ->cascadeOnDelete();
             $table->unsignedBigInteger('token_id')->nullable()->index();
-            $table->string('ip_address', 45)->nullable(); // IPv6-safe
+            $table->string('ip_address', 45)->nullable();
             $table->text('user_agent')->nullable();
             $table->string('device')->nullable();
             $table->string('browser')->nullable();
