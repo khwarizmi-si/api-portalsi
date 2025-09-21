@@ -80,10 +80,10 @@ Route::post('/register', function (Request $request) {
     ], 201);
 });
 
-// 🔑 Login
+
 Route::post('/login', function (Request $request) {
     $request->validate([
-        'login' => 'required|string',
+        'login'    => 'required|string',
         'password' => 'required|string',
     ]);
 
@@ -93,45 +93,44 @@ Route::post('/login', function (Request $request) {
 
     if (!$user || !Hash::check($request->password, $user->password_hash)) {
         return response()->json([
-            'code' => 2001,
+            'code'    => 2001,
             'message' => 'The provided credentials are incorrect.'
         ], 401);
     }
 
     if (!$user->hasVerifiedEmail()) {
         return response()->json([
-            'code' => 2002,
+            'code'    => 2002,
             'message' => 'Akun Anda belum diverifikasi. Silakan cek email Anda untuk melakukan verifikasi.'
         ], 403);
     }
 
-    // buat token terlebih dahulu (Sanctum)
-    $tokenResult = $user->createToken('api-token');
-$plainTextToken = $tokenResult->plainTextToken;
-$tokenModel = $user->tokens()->latest('id')->first(); // ✅ ambil dari Sanctum
+    // ✅ generate token Sanctum
+    $tokenResult    = $user->createToken('api-token');
+    $plainTextToken = $tokenResult->plainTextToken;
+    $tokenModel     = $user->tokens()->latest('id')->first();
 
-$agent = new Agent();
-$ip = $request->getClientIp();
-$ua = $request->header('User-Agent');
-
-LoginHistory::create([
-    'user_id'    => $user->id,
-    'token_id'   => $tokenModel?->id,
-    'ip_address' => $ip,
-    'user_agent' => $ua,
-    'device'     => $agent->device(),
-    'browser'    => $agent->browser(),
-    'platform'   => $agent->platform(),
-    'login_at'   => now(),
-]);
+    // ✅ catat login history
+    $agent = new Agent();
+    LoginHistory::create([
+        'user_id'    => $user->id,
+        'token_id'   => $tokenModel?->id,
+        'ip_address' => $request->ip(),
+        'user_agent' => $request->header('User-Agent'),
+        'device'     => $agent->device(),
+        'browser'    => $agent->browser(),
+        'platform'   => $agent->platform(),
+        'login_at'   => now(),
+    ]);
 
     return response()->json([
-        'code' => 1001,
+        'code'    => 1001,
         'message' => 'Login successful',
-        'token' => $plainTextToken,
-        'user' => $user
+        'token'   => $plainTextToken,
+        'user'    => $user
     ], 200);
 });
+
 
 
 
