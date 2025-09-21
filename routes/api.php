@@ -82,20 +82,19 @@ Route::post('/register', function (Request $request) {
 
 
 Route::post('/login', function (Request $request) {
-
     // 1️⃣ Validasi input
     $request->validate([
         'login'    => 'required|string',
         'password' => 'required|string',
     ]);
 
-    // 2️⃣ Cari user by email atau username
-$user = User::where(function ($query) use ($request) {
-    $query->where('email', strtolower($request->login))
-          ->orWhere('username', strtolower($request->login));
-})->first();
+    // 2️⃣ Cari user by email atau username (dengan lowercase)
+    $user = User::where(function ($query) use ($request) {
+        $query->where('email', strtolower($request->login))
+              ->orWhere('username', strtolower($request->login));
+    })->first();
 
-
+    // 3️⃣ Validasi kredensial
     if (!$user || !Hash::check($request->password, $user->password_hash)) {
         return response()->json([
             'code'    => 2001,
@@ -103,6 +102,7 @@ $user = User::where(function ($query) use ($request) {
         ], 401);
     }
 
+    // 4️⃣ Validasi email verification
     if (!$user->hasVerifiedEmail()) {
         return response()->json([
             'code'    => 2002,
@@ -110,21 +110,19 @@ $user = User::where(function ($query) use ($request) {
         ], 403);
     }
 
-    // 3️⃣ Generate token Sanctum
-    $tokenResult    = $user->createToken('api-token');
+    // 5️⃣ Generate token Sanctum
+    $tokenResult = $user->createToken('api-token');
     $plainTextToken = $tokenResult->plainTextToken;
+    $tokenModel = $tokenResult->accessToken;
 
-    // 4️⃣ Ambil token model dari DB
-    $tokenModel = $user->tokens()->latest('id')->first();
-
-    // 5️⃣ Catat login history (debug-friendly)
+    // 6️⃣ Catat login history - PASTIKAN user_id TIDAK NULL
     $loginHistoryError = null;
     try {
         $agent = new Agent();
 
         LoginHistory::create([
-            'user_id'    => $user->id,
-            'token_id'   => $tokenModel?->id,
+            'user_id'    => $user->id, // ✅ Pastikan ini tidak null
+            'token_id'   => $tokenModel->id ?? null,
             'ip_address' => $request->ip() ?? 'unknown',
             'user_agent' => $request->header('User-Agent') ?? 'unknown',
             'device'     => $agent->device() ?? 'unknown',
@@ -134,12 +132,11 @@ $user = User::where(function ($query) use ($request) {
         ]);
 
     } catch (\Exception $e) {
-        // Simpan pesan error ke variable dan log
         $loginHistoryError = $e->getMessage();
         Log::error('LoginHistory insert failed: '.$loginHistoryError);
     }
 
-    // 6️⃣ Return response, termasuk error login history jika ada
+    // 7️⃣ Return response
     $response = [
         'code'    => 1001,
         'message' => 'Login successful',
