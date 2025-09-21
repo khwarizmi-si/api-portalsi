@@ -107,25 +107,23 @@ Route::post('/login', function (Request $request) {
 
     // buat token terlebih dahulu (Sanctum)
     $tokenResult = $user->createToken('api-token');
-    $tokenModel = $tokenResult->accessToken; // ✅ model token
-    $plainTextToken = $tokenResult->plainTextToken;
+$plainTextToken = $tokenResult->plainTextToken;
+$tokenModel = $user->tokens()->latest('id')->first(); // ✅ ambil dari Sanctum
 
-    // ambil info device/browser/ip
-    $agent = new Agent();
-    $ip = $request->getClientIp();
-    $ua = $request->header('User-Agent');
+$agent = new Agent();
+$ip = $request->getClientIp();
+$ua = $request->header('User-Agent');
 
-    // simpan login history
-    LoginHistory::create([
-        'user_id'    => $user->id,
-        'token_id'   => $tokenModel->id,
-        'ip_address' => $ip,
-        'user_agent' => $ua,
-        'device'     => $agent->device(),
-        'browser'    => $agent->browser(),
-        'platform'   => $agent->platform(),
-        'login_at'   => now(),
-    ]);
+LoginHistory::create([
+    'user_id'    => $user->id,
+    'token_id'   => $tokenModel?->id,
+    'ip_address' => $ip,
+    'user_agent' => $ua,
+    'device'     => $agent->device(),
+    'browser'    => $agent->browser(),
+    'platform'   => $agent->platform(),
+    'login_at'   => now(),
+]);
 
     return response()->json([
         'code' => 1001,
