@@ -25,6 +25,18 @@ class LoginHistory extends Model
         'login_at' => 'datetime',
     ];
 
+    // ✅ Tambahkan boot method untuk validasi
+    protected static function boot()
+    {
+        parent::boot();
+
+        static::creating(function ($model) {
+            if (empty($model->user_id)) {
+                throw new \Exception('User ID is required for login history');
+            }
+        });
+    }
+
     public function user()
     {
         return $this->belongsTo(User::class);
