@@ -46,4 +46,20 @@ class GroupMessage extends Model
     {
         return $this->hasMany(GroupMessageMention::class);
     }
+
+    public function replyTo()
+{
+    return $this->belongsTo(GroupMessage::class, 'reply_to');
+}
+
+public function replies()
+{
+    return $this->hasMany(GroupMessage::class, 'reply_to');
+}
+
+public function reads()
+{
+    return $this->hasMany(GroupMessageRead::class, 'group_message_id');
+}
+
 }

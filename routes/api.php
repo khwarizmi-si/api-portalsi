@@ -303,6 +303,8 @@ Route::middleware(['auth:sanctum'])->group(function () {
             Route::get('/messages', [GroupMessageController::class, 'index']);
             Route::delete('/messages/{message}', [GroupMessageController::class, 'destroy']);
             Route::post('/messages/{message}/pin', [GroupMessageController::class, 'togglePin']);
+            Route::post('/messages/{message}/read', [GroupMessageController::class, 'markAsRead']);
+            Route::get('/messages/{message}/read-info', [GroupMessageController::class, 'readInfo']);
         });
 
         // Announcements
