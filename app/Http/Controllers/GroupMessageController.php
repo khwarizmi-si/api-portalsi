@@ -108,43 +108,28 @@ public function index(Request $request, Group $group)
         return response()->json(['message' => 'Kamu bukan anggota grup ini.'], 403);
     }
 
-    // Hitung total halaman dulu
-    $baseQuery = $group->messages()
+    $messages = $group->messages()
         ->with([
             'sender:user_id,username',
             'mentions.mentioned:user_id,username',
             'replyTo.sender:user_id,username',
             'reads.user:user_id,username'
         ])
-        ->orderBy('sent_at', 'asc');
-
-    // Kalau user tidak request ?page, langsung ambil halaman terakhir
-    $page = $request->query('page');
-    if (!$page) {
-        $lastPage = (clone $baseQuery)->paginate(20)->lastPage();
-        $page = $lastPage;
-    }
-
-    $messages = $baseQuery->paginate(20, ['*'], 'page', $page);
+        ->orderBy('sent_at', 'asc')
+        ->get();
 
     // Cek reverse param
     $reverse = filter_var($request->query('reverse'), FILTER_VALIDATE_BOOLEAN);
-    $messagesCollection = $messages->getCollection();
     if ($reverse) {
-        $messagesCollection = $messagesCollection->reverse()->values();
+        $messages = $messages->reverse()->values();
     }
 
     return response()->json([
         'group_id' => $group->id,
-        'messages' => $messagesCollection->map(fn($msg) => $this->formatMessage($msg, $user)),
-        'pagination' => [
-            'current_page' => $messages->currentPage(),
-            'last_page'    => $messages->lastPage(),
-            'per_page'     => $messages->perPage(),
-            'total'        => $messages->total(),
-        ]
+        'messages' => $messages->map(fn($msg) => $this->formatMessage($msg, $user)),
     ]);
 }
+
 
 
     /**
