@@ -108,7 +108,7 @@ Route::post('/login', function (Request $request) {
     // buat token terlebih dahulu (Sanctum)
     $tokenResult = $user->createToken('api-token');
 $plainTextToken = $tokenResult->plainTextToken;
-$tokenModel = $user->tokens()->latest('id')->first(); // ✅ ambil dari Sanctum
+$tokenModel = $user->tokens()->latest('user_id')->first(); // ✅ ambil dari Sanctum
 
 $agent = new Agent();
 $ip = $request->getClientIp();
