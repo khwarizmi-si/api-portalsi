@@ -101,7 +101,7 @@ Route::post('/login', function (Request $request) {
     if (!$user || !Hash::check($request->password, $user->password_hash)) {
         return response()->json([
             'code'    => 2001,
-            'message' => 'The provided credentials are incorrect.'
+            'message' => 'Username/email atau password salah!'
         ], 401);
     }
 
