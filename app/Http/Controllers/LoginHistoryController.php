@@ -4,18 +4,16 @@ namespace App\Http\Controllers;
 
 use Illuminate\Http\Request;
 use App\Models\LoginHistory;
-use Carbon\Carbon;
 use Laravel\Sanctum\PersonalAccessToken;
 
 class LoginHistoryController extends Controller
 {
-    // List (paginated)
+    // List tanpa pagination
     public function index(Request $request)
     {
-        $perPage = (int) $request->query('perPage', 15);
         $histories = LoginHistory::where('user_id', $request->user()->id)
             ->orderByDesc('login_at')
-            ->paginate($perPage);
+            ->get();
 
         return response()->json($histories);
     }
