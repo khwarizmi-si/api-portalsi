@@ -8,10 +8,23 @@ use Laravel\Sanctum\PersonalAccessToken;
 
 class LoginHistoryController extends Controller
 {
-    // List tanpa pagination
+    // List tanpa pagination (menampilkan semua field sesuai struktur tabel)
     public function index(Request $request)
     {
-        $histories = LoginHistory::where('user_id', $request->user()->id)
+        $histories = LoginHistory::select(
+                'id',
+                'user_id',
+                'token_id',
+                'ip_address',
+                'user_agent',
+                'device',
+                'browser',
+                'platform',
+                'login_at',
+                'created_at',
+                'updated_at'
+            )
+            ->where('user_id', $request->user()->id)
             ->orderByDesc('login_at')
             ->get();
 
