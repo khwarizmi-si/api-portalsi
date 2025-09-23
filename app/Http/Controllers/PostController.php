@@ -26,9 +26,9 @@ public function index(Request $request)
         ->where('status', 'accepted')
         ->pluck('followed_id');
 
-    // ========== PINNED POSTS ==========
+    // ========== PINNED POSTS (hanya untuk page 1) ==========
     $pinnedPosts = collect();
-    if ($followingIds->isNotEmpty()) {
+    if ($page === 1 && $followingIds->isNotEmpty()) {
         $pinnedPosts = Post::with(['user', 'tags', 'mentions'])
             ->withCount(['likes', 'comments'])
             ->whereIn('user_id', $followingIds)
@@ -50,6 +50,7 @@ public function index(Request $request)
     $mainPosts = collect();
 
     if ($followingIds->isEmpty()) {
+        // Kalau belum follow siapa-siapa → tampilkan explore public
         $mainPosts = Post::with(['user', 'tags', 'mentions'])
             ->withCount(['likes', 'comments'])
             ->whereHas('user', fn($q) => $q->where('is_private', 0))
@@ -57,11 +58,12 @@ public function index(Request $request)
             ->orderByDesc('created_at')
             ->get();
     } else {
+        // Aturan distribusi feed
         $total = 100;
-        $countTimeline  = (int) round($total * 0.50);
-        $countRelasi    = (int) round($total * 0.10);
-        $countRandom    = (int) round($total * 0.25);
-        $countLiked     = (int) round($total * 0.15);
+        $countTimeline = (int) round($total * 0.50);
+        $countRelasi   = (int) round($total * 0.10);
+        $countRandom   = (int) round($total * 0.25);
+        $countLiked    = (int) round($total * 0.15);
 
         $timelinePosts = Post::with(['user', 'tags', 'mentions'])
             ->withCount(['likes', 'comments'])
@@ -93,7 +95,7 @@ public function index(Request $request)
             ->where('user_id', '!=', $authUser->user_id)
             ->whereHas('user', fn($q) => $q->where('is_private', 0))
             ->whereNotIn('post_id', $pinnedIds)
-            ->orderByDesc('created_at')
+            ->inRandomOrder() // pakai random di query, bukan setelah get
             ->take($countRandom)
             ->get();
 
@@ -120,13 +122,14 @@ public function index(Request $request)
                 $post->type = 'post';
                 return $post;
             })
-            ->shuffle()
-            ->values();
+            ->values(); // jangan shuffle di sini
     }
 
-    // ========== PAGINATION COLLECTION ==========
+    // ========== PAGINATION (hanya untuk main posts) ==========
     $totalMainPosts = $mainPosts->count();
-    $postsSlice = $mainPosts->slice(($page - 1) * $perPage, $perPage)->values();
+    $postsSlice = $mainPosts
+        ->slice(($page - 1) * $perPage, $perPage)
+        ->values();
 
     $paginator = new LengthAwarePaginator(
         $postsSlice,
@@ -200,10 +203,15 @@ public function index(Request $request)
         return $user;
     })->sortByDesc('is_follow_back')->values();
 
-    // ========== FEED MERGE POSTS + SUGGESTIONS ==========
-    $feed = $pinnedPosts->merge($postsSlice)->values();
-    $postCount = 0;
+    // ========== MERGE POSTS + SUGGESTIONS ==========
+    $feed = collect();
+    if ($page === 1) {
+        $feed = $feed->merge($pinnedPosts);
+    }
+    $feed = $feed->merge($postsSlice)->values();
+
     $feedWithSuggestions = collect();
+    $postCount = 0;
     foreach ($feed as $item) {
         $feedWithSuggestions->push($item);
         $postCount++;
