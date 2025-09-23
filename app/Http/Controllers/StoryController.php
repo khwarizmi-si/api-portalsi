@@ -251,45 +251,54 @@ if ($request->filled('caption')) {
 /**
  * Ambil semua story berdasarkan user_id tertentu
  */
+/**
+ * Ambil semua story berdasarkan user_id tertentu
+ */
 public function getByUser($userId)
 {
     $authUser = Auth::user();
 
+    // Ambil stories masih dalam bentuk model, supaya relasi user masih bisa diakses
     $stories = Story::with(['user:user_id,username,profile_picture_url'])
         ->where('user_id', $userId)
         ->where('expires_at', '>', now())
         ->latest()
-        ->get()
-        ->map(function ($story) use ($authUser) {
-            $alreadyViewed = \DB::table('story_views')
-                ->where('story_id', $story->story_id)
-                ->where('viewer_id', $authUser->user_id)
-                ->exists();
+        ->get();
 
-            return [
-                'story_id' => $story->story_id,
-                'type' => $story->type,
-                'media_url' => $story->media_url,
-                'caption' => $story->caption,
-                'music_track_name' => $story->music_track_name,
-                'music_artist_name' => $story->music_artist_name,
-                'music_preview_url' => $story->music_preview_url,
-                'music_album_art_url' => $story->music_album_art_url,
-                'music_start_position_ms' => $story->music_start_position_ms,
-                'music_clip_duration_ms' => $story->music_clip_duration_ms,
-                'music_display_style' => $story->music_display_style,
-                'music_sticker_position_x' => $story->music_sticker_position_x,
-                'music_sticker_position_y' => $story->music_sticker_position_y,
-                'created_at' => $story->created_at,
-                'expires_at' => $story->expires_at,
-                'is_viewed' => $alreadyViewed,
-            ];
-        });
+    // Ambil data user dari story pertama (kalau ada)
+    $user = optional($stories->first()?->user);
+
+    // Baru mapping ke array
+    $stories = $stories->map(function ($story) use ($authUser) {
+        $alreadyViewed = \DB::table('story_views')
+            ->where('story_id', $story->story_id)
+            ->where('viewer_id', $authUser->user_id)
+            ->exists();
+
+        return [
+            'story_id' => $story->story_id,
+            'type' => $story->type,
+            'media_url' => $story->media_url,
+            'caption' => $story->caption,
+            'music_track_name' => $story->music_track_name,
+            'music_artist_name' => $story->music_artist_name,
+            'music_preview_url' => $story->music_preview_url,
+            'music_album_art_url' => $story->music_album_art_url,
+            'music_start_position_ms' => $story->music_start_position_ms,
+            'music_clip_duration_ms' => $story->music_clip_duration_ms,
+            'music_display_style' => $story->music_display_style,
+            'music_sticker_position_x' => $story->music_sticker_position_x,
+            'music_sticker_position_y' => $story->music_sticker_position_y,
+            'created_at' => $story->created_at,
+            'expires_at' => $story->expires_at,
+            'is_viewed' => $alreadyViewed,
+        ];
+    });
 
     return response()->json([
         'user_id' => $userId,
-        'username' => optional($stories->first()->user)->username ?? null,
-        'profile_picture_url' => optional($stories->first()->user)->profile_picture_url ?? null,
+        'username' => $user->username ?? null,
+        'profile_picture_url' => $user->profile_picture_url ?? null,
         'stories' => $stories
     ]);
 }
