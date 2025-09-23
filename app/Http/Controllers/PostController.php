@@ -26,7 +26,7 @@ public function index(Request $request)
         ->where('status', 'accepted')
         ->pluck('followed_id');
 
-    // ========== PINNED POSTS ==========
+    // ======== PINNED POSTS ========
     $pinnedPosts = collect();
     if ($followingIds->isNotEmpty()) {
         $pinnedPosts = Post::with(['user', 'tags', 'mentions'])
@@ -46,107 +46,27 @@ public function index(Request $request)
     }
     $pinnedIds = $pinnedPosts->pluck('post_id');
 
-    // ========== MAIN POSTS ==========
-    $mainPosts = collect();
+    // ======== MAIN POSTS (gabungan) ========
+    $mainQuery = Post::with(['user', 'tags', 'mentions'])
+        ->withCount(['likes', 'comments'])
+        ->whereHas('user', fn($q) => $q->where('is_private', 0))
+        ->whereNotIn('post_id', $pinnedIds)
+        ->orderByDesc('created_at');
 
-    if ($followingIds->isEmpty()) {
-        // Explore mode
-        $mainPosts = Post::with(['user', 'tags', 'mentions'])
-            ->withCount(['likes', 'comments'])
-            ->whereHas('user', fn($q) => $q->where('is_private', 0))
-            ->whereNotIn('post_id', $pinnedIds)
-            ->orderByDesc('created_at')
-            ->take(100)
-            ->get();
-    } else {
-        $total = 100;
-        $countTimeline  = (int) round($total * 0.50);
-        $countRelasi    = (int) round($total * 0.10);
-        $countRandom    = (int) round($total * 0.25);
-        $countLiked     = (int) round($total * 0.15);
+    // ======== PAGINATION (sisakan slot suggestion) ========
+    $slotSuggestion = 2;
+    $postPerPage = max(1, $perPage - $slotSuggestion);
 
-        // Timeline
-        $timelinePosts = Post::with(['user', 'tags', 'mentions'])
-            ->withCount(['likes', 'comments'])
-            ->whereIn('user_id', $followingIds->push($authUser->user_id))
-            ->whereHas('user', fn($q) => $q->where('is_private', 0))
-            ->whereNotIn('post_id', $pinnedIds)
-            ->orderByDesc('created_at')
-            ->take($countTimeline)
-            ->get();
+    $posts = $mainQuery->paginate($postPerPage, ['*'], 'page', $page);
 
-        // Relasi (2nd degree)
-        $secondDegreeIds = \DB::table('follows')
-            ->whereIn('follower_id', $followingIds)
-            ->whereNotIn('followed_id', $followingIds)
-            ->where('followed_id', '!=', $authUser->user_id)
-            ->pluck('followed_id');
+    $postItems = collect($posts->items())->map(function ($post) use ($authUser) {
+        $post->is_liked = $post->likes()->where('user_id', $authUser->user_id)->exists();
+        $post->is_bookmarked = $post->bookmarks()->where('user_id', $authUser->user_id)->exists();
+        $post->type = 'post';
+        return $post;
+    });
 
-        $relasiPosts = Post::with(['user', 'tags', 'mentions'])
-            ->withCount(['likes', 'comments'])
-            ->whereIn('user_id', $secondDegreeIds)
-            ->whereHas('user', fn($q) => $q->where('is_private', 0))
-            ->whereNotIn('post_id', $pinnedIds)
-            ->orderByDesc('created_at')
-            ->take($countRelasi)
-            ->get();
-
-        // Random explore
-        $randomPosts = Post::with(['user', 'tags', 'mentions'])
-            ->withCount(['likes', 'comments'])
-            ->whereNotIn('user_id', $followingIds)
-            ->where('user_id', '!=', $authUser->user_id)
-            ->whereHas('user', fn($q) => $q->where('is_private', 0))
-            ->whereNotIn('post_id', $pinnedIds)
-            ->inRandomOrder()
-            ->take($countRandom)
-            ->get();
-
-        // Liked by following
-        $likedByFollowingIds = \DB::table('likes')
-            ->whereIn('user_id', $followingIds)
-            ->pluck('post_id');
-
-        $likedPosts = Post::with(['user', 'tags', 'mentions'])
-            ->withCount(['likes', 'comments'])
-            ->whereIn('post_id', $likedByFollowingIds)
-            ->whereHas('user', fn($q) => $q->where('is_private', 0))
-            ->whereNotIn('post_id', $pinnedIds)
-            ->orderByDesc('created_at')
-            ->take($countLiked)
-            ->get();
-
-        // Merge semua lalu urutkan stabil
-        $mainPosts = $timelinePosts
-            ->merge($relasiPosts)
-            ->merge($randomPosts)
-            ->merge($likedPosts)
-            ->map(function ($post) use ($authUser) {
-                $post->is_liked = $post->likes()->where('user_id', $authUser->user_id)->exists();
-                $post->is_bookmarked = $post->bookmarks()->where('user_id', $authUser->user_id)->exists();
-                $post->type = 'post';
-                return $post;
-            })
-            ->sortByDesc('created_at') // ini bikin page 1/2 tidak duplikat
-            ->values();
-    }
-
-    // ========== PAGINATION COLLECTION ==========
-    $totalMainPosts = $mainPosts->count();
-    $postsSlice = $mainPosts->slice(($page - 1) * $perPage, $perPage)->values();
-
-    $paginator = new \Illuminate\Pagination\LengthAwarePaginator(
-        $postsSlice,
-        $totalMainPosts,
-        $perPage,
-        $page,
-        [
-            'path' => $request->url(),
-            'query' => $request->query(),
-        ]
-    );
-
-    // ========== SUGGESTIONS ==========
+    // ======== SUGGESTIONS ========
     $suggestions = collect();
 
     if ($followingIds->isNotEmpty()) {
@@ -197,37 +117,34 @@ public function index(Request $request)
         return $user;
     })->sortByDesc('is_follow_back')->values();
 
-    // ========== FEED MERGE ==========
-    $feed = $pinnedPosts->merge($postsSlice)->values();
+    // ======== FEED MERGE (post + suggestion) ========
+    $feed = collect($postItems);
 
-    $postCount = 0;
-    $feedWithSuggestions = collect();
-    foreach ($feed as $item) {
-        $feedWithSuggestions->push($item);
-        $postCount++;
-        if ($postCount === 2 || ($postCount > 2 && $postCount % 8 === 0)) {
-            $feedWithSuggestions->push([
-                'type' => 'suggestion',
-                'users' => $suggestions->shuffle()->take(5)->values()
-            ]);
-        }
+    // Inject suggestion di posisi tertentu (misalnya setelah 2 post)
+    if ($feed->count() >= 2) {
+        $feed->splice(2, 0, [[
+            'type' => 'suggestion',
+            'users' => $suggestions->shuffle()->take($slotSuggestion)->values()
+        ]]);
+    } else {
+        // Kalau post kurang dari 2, tambahkan suggestion di akhir
+        $feed->push([
+            'type' => 'suggestion',
+            'users' => $suggestions->shuffle()->take($slotSuggestion)->values()
+        ]);
     }
 
+    // ======== RETURN JSON ========
     return response()->json([
-        'current_page' => $paginator->currentPage(),
-        'per_page' => $paginator->perPage(),
-        'total' => $paginator->total(),
-        'next_page_url' => $paginator->currentPage() < $paginator->lastPage()
-            ? $request->url() . '?' . http_build_query(array_merge($request->query(), ['page' => $paginator->currentPage() + 1]))
-            : null,
-        'prev_page_url' => $paginator->currentPage() > 1
-            ? $request->url() . '?' . http_build_query(array_merge($request->query(), ['page' => $paginator->currentPage() - 1]))
-            : null,
-        'last_page_url' => $request->url() . '?' . http_build_query(array_merge($request->query(), ['page' => $paginator->lastPage()])),
-        'feed' => $feedWithSuggestions
+        'current_page' => $posts->currentPage(),
+        'per_page' => $perPage, // tetap tampil 10 (post + suggestion)
+        'total' => $posts->total(), // total post asli (tanpa suggestion)
+        'next_page_url' => $posts->nextPageUrl(),
+        'prev_page_url' => $posts->previousPageUrl(),
+        'last_page_url' => $request->url() . '?' . http_build_query(array_merge($request->query(), ['page' => $posts->lastPage()])),
+        'feed' => $pinnedPosts->merge($feed)->values()
     ]);
 }
-
 
 
 public function explore(Request $request)
