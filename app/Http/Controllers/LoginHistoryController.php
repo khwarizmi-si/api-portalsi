@@ -34,7 +34,7 @@ class LoginHistoryController extends Controller
     // Hapus history tertentu — hanya boleh jika sudah >= 7 hari
     public function destroy(Request $request, $id)
     {
-        $history = LoginHistory::where('user_id', $request->user()->id)
+        $history = LoginHistory::where('user_id', $request->user()->user_id)
             ->where('id', $id)
             ->firstOrFail();
 
