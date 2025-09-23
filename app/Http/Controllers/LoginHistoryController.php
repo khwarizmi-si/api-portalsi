@@ -24,7 +24,7 @@ class LoginHistoryController extends Controller
                 'created_at',
                 'updated_at'
             )
-            ->where('user_id', $request->user()->id)
+            ->where('user_id', $request->user()->user_id)
             ->orderByDesc('login_at')
             ->get();
 
