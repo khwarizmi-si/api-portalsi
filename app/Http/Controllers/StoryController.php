@@ -244,4 +244,43 @@ if ($request->filled('caption')) {
 
         return response()->json($stories);
     }
+
+    /**
+ * Ambil semua story milik user tertentu (hanya story_id saja)
+ */
+public function getByUser($userId)
+{
+    $authUser = Auth::user();
+
+    $stories = Story::with(['user:user_id,username,profile_picture_url'])
+        ->where('user_id', $userId)
+        ->where('expires_at', '>', now())
+        ->latest()
+        ->get(['story_id', 'user_id', 'created_at', 'expires_at']);
+
+    if ($stories->isEmpty()) {
+        return response()->json([
+            'user_id' => $userId,
+            'username' => null,
+            'profile_picture_url' => null,
+            'stories' => []
+        ]);
+    }
+
+    $storyOwner = $stories->first()->user;
+
+    return response()->json([
+        'user_id' => $storyOwner->user_id,
+        'username' => $storyOwner->username,
+        'profile_picture_url' => $storyOwner->profile_picture_url,
+        'stories' => $stories->map(function ($story) {
+            return [
+                'story_id' => $story->story_id,
+                'created_at' => $story->created_at,
+                'expires_at' => $story->expires_at,
+            ];
+        })->values()
+    ]);
+}
+
 }

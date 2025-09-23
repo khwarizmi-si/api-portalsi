@@ -266,6 +266,7 @@ Route::middleware(['auth:sanctum'])->group(function () {
         Route::post('/stories/{id}/view', [StoryController::class, 'view']);
         Route::get('/stories/my', [StoryController::class, 'myStories']);
         Route::get('/stories/{id}/viewers', [StoryViewController::class, 'viewers']);
+        Route::get('/stories/user/{userId}', [StoryController::class, 'getByUser']);
 
         // Notifications
         Route::patch('/notifications/{id}/read', [NotificationController::class, 'markAsRead']);
