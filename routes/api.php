@@ -35,6 +35,7 @@ use App\Http\Controllers\{
     BookmarkController,
     LoginHistoryController,
     WebSocketController,
+    BulkRegisterController,
 };
 
 // 🚀 PUBLIC ROUTES
@@ -81,7 +82,38 @@ Route::post('/register', function (Request $request) {
     ], 201);
 });
 
+// 🚀 Register khusus Parent tanpa email & full_name
+Route::post('/register-parent', function (Request $request) {
+    $request->validate([
+        'username' => [
+            'required',
+            'string',
+            'unique:users',
+            'regex:/^[a-zA-Z0-9._]+$/'
+        ],
+        'password' => 'required|min:6',
+    ], [
+        'username.regex' => 'Username hanya boleh berisi huruf, angka, titik, dan underscore tanpa spasi atau simbol lain.'
+    ]);
 
+    $user = User::create([
+        'username' => strtolower($request->username),
+        'password_hash' => bcrypt($request->password),
+        'role' => 'parent',
+        'full_name' => null,
+        'email' => null,
+        'profile_picture_url' => 'https://api-new.portalsi.com/storage/default-profile.png',
+        'banner_url' => 'https://api-new.portalsi.com/storage/default-banner.png'
+    ]);
+
+    $token = $user->createToken('api-token')->plainTextToken;
+
+    return response()->json([
+        'message' => 'Parent registered successfully.',
+        'token' => $token,
+        'user' => $user
+    ], 201);
+});
 
 
 // ✅ Login API aman
@@ -369,6 +401,7 @@ Route::middleware(['auth:sanctum'])->group(function () {
         Route::get('/', [LoginHistoryController::class, 'index']); // list riwayat login user
         Route::delete('/{id}', [LoginHistoryController::class, 'destroy']); // hapus riwayat tertentu
     });
+
 
         // WebSocket Routes
         Route::prefix('websocket')->group(function () {
