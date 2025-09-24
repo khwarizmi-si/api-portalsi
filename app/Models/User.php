@@ -37,6 +37,7 @@ class User extends Authenticatable implements MustVerifyEmail
         'password_hash',
         'bio',
         'profile_picture_url',
+        'banner_url',
         'is_verified',       // centang biru
         'is_private',
         'role',              // dev, teacher, parent, student
