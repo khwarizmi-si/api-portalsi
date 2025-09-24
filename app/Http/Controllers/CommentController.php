@@ -9,6 +9,7 @@ use App\Models\Post;
 use App\Models\Comment;
 use App\Models\Notification;
 use App\Models\User;
+use App\Models\CommentLike;
 
 // ✅ Gunakan hanya satu event untuk setiap aksi
 use App\Events\CommentCreated;
@@ -121,6 +122,48 @@ public function getCommentsByPost($post_id)
         'comments' => $comments
     ]);
 }
+
+    public function like($comment_id)
+    {
+        $user_id = Auth::id();
+        $comment = Comment::findOrFail($comment_id);
+
+        // Cek apakah sudah pernah like
+        $alreadyLiked = CommentLike::where('comment_id', $comment_id)
+            ->where('user_id', $user_id)
+            ->exists();
+
+        if ($alreadyLiked) {
+            return response()->json(['message' => 'Kamu sudah menyukai komentar ini.'], 400);
+        }
+
+        $like = CommentLike::create([
+            'comment_id' => $comment_id,
+            'user_id' => $user_id,
+        ]);
+
+        return response()->json([
+            'message' => 'Komentar berhasil disukai.',
+            'data' => $like
+        ], 201);
+    }
+
+    public function unlike($comment_id)
+    {
+        $user_id = Auth::id();
+        $comment = Comment::findOrFail($comment_id);
+
+        $deleted = CommentLike::where('comment_id', $comment_id)
+            ->where('user_id', $user_id)
+            ->delete();
+
+        if (!$deleted) {
+            return response()->json(['message' => 'Kamu belum pernah menyukai komentar ini.'], 400);
+        }
+
+        return response()->json(['message' => 'Like pada komentar berhasil dihapus.']);
+    }
+
 
 
     public function update(Request $request, $comment_id)
