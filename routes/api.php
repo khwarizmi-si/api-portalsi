@@ -335,7 +335,8 @@ Route::middleware(['auth:sanctum'])->group(function () {
             Route::post('{group}/leave', [GroupController::class, 'leave']);
             Route::get('{group}', [GroupController::class, 'show']);
             Route::match(['put', 'post'], '{group}', [GroupController::class, 'update']);
-            Route::delete('{group}', [GroupController::class, 'destroy']); // ✅ tambahkan ini
+            Route::delete('{group}', [GroupController::class, 'destroy']); 
+            Route::get('{group}/role', [GroupController::class, 'checkRole']);
         });
 
 

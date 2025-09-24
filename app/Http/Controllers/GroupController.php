@@ -403,4 +403,27 @@ protected function toggleMute(Group $group, User $target, bool $mute)
     return response()->json(['message' => $mute ? 'User muted' : 'User unmuted']);
 }
 
+public function checkRole($groupId)
+{
+    $user = Auth::user();
+
+    $membership = \App\Models\GroupMember::where('group_id', $groupId)
+        ->where('user_id', $user->id)
+        ->first();
+
+    if (!$membership) {
+        return response()->json([
+            'status' => 'error',
+            'message' => 'User bukan member dari grup ini'
+        ], 404);
+    }
+
+    return response()->json([
+        'status' => 'success',
+        'group_id' => $groupId,
+        'user_id' => $user->id,
+        'role' => $membership->role, // "admin" / "member"
+    ]);
+}
+
 }
