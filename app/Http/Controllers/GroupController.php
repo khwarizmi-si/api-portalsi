@@ -17,9 +17,10 @@ public function store(Request $request)
 {
     $user = Auth::user();
 
-    if (!$user->is_verified) {
-        return response()->json(['message' => 'Hanya user terverifikasi (centang biru) yang bisa membuat grup.'], 403);
-    }
+    // ❌ Hapus validasi verifikasi
+    // if (!$user->is_verified) {
+    //     return response()->json(['message' => 'Hanya user terverifikasi (centang biru) yang bisa membuat grup.'], 403);
+    // }
 
     $request->validate([
         'name' => 'required|string|max:255',
@@ -67,7 +68,6 @@ public function store(Request $request)
                 continue; // skip kalau user tidak ditemukan
             }
 
-            // Skip kalau sudah ada di grup
             if (GroupMember::where('group_id', $group->id)
                 ->where('user_id', $target->user_id)
                 ->exists()) {
@@ -84,7 +84,10 @@ public function store(Request $request)
         }
     }
 
-    return response()->json(['message' => 'Grup berhasil dibuat.', 'group' => $group->load('members.user')]);
+    return response()->json([
+        'message' => 'Grup berhasil dibuat.',
+        'group' => $group->load('members.user')
+    ]);
 }
 
 
