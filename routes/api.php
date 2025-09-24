@@ -128,7 +128,7 @@ Route::post('/register-parent', function (Request $request) {
             'unique:users',
             'regex:/^[a-zA-Z0-9._]+$/'
         ],
-        'password' => 'required|min:6',
+        'password' => 'required|min:1',
     ], [
         'username.regex' => 'Username hanya boleh berisi huruf, angka, titik, dan underscore tanpa spasi atau simbol lain.'
     ]);

@@ -174,4 +174,10 @@ public function commentLikes()
     return $this->hasMany(CommentLike::class, 'user_id', 'user_id');
 }
 
+public function groups()
+{
+    return $this->belongsToMany(\App\Models\Group::class, 'group_members', 'user_id', 'group_id');
+}
+
+
 }
