@@ -407,8 +407,8 @@ public function checkRole($groupId)
 {
     $user = Auth::user();
 
-    $membership = \App\Models\GroupMember::where('group_id', $groupId)
-        ->where('user_id', $user->id)
+    $membership = GroupMember::where('group_id', $groupId)
+        ->where('user_id', $user->user_id) // ✅ BUKAN $user->id
         ->first();
 
     if (!$membership) {
@@ -421,9 +421,10 @@ public function checkRole($groupId)
     return response()->json([
         'status' => 'success',
         'group_id' => $groupId,
-        'user_id' => $user->id,
-        'role' => $membership->role, // "admin" / "member"
+        'user_id' => $user->user_id,
+        'role' => $membership->role,
     ]);
 }
+
 
 }
