@@ -303,5 +303,56 @@ public function getByUser($userId)
     ]);
 }
 
+public function myArchivedStories(Request $request)
+{
+    $authUser = Auth::user();
+
+    $page    = max(1, (int) $request->input('page', 1));
+    $perPage = max(1, (int) $request->input('per_page', 10));
+
+    // Query hanya story expired
+    $query = Story::with(['user:user_id,username,profile_picture_url'])
+        ->where('user_id', $authUser->user_id)
+        ->where('expires_at', '<=', now())
+        ->latest();
+
+    $paginator = $query->paginate($perPage, ['*'], 'page', $page);
+
+    $stories = $paginator->getCollection()->map(function ($story) use ($authUser) {
+        $alreadyViewed = \DB::table('story_views')
+            ->where('story_id', $story->story_id)
+            ->where('viewer_id', $authUser->user_id)
+            ->exists();
+
+        return [
+            'story_id' => $story->story_id,
+            'type' => $story->type,
+            'media_url' => $story->media_url,
+            'caption' => $story->caption,
+            'music_track_name' => $story->music_track_name,
+            'music_artist_name' => $story->music_artist_name,
+            'music_preview_url' => $story->music_preview_url,
+            'music_album_art_url' => $story->music_album_art_url,
+            'music_start_position_ms' => $story->music_start_position_ms,
+            'music_clip_duration_ms' => $story->music_clip_duration_ms,
+            'music_display_style' => $story->music_display_style,
+            'music_sticker_position_x' => $story->music_sticker_position_x,
+            'music_sticker_position_y' => $story->music_sticker_position_y,
+            'created_at' => $story->created_at,
+            'expires_at' => $story->expires_at,
+            'is_viewed' => $alreadyViewed,
+        ];
+    });
+
+    return response()->json([
+        'current_page'   => $paginator->currentPage(),
+        'per_page'       => $paginator->perPage(),
+        'total'          => $paginator->total(),
+        'next_page_url'  => $paginator->nextPageUrl(),
+        'prev_page_url'  => $paginator->previousPageUrl(),
+        'last_page_url'  => $paginator->url($paginator->lastPage()),
+        'stories'        => $stories->values(),
+    ]);
+}
 
 }
