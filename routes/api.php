@@ -290,7 +290,7 @@ Route::post('/reset-password', function (Request $request) {
     ], $status === Password::PASSWORD_RESET ? 200 : 400);
 });
 
-Route::middleware(['auth:sanctum'])->get('/my-groups', function (Request $request) {
+Route::middleware(['auth:sanctum'])->get('/parent-groups', function (Request $request) {
     $user = $request->user();
 
     // 🚫 Cek role user
