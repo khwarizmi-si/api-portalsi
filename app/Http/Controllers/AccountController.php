@@ -27,14 +27,14 @@ class AccountController extends Controller
             'email' => 'nullable|email|unique:users,email,' . $user->user_id . ',user_id',
             'bio' => 'nullable|string',
             'is_private' => 'nullable|boolean',
-            'profile_picture' => 'nullable|image|max:10240', // upload file, bukan URL
+            'profile_picture' => 'nullable|image|max:10240', // max 10MB
+            'banner' => 'nullable|image|max:20480', // max 20MB
         ], [
             'username.regex' => 'Username hanya boleh berisi huruf, angka, titik, dan underscore tanpa spasi atau simbol lain.'
         ]);
     
-        // ✅ Upload profile picture (jika ada YA)
+        // ✅ Upload profile picture
         if ($request->hasFile('profile_picture')) {
-            // Hapus file lama jika ada dan dari folder yang sama
             if ($user->profile_picture_url && str_contains($user->profile_picture_url, '/storage/profile_pictures/')) {
                 $oldPath = str_replace(asset('storage') . '/', '', $user->profile_picture_url);
                 Storage::disk('public')->delete($oldPath);
@@ -42,6 +42,17 @@ class AccountController extends Controller
     
             $path = $request->file('profile_picture')->store('profile_pictures', 'public');
             $user->profile_picture_url = asset('storage/' . $path);
+        }
+
+        // ✅ Upload banner
+        if ($request->hasFile('banner')) {
+            if ($user->banner_url && str_contains($user->banner_url, '/storage/banners/')) {
+                $oldPath = str_replace(asset('storage') . '/', '', $user->banner_url);
+                Storage::disk('public')->delete($oldPath);
+            }
+
+            $path = $request->file('banner')->store('banners', 'public');
+            $user->banner_url = asset('storage/' . $path);
         }
     
         // ✅ Update field lain
@@ -95,25 +106,29 @@ class AccountController extends Controller
             Storage::disk('public')->delete($oldPath);
         }
 
+        // Hapus banner jika ada
+        if ($user->banner_url && str_contains($user->banner_url, '/storage/banners/')) {
+            $oldPath = str_replace(asset('storage') . '/', '', $user->banner_url);
+            Storage::disk('public')->delete($oldPath);
+        }
+
         $user->delete();
 
         return response()->json(['message' => 'Akun telah dihapus']);
     }
 
 
-// 🔍 Cek status private user login
-public function checkPrivateStatus()
-{
-    $user = auth()->user();
+    // 🔍 Cek status private user login
+    public function checkPrivateStatus()
+    {
+        $user = auth()->user();
 
-    if (!$user) {
-        return response()->json([
-            'message' => 'User belum login'
-        ], 401); // 401 Unauthorized
+        if (!$user) {
+            return response()->json([
+                'message' => 'User belum login'
+            ], 401); // 401 Unauthorized
+        }
+
+        return response()->json($user->is_private == 1 ? 1 : 0);
     }
-
-    return response()->json($user->is_private == 1 ? 1 : 0);
-}
-
-
 }
