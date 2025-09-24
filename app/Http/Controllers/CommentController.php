@@ -104,20 +104,24 @@ class CommentController extends Controller
         ], 201);
     }
 
-    public function getCommentsByPost($post_id)
-    {
-        $post = Post::findOrFail($post_id);
-        $comments = $post->comments()
-            ->with(['user', 'replies.user'])
-            ->whereNull('parent_comment_id')
-            ->orderBy('created_at', 'desc')
-            ->get();
+public function getCommentsByPost($post_id)
+{
+    $post = Post::findOrFail($post_id);
 
-        return response()->json([
-            'post_id' => $post_id,
-            'comments' => $comments
-        ]);
-    }
+    $comments = $post->comments()
+        ->withCount('likes') // hitung jumlah likes tiap komentar
+        ->with(['user', 'replies.user', 'likes'])
+        ->whereNull('parent_comment_id')
+        ->orderByDesc('likes_count') // urutkan berdasarkan likes terbanyak
+        ->orderBy('created_at', 'desc') // kalau like sama, urut terbaru
+        ->get();
+
+    return response()->json([
+        'post_id' => $post_id,
+        'comments' => $comments
+    ]);
+}
+
 
     public function update(Request $request, $comment_id)
     {
