@@ -48,31 +48,34 @@ class ProfileController extends Controller
     }
     
     // ✅ Search user by username and/or full_name
-    public function search(Request $request)
-    {
-        $username = $request->input('username');
-        $fullName = $request->input('full_name');
+public function search(Request $request)
+{
+    $username = $request->input('username');
+    $fullName = $request->input('full_name');
 
-        if (!$username && !$fullName) {
-            return response()->json(['message' => 'Parameter username atau full_name diperlukan.'], 400);
-        }
-
-        $users = User::query()
-            ->when($username, function ($q) use ($username) {
-                $q->where('username', 'like', "%{$username}%");
-            })
-            ->when($fullName, function ($q) use ($fullName) {
-                $q->where('full_name', 'like', "%{$fullName}%");
-            })
-            ->select('user_id', 'username', 'full_name', 'profile_picture_url')
-            ->get();
-
-        if ($users->isEmpty()) {
-            return response()->json(['message' => 'Tidak ada hasil yang ditemukan.'], 404);
-        }
-
-        return response()->json($users);
+    if (!$username && !$fullName) {
+        return response()->json(['message' => 'Parameter username atau full_name diperlukan.'], 400);
     }
+
+    $users = User::query()
+        ->where(function ($q) use ($username, $fullName) {
+            if ($username) {
+                $q->where('username', 'like', "%{$username}%");
+            }
+            if ($fullName) {
+                $q->orWhere('full_name', 'like', "%{$fullName}%");
+            }
+        })
+        ->select('user_id', 'username', 'full_name', 'profile_picture_url')
+        ->get();
+
+    if ($users->isEmpty()) {
+        return response()->json(['message' => 'Tidak ada hasil yang ditemukan.'], 404);
+    }
+
+    return response()->json($users);
+}
+
 
     public function me(Request $request)
     {
