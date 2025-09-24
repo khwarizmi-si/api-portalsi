@@ -107,14 +107,30 @@ class CommentController extends Controller
 
 public function getCommentsByPost($post_id)
 {
+    $authId = Auth::id();
     $post = Post::findOrFail($post_id);
 
     $comments = $post->comments()
-        ->withCount('likes') // hitung jumlah likes tiap komentar
-        ->with(['user', 'replies.user', 'likes'])
+        ->withCount('likes') // hitung jumlah likes
+        ->withExists([
+            'likes as is_liked' => fn($q) => $q->where('user_id', $authId)
+        ]) // cek apakah user login sudah like
+        ->with([
+            'user',
+            'replies.user',
+            'replies.likes',
+            'replies' => function ($q) use ($authId) {
+                $q->withCount('likes')
+                  ->withExists([
+                      'likes as is_liked' => fn($q2) => $q2->where('user_id', $authId)
+                  ])
+                  ->orderByDesc('likes_count')
+                  ->orderBy('created_at', 'desc');
+            }
+        ])
         ->whereNull('parent_comment_id')
-        ->orderByDesc('likes_count') // urutkan berdasarkan likes terbanyak
-        ->orderBy('created_at', 'desc') // kalau like sama, urut terbaru
+        ->orderByDesc('likes_count') // komentar dengan like terbanyak dulu
+        ->orderBy('created_at', 'desc')
         ->get();
 
     return response()->json([
@@ -122,6 +138,7 @@ public function getCommentsByPost($post_id)
         'comments' => $comments
     ]);
 }
+
 
     public function like($comment_id)
     {

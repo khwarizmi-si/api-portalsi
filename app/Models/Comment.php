@@ -44,4 +44,14 @@ public function likes()
     return $this->hasMany(\App\Models\CommentLike::class, 'comment_id', 'comment_id');
 }
 
+protected $appends = ['is_liked'];
+
+public function getIsLikedAttribute()
+{
+    $authId = auth()->id();
+    if (!$authId) return false;
+
+    return $this->likes()->where('user_id', $authId)->exists();
+}
+
 }

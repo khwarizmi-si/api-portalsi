@@ -163,9 +163,14 @@ public function bookmarkedPosts()
                 ->withTimestamps();
 }
 
-    public function loginHistories()
-    {
-        return $this->hasMany(LoginHistory::class);
-    }
+public function loginHistories()
+{
+    return $this->hasMany(LoginHistory::class);
+}
+
+public function commentLikes()
+{
+    return $this->hasMany(CommentLike::class, 'user_id', 'user_id');
+}
 
 }
