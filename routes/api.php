@@ -15,6 +15,8 @@ use Illuminate\Auth\Events\Verified;
 use Illuminate\Foundation\Auth\EmailVerificationRequest;
 use Illuminate\Support\Str;
 use App\Models\User;
+use Illuminate\Support\Facades\DB;
+use App\Models\Group;
 use App\Http\Controllers\{
     PostController,
     CommentController,
@@ -287,6 +289,47 @@ Route::post('/reset-password', function (Request $request) {
         }
     ], $status === Password::PASSWORD_RESET ? 200 : 400);
 });
+
+Route::middleware(['auth:sanctum'])->get('/my-groups', function (Request $request) {
+    $user = $request->user();
+
+    // 🚫 Cek role user
+    if ($user->role !== 'parent') {
+        return response()->json([
+            'error' => 'Hanya user dengan role parent yang dapat mengakses endpoint ini.'
+        ], 403);
+    }
+
+    // 1️⃣ Ambil grup yang user ikuti, filter hanya id 1-6
+    $groups = $user->groups()
+        ->whereIn('groups.id', [1, 2, 3, 4, 5, 6])
+        ->select('groups.id', 'groups.name', 'groups.description', 'groups.avatar_url')
+        ->get();
+
+    // 2️⃣ Tambahkan unread_message_count
+    $result = $groups->map(function ($group) use ($user) {
+        $unreadCount = DB::table('group_messages')
+            ->leftJoin('group_message_reads', function ($join) use ($user) {
+                $join->on('group_messages.id', '=', 'group_message_reads.message_id')
+                     ->where('group_message_reads.user_id', '=', $user->user_id);
+            })
+            ->where('group_messages.group_id', $group->id)
+            ->whereNull('group_message_reads.id')
+            ->count();
+
+        return [
+            'id' => $group->id,
+            'name' => $group->name,
+            'description' => $group->description,
+            'avatar_url' => $group->avatar_url,
+            'unread_message_count' => (string) $unreadCount,
+        ];
+    });
+
+    // 3️⃣ Return hasil
+    return response()->json($result);
+});
+
 
 Route::get('/profile/{username}', [ProfileController::class, 'show']);
 
