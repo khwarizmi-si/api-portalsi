@@ -28,9 +28,13 @@ class UserSuggestionController extends Controller
                 ->get();
 
             $userIds = $mutuals->pluck('followed_id');
-            $users = User::whereIn('user_id', $userIds)
-                ->orderByRaw("FIELD(user_id, " . implode(',', $userIds->toArray()) . ")")
-                ->get();
+
+            // cek dulu apakah ada userIds, kalau kosong jangan pakai FIELD()
+            $users = $userIds->isNotEmpty()
+                ? User::whereIn('user_id', $userIds)
+                    ->orderByRaw("FIELD(user_id, " . implode(',', $userIds->toArray()) . ")")
+                    ->get()
+                : collect();
 
             $suggestions = $suggestions->merge($users);
         }
