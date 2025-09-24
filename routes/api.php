@@ -82,7 +82,7 @@ Route::post('/register', function (Request $request) {
     ], 201);
 });
 
-// 🚀 Register khusus Parent tanpa email & full_name
+// 🚀 Register khusus Parent tanpa email & full_name, auto verified
 Route::post('/register-parent', function (Request $request) {
     $request->validate([
         'username' => [
@@ -106,14 +106,18 @@ Route::post('/register-parent', function (Request $request) {
         'banner_url' => 'https://api-new.portalsi.com/storage/default-banner.png'
     ]);
 
+    // 🔥 langsung verifikasi email meskipun null
+    $user->markEmailAsVerified();
+
     $token = $user->createToken('api-token')->plainTextToken;
 
     return response()->json([
-        'message' => 'Parent registered successfully.',
+        'message' => 'Parent registered successfully (auto verified).',
         'token' => $token,
         'user' => $user
     ], 201);
 });
+
 
 
 // ✅ Login API aman
