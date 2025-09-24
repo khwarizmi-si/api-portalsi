@@ -306,11 +306,11 @@ Route::middleware(['auth:sanctum'])->get('/parent-groups', function (Request $re
         ->select('groups.id', 'groups.name', 'groups.description', 'groups.avatar_url')
         ->get();
 
-    // 2️⃣ Tambahkan unread_message_count
+    // 2️⃣ Hitung unread_message_count per grup
     $result = $groups->map(function ($group) use ($user) {
         $unreadCount = DB::table('group_messages')
             ->leftJoin('group_message_reads', function ($join) use ($user) {
-                $join->on('group_messages.id', '=', 'group_message_reads.message_id')
+                $join->on('group_messages.id', '=', 'group_message_reads.group_message_id') // ✅ pakai kolom yg benar
                      ->where('group_message_reads.user_id', '=', $user->user_id);
             })
             ->where('group_messages.group_id', $group->id)
