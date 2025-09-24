@@ -82,6 +82,43 @@ Route::post('/register', function (Request $request) {
     ], 201);
 });
 
+// 🚀 Login + Cek Membership (tanpa Sanctum)
+Route::post('/login-check', function (Request $request) {
+    // 1️⃣ Validasi input
+    $request->validate([
+        'username' => 'required|string',
+        'password' => 'required|string',
+    ]);
+
+    // 2️⃣ Cari user berdasarkan username (lowercase biar konsisten)
+    $user = User::where('username', strtolower($request->username))->first();
+
+    // 3️⃣ Cek apakah user ada & password cocok
+    if (!$user || !Hash::check($request->password, $user->password_hash)) {
+        return response()->json([
+            'success' => false,
+            'message' => 'Username atau password salah',
+        ], 401);
+    }
+
+    // 4️⃣ Ambil grup user (relasi ke tabel groups)
+    $groups = $user->groups()
+        ->select('groups.id as group_id', 'groups.name')
+        ->get();
+
+    // 5️⃣ Return JSON
+    return response()->json([
+        'success' => true,
+        'user'    => [
+            'id'        => $user->user_id,
+            'username'  => $user->username,
+            'full_name' => $user->full_name,
+            'role'      => $user->role,
+        ],
+        'groups'  => $groups,
+    ]);
+});
+
 // 🚀 Register khusus Parent tanpa email & full_name, auto verified
 Route::post('/register-parent', function (Request $request) {
     $request->validate([
