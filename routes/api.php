@@ -66,7 +66,8 @@ Route::post('/register', function (Request $request) {
         'email' => strtolower($request->email),     // 👈 Lowercase email
         'password_hash' => bcrypt($request->password),
         'role' => $request->role ?? 'student',
-        'profile_picture_url' => 'https://api-new.portalsi.com/storage/default-profile.png'
+        'profile_picture_url' => 'https://api-new.portalsi.com/storage/default-profile.png',
+        'banner_url' => 'https://api-new.portalsi.com/storage/default-banner.png'
     ]);
 
     $user->sendEmailVerificationNotification();
