@@ -13,11 +13,6 @@ class AnnouncementController extends Controller
 // 🔹 List semua pengumuman (terbaru dulu)
 public function index()
 {
-    // cek apakah user login dan punya is_verified = 1
-    if (!Auth::check() || Auth::user()->is_verified != 1) {
-        return response()->json(['message' => 'Only admin can access all announcements! Please use /api/announcements/pinned instead.'], 403);
-    }
-
     return Announcement::with([
         'creator:user_id,full_name,username,profile_picture_url'
     ])->latest()->get();

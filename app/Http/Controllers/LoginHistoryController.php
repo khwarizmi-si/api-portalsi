@@ -4,18 +4,29 @@ namespace App\Http\Controllers;
 
 use Illuminate\Http\Request;
 use App\Models\LoginHistory;
-use Carbon\Carbon;
 use Laravel\Sanctum\PersonalAccessToken;
 
 class LoginHistoryController extends Controller
 {
-    // List (paginated)
+    // List tanpa pagination (menampilkan semua field sesuai struktur tabel)
     public function index(Request $request)
     {
-        $perPage = (int) $request->query('perPage', 15);
-        $histories = LoginHistory::where('user_id', $request->user()->id)
+        $histories = LoginHistory::select(
+                'id',
+                'user_id',
+                'token_id',
+                'ip_address',
+                'user_agent',
+                'device',
+                'browser',
+                'platform',
+                'login_at',
+                'created_at',
+                'updated_at'
+            )
+            ->where('user_id', $request->user()->user_id)
             ->orderByDesc('login_at')
-            ->paginate($perPage);
+            ->get();
 
         return response()->json($histories);
     }
@@ -23,7 +34,7 @@ class LoginHistoryController extends Controller
     // Hapus history tertentu — hanya boleh jika sudah >= 7 hari
     public function destroy(Request $request, $id)
     {
-        $history = LoginHistory::where('user_id', $request->user()->id)
+        $history = LoginHistory::where('user_id', $request->user()->user_id)
             ->where('id', $id)
             ->firstOrFail();
 

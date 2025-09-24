@@ -284,7 +284,7 @@ class PostController extends Controller
 public function explore(Request $request)
 {
     $page = max(1, (int) $request->input('page', 1));
-    $perPage = max(1, (int) $request->input('per_page', 10));
+    $perPage = max(1, (int) $request->input('per_page', 15));
 
     $query = Post::with(['user', 'tags'])
         ->withCount(['likes', 'comments'])
