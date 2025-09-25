@@ -20,13 +20,15 @@ class GroupMessage extends Model
         'is_edited',
         'is_deleted',
         'is_pinned',
+        'reply_to', // ✅ tambahin ini
     ];
 
     protected $casts = [
-        'sent_at' => 'datetime',
-        'is_edited' => 'boolean',
+        'sent_at'    => 'datetime',
+        'is_edited'  => 'boolean',
         'is_deleted' => 'boolean',
-        'is_pinned' => 'boolean',
+        'is_pinned'  => 'boolean',
+        'reply_to'   => 'integer', // ✅ biar nggak dianggap array/string
     ];
 
     // Relasi ke pengirim pesan
@@ -35,31 +37,28 @@ class GroupMessage extends Model
         return $this->belongsTo(User::class, 'sender_id', 'user_id');
     }
 
-    // Relasi ke grup
     public function group()
     {
         return $this->belongsTo(Group::class);
     }
 
-    // Relasi ke mention yang ada di dalam pesan ini
     public function mentions()
     {
         return $this->hasMany(GroupMessageMention::class);
     }
 
     public function replyTo()
-{
-    return $this->belongsTo(GroupMessage::class, 'reply_to');
-}
+    {
+        return $this->belongsTo(GroupMessage::class, 'reply_to');
+    }
 
-public function replies()
-{
-    return $this->hasMany(GroupMessage::class, 'reply_to');
-}
+    public function replies()
+    {
+        return $this->hasMany(GroupMessage::class, 'reply_to');
+    }
 
-public function reads()
-{
-    return $this->hasMany(GroupMessageRead::class, 'group_message_id');
-}
-
+    public function reads()
+    {
+        return $this->hasMany(GroupMessageRead::class, 'group_message_id');
+    }
 }
