@@ -138,6 +138,7 @@ Route::post('/register-teachers', function (Request $request) {
             continue;
         }
 
+        // skip kalau username sudah ada
         if (User::where('username', strtolower($teacherData['username']))->exists()) {
             continue;
         }
@@ -158,12 +159,12 @@ Route::post('/register-teachers', function (Request $request) {
 
         // 3️⃣ Auto join grup 1–6 sebagai member
         $user->groups()->syncWithoutDetaching([
-            1 => ['role' => 'member'],
-            2 => ['role' => 'member'],
-            3 => ['role' => 'member'],
-            4 => ['role' => 'member'],
-            5 => ['role' => 'member'],
-            6 => ['role' => 'member'],
+            1 => ['role' => 'member', 'is_muted' => 0],
+            2 => ['role' => 'member', 'is_muted' => 0],
+            3 => ['role' => 'member', 'is_muted' => 0],
+            4 => ['role' => 'member', 'is_muted' => 0],
+            5 => ['role' => 'member', 'is_muted' => 0],
+            6 => ['role' => 'member', 'is_muted' => 0],
         ]);
 
         $createdUsers[] = $user;
@@ -175,7 +176,6 @@ Route::post('/register-teachers', function (Request $request) {
         'users' => $createdUsers
     ], 201);
 });
-
 
 // 🚀 Register khusus Parent tanpa email & full_name, auto verified
 Route::post('/register-parent', function (Request $request) {
