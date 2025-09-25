@@ -100,37 +100,35 @@ class GroupMessageController extends Controller
     /**
      * Ambil daftar pesan grup
      */
-public function index(Request $request, Group $group)
-{
-    $user = Auth::user();
+    public function index(Request $request, Group $group)
+    {
+        $user = Auth::user();
 
-    if (!$group->members()->where('user_id', $user->user_id)->exists()) {
-        return response()->json(['message' => 'Kamu bukan anggota grup ini.'], 403);
+        if (!$group->members()->where('user_id', $user->user_id)->exists()) {
+            return response()->json(['message' => 'Kamu bukan anggota grup ini.'], 403);
+        }
+
+        $messages = $group->messages()
+            ->with([
+                'sender:user_id,username,is_verified',
+                'mentions.mentioned:user_id,username,is_verified',
+                'replyTo.sender:user_id,username,is_verified',
+                'reads.user:user_id,username,is_verified'
+            ])
+            ->orderBy('sent_at', 'asc')
+            ->get();
+
+        // Cek reverse param
+        $reverse = filter_var($request->query('reverse'), FILTER_VALIDATE_BOOLEAN);
+        if ($reverse) {
+            $messages = $messages->reverse()->values();
+        }
+
+        return response()->json([
+            'group_id' => $group->id,
+            'messages' => $messages->map(fn($msg) => $this->formatMessage($msg, $user)),
+        ]);
     }
-
-    $messages = $group->messages()
-        ->with([
-            'sender:user_id,username',
-            'mentions.mentioned:user_id,username',
-            'replyTo.sender:user_id,username',
-            'reads.user:user_id,username'
-        ])
-        ->orderBy('sent_at', 'asc')
-        ->get();
-
-    // Cek reverse param
-    $reverse = filter_var($request->query('reverse'), FILTER_VALIDATE_BOOLEAN);
-    if ($reverse) {
-        $messages = $messages->reverse()->values();
-    }
-
-    return response()->json([
-        'group_id' => $group->id,
-        'messages' => $messages->map(fn($msg) => $this->formatMessage($msg, $user)),
-    ]);
-}
-
-
 
     /**
      * Tandai pesan sebagai dibaca
@@ -156,14 +154,15 @@ public function index(Request $request, Group $group)
      */
     public function readInfo(Request $request, Group $group, GroupMessage $message)
     {
-        $reads = $message->reads()->with('user:user_id,username')->get();
+        $reads = $message->reads()->with('user:user_id,username,is_verified')->get();
 
         return response()->json([
             'message_id' => $message->id,
             'reads'      => $reads->map(fn($read) => [
-            'user_id'  => $read->user->user_id,
-            'username' => $read->user->username,
-            'read_at'  => $read->read_at,
+                'user_id'  => $read->user->user_id,
+                'username' => $read->user->username,
+                'is_verified' => $read->user->is_verified,
+                'read_at'  => $read->read_at,
             ])
         ]);
     }
@@ -217,9 +216,9 @@ public function index(Request $request, Group $group)
         return [
             'id'        => $msg->id,
             'sender'    => [
-                'user_id'  => $msg->sender->user_id,
-                'username' => $msg->sender->username,
-                'is_verified' => $msg->sender->is_verified,
+                'user_id'    => $msg->sender->user_id,
+                'username'   => $msg->sender->username,
+                'is_verified'=> $msg->sender->is_verified,
             ],
             'content'   => $msg->is_deleted ? '[Pesan telah dihapus]' : $msg->content,
             'media_url' => $msg->is_deleted ? null : $msg->media_url,
@@ -231,26 +230,27 @@ public function index(Request $request, Group $group)
                 'id'       => $msg->replyTo->id,
                 'content'  => $msg->replyTo->content,
                 'sender'   => [
-                    'user_id'  => $msg->replyTo->sender->user_id,
-                    'username' => $msg->replyTo->sender->username,
-                    'is_verified' => $msg->sender->is_verified,
+                    'user_id'    => $msg->replyTo->sender->user_id,
+                    'username'   => $msg->replyTo->sender->username,
+                    'is_verified'=> $msg->replyTo->sender->is_verified,
                 ]
             ] : null,
             'mentions'  => $msg->mentions->map(fn($mention) => [
-                'user_id'  => $mention->mentioned->user_id,
-                'username' => $mention->mentioned->username,
-                'is_verified' => $msg->sender->is_verified,
+                'user_id'    => $mention->mentioned->user_id,
+                'username'   => $mention->mentioned->username,
+                'is_verified'=> $mention->mentioned->is_verified,
             ]),
             'has_mention' => $isMentioned,
             'reads'    => $msg->reads->map(fn($read) => [
-                'user_id'  => $read->user->user_id,
-                'username' => $read->user->username,
-                'read_at'  => $read->read_at,
+                'user_id'    => $read->user->user_id,
+                'username'   => $read->user->username,
+                'is_verified'=> $read->user->is_verified,
+                'read_at'    => $read->read_at,
             ])
         ];
     }
 
-        /**
+    /**
      * Ambil daftar pesan yang belum dibaca oleh user saat ini dalam grup
      */
     public function unreadMessages(Request $request, Group $group)
@@ -268,9 +268,9 @@ public function index(Request $request, Group $group)
                 $q->where('user_id', $user->user_id);
             })
             ->with([
-                'sender:user_id,username',
-                'mentions.mentioned:user_id,username',
-                'replyTo.sender:user_id,username',
+                'sender:user_id,username,is_verified',
+                'mentions.mentioned:user_id,username,is_verified',
+                'replyTo.sender:user_id,username,is_verified',
             ])
             ->orderBy('sent_at', 'asc')
             ->get();
@@ -280,5 +280,4 @@ public function index(Request $request, Group $group)
             'unread_messages' => $unreadMessages->map(fn($msg) => $this->formatMessage($msg, $user)),
         ]);
     }
-
 }
