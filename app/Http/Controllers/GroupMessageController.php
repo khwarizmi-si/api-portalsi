@@ -233,11 +233,13 @@ public function index(Request $request, Group $group)
                 'sender'   => [
                     'user_id'  => $msg->replyTo->sender->user_id,
                     'username' => $msg->replyTo->sender->username,
+                    'is_verified' => $msg->sender->is_verified,
                 ]
             ] : null,
             'mentions'  => $msg->mentions->map(fn($mention) => [
                 'user_id'  => $mention->mentioned->user_id,
                 'username' => $mention->mentioned->username,
+                'is_verified' => $msg->sender->is_verified,
             ]),
             'has_mention' => $isMentioned,
             'reads'    => $msg->reads->map(fn($read) => [
