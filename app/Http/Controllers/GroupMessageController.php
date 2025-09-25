@@ -31,7 +31,7 @@ class GroupMessageController extends Controller
         $request->validate([
             'content'   => 'nullable|string',
             'media'     => 'nullable|file|mimes:jpg,jpeg,png,pdf|max:51200',
-            'reply_to'  => $request->reply_to ? (int) $request->reply_to : null,
+            'reply_to'  => 'nullable|exists:group_messages,id',
         ]);
 
         // Upload media (jika ada)
@@ -43,15 +43,14 @@ class GroupMessageController extends Controller
         }
 
         // Simpan pesan
-$message = GroupMessage::create([
-    'group_id'  => $group->id,
-    'sender_id' => $user->user_id,
-    'content'   => $request->content,
-    'media_url' => $mediaUrl,
-    'reply_to'  => $request->reply_to ? (int) $request->reply_to : null,
-    'sent_at'   => now(),
-]);
-
+        $message = GroupMessage::create([
+            'group_id'  => $group->id,
+            'sender_id' => $user->user_id,
+            'content'   => $request->content,
+            'media_url' => $mediaUrl,
+            'reply_to'  => $request->reply_to,
+            'sent_at'   => now(),
+        ]);
 
         // refresh agar relasi ikut
         $message = $message->fresh(['sender', 'replyTo.sender']);
