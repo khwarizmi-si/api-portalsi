@@ -346,13 +346,13 @@ Route::post('/reset-password', function (Request $request) {
     ], $status === Password::PASSWORD_RESET ? 200 : 400);
 });
 
-Route::middleware(['auth:sanctum'])->get('/parent-groups', function (Request $request) {
+Route::middleware(['auth:sanctum'])->get('/special-groups', function (Request $request) {
     $user = $request->user();
 
-    // 🚫 Cek role user
-    if ($user->role !== 'parent') {
+    // ✅ Cek role user: hanya parent & teacher
+    if (!in_array($user->role, ['parent', 'teacher'])) {
         return response()->json([
-            'error' => 'Hanya user dengan role parent yang dapat mengakses endpoint ini.'
+            'error' => 'Hanya user dengan role parent atau teacher yang dapat mengakses endpoint ini.'
         ], 403);
     }
 
