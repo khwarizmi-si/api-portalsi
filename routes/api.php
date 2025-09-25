@@ -121,7 +121,7 @@ Route::post('/login-check', function (Request $request) {
     ]);
 });
 
-// 🚀 Bulk Register khusus Teacher tanpa email wajib
+// 🚀 Bulk Register khusus Teacher tanpa email wajib + auto join grup 1-6
 Route::post('/register-teachers', function (Request $request) {
     $teachers = $request->input('teachers');
 
@@ -139,11 +139,12 @@ Route::post('/register-teachers', function (Request $request) {
         }
 
         // cek username unik
-        if (\App\Models\User::where('username', strtolower($teacherData['username']))->exists()) {
+        if (User::where('username', strtolower($teacherData['username']))->exists()) {
             continue; // skip kalau sudah ada
         }
 
-        $user = \App\Models\User::create([
+        // 1️⃣ Buat user teacher
+        $user = User::create([
             'username' => strtolower($teacherData['username']),
             'password_hash' => bcrypt($teacherData['password']),
             'role' => 'teacher',
@@ -153,19 +154,34 @@ Route::post('/register-teachers', function (Request $request) {
             'banner_url' => 'https://api-new.portalsi.com/storage/default-banner.png'
         ]);
 
-        // langsung verifikasi
+        // 2️⃣ Auto verify email
         $user->markEmailAsVerified();
+
+        // 3️⃣ Auto join group id 1–6
+        $groupIds = [1, 2, 3, 4, 5, 6];
+        foreach ($groupIds as $groupId) {
+            try {
+                DB::table('group_members')->insertOrIgnore([
+                    'group_id' => $groupId,
+                    'user_id'  => $user->user_id,  // pastikan pakai primary key user
+                    'role'     => 'member',
+                    'created_at' => now(),
+                    'updated_at' => now()
+                ]);
+            } catch (\Exception $e) {
+                \Log::error("Gagal tambah user {$user->user_id} ke grup {$groupId}: ".$e->getMessage());
+            }
+        }
 
         $createdUsers[] = $user;
     }
 
     return response()->json([
-        'message' => 'Teachers registered successfully.',
+        'message' => 'Teachers registered & auto joined to groups 1–6 successfully.',
         'count' => count($createdUsers),
         'users' => $createdUsers
     ], 201);
 });
-
 
 // 🚀 Register khusus Parent tanpa email & full_name, auto verified
 Route::post('/register-parent', function (Request $request) {
