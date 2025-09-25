@@ -219,6 +219,7 @@ public function index(Request $request, Group $group)
             'sender'    => [
                 'user_id'  => $msg->sender->user_id,
                 'username' => $msg->sender->username,
+                'is_verified' => $msg->sender->is_verified,
             ],
             'content'   => $msg->is_deleted ? '[Pesan telah dihapus]' : $msg->content,
             'media_url' => $msg->is_deleted ? null : $msg->media_url,
