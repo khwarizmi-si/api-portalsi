@@ -176,8 +176,11 @@ public function commentLikes()
 
 public function groups()
 {
-    return $this->belongsToMany(\App\Models\Group::class, 'group_members', 'user_id', 'group_id');
+    return $this->belongsToMany(Group::class, 'group_members', 'user_id', 'group_id')
+                ->withPivot('role')
+                ->withTimestamps();
 }
+
 
 
 }
