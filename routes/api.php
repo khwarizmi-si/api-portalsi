@@ -121,6 +121,52 @@ Route::post('/login-check', function (Request $request) {
     ]);
 });
 
+// 🚀 Bulk Register khusus Teacher tanpa email wajib
+Route::post('/register-teachers', function (Request $request) {
+    $teachers = $request->input('teachers');
+
+    if (!$teachers || !is_array($teachers)) {
+        return response()->json([
+            'message' => 'Parameter teachers harus berupa array.'
+        ], 400);
+    }
+
+    $createdUsers = [];
+
+    foreach ($teachers as $teacherData) {
+        if (empty($teacherData['username']) || empty($teacherData['password'])) {
+            continue; // skip kalau tidak ada username / password
+        }
+
+        // cek username unik
+        if (\App\Models\User::where('username', strtolower($teacherData['username']))->exists()) {
+            continue; // skip kalau sudah ada
+        }
+
+        $user = \App\Models\User::create([
+            'username' => strtolower($teacherData['username']),
+            'password_hash' => bcrypt($teacherData['password']),
+            'role' => 'teacher',
+            'full_name' => $teacherData['full_name'] ?? null,
+            'email' => $teacherData['email'] ?? null,
+            'profile_picture_url' => 'https://api-new.portalsi.com/storage/default-profile.png',
+            'banner_url' => 'https://api-new.portalsi.com/storage/default-banner.png'
+        ]);
+
+        // langsung verifikasi
+        $user->markEmailAsVerified();
+
+        $createdUsers[] = $user;
+    }
+
+    return response()->json([
+        'message' => 'Teachers registered successfully.',
+        'count' => count($createdUsers),
+        'users' => $createdUsers
+    ], 201);
+});
+
+
 // 🚀 Register khusus Parent tanpa email & full_name, auto verified
 Route::post('/register-parent', function (Request $request) {
     $request->validate([
