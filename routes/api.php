@@ -16,6 +16,7 @@ use Illuminate\Foundation\Auth\EmailVerificationRequest;
 use Illuminate\Support\Str;
 use App\Models\User;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Validator;
 use App\Models\Group;
 use App\Http\Controllers\{
     PostController,
@@ -42,7 +43,7 @@ use App\Http\Controllers\{
 
 // 🚀 PUBLIC ROUTES
 Route::post('/register', function (Request $request) {
-    $request->validate([
+    $validator = Validator::make($request->all(), [
         'username' => [
             'required',
             'string',
@@ -57,6 +58,12 @@ Route::post('/register', function (Request $request) {
         'username.regex' => 'Username hanya boleh berisi huruf, angka, titik, dan underscore tanpa spasi atau simbol lain.'
     ]);
 
+    if ($validator->fails()) {
+        return response()->json([
+            'errors' => $validator->errors()
+        ], 422);
+    }
+
     if ($request->role === 'dev') {
         return response()->json([
             'message' => 'Role "dev" tidak diizinkan untuk registrasi publik.'
@@ -64,9 +71,9 @@ Route::post('/register', function (Request $request) {
     }
 
     $user = User::create([
-        'username' => strtolower($request->username), // 👈 Lowercase username
+        'username' => strtolower($request->username),
         'full_name' => $request->full_name,
-        'email' => strtolower($request->email),     // 👈 Lowercase email
+        'email' => strtolower($request->email),
         'password_hash' => bcrypt($request->password),
         'role' => $request->role ?? 'student',
         'profile_picture_url' => 'https://api-new.portalsi.com/storage/default-profile.png',
