@@ -51,39 +51,14 @@ public function index(Request $request)
         ->where('status', 'accepted')
         ->pluck('followed_id');
 
-    // ========== PINNED POSTS ==========
-    $pinnedPosts = collect();
-    if ($page === 1 && $followingIds->isNotEmpty()) {
-        $pinnedPosts = Post::with(['user', 'tags', 'mentions'])
-            ->withCount(['likes', 'comments'])
-            ->whereIn('user_id', $followingIds)
-            ->whereHas('user', fn($q) => $q->where('is_private', 0))
-            ->orderByDesc('created_at')
-            ->take(5)
-            ->get()
-            ->map(function ($post) use ($authUser) {
-                $post->is_liked = $post->likes()->where('user_id', $authUser->user_id)->exists();
-                $post->is_bookmarked = $post->bookmarks()->where('user_id', $authUser->user_id)->exists();
-                $post->type = 'post';
-                $post->is_pinned = true;
-
-                // tambahkan story info
-                $post->user = $this->attachStoryInfo($post->user, $authUser);
-
-                return $post;
-            })
-            ->shuffle(); // 🔥 pinned acak
-    }
-    $pinnedIds = $pinnedPosts->pluck('post_id');
-
     // ========== MAIN POSTS ==========
     $mainPosts = collect();
 
     if ($followingIds->isEmpty()) {
+        // Jika user belum follow siapa pun → tampilkan random feed
         $mainPosts = Post::with(['user', 'tags', 'mentions'])
             ->withCount(['likes', 'comments'])
             ->whereHas('user', fn($q) => $q->where('is_private', 0))
-            ->whereNotIn('post_id', $pinnedIds)
             ->orderByDesc('created_at')
             ->get()
             ->map(function ($post) use ($authUser) {
@@ -97,22 +72,23 @@ public function index(Request $request)
             ->shuffle() // 🔥 acak feed non-following
             ->values();
     } else {
-        // distribusi feed
+        // Distribusi feed
         $total = 100;
         $countTimeline = (int) round($total * 0.50);
         $countRelasi   = (int) round($total * 0.10);
         $countRandom   = (int) round($total * 0.25);
         $countLiked    = (int) round($total * 0.15);
 
+        // Timeline posts (dari following + diri sendiri)
         $timelinePosts = Post::with(['user', 'tags', 'mentions'])
             ->withCount(['likes', 'comments'])
             ->whereIn('user_id', $followingIds->push($authUser->user_id))
             ->whereHas('user', fn($q) => $q->where('is_private', 0))
-            ->whereNotIn('post_id', $pinnedIds)
             ->orderByDesc('created_at')
             ->take($countTimeline)
             ->get();
 
+        // Second degree (temannya teman)
         $secondDegreeIds = DB::table('follows')
             ->whereIn('follower_id', $followingIds)
             ->whereNotIn('followed_id', $followingIds)
@@ -123,21 +99,21 @@ public function index(Request $request)
             ->withCount(['likes', 'comments'])
             ->whereIn('user_id', $secondDegreeIds)
             ->whereHas('user', fn($q) => $q->where('is_private', 0))
-            ->whereNotIn('post_id', $pinnedIds)
             ->orderByDesc('created_at')
             ->take($countRelasi)
             ->get();
 
+        // Random posts dari user lain
         $randomPosts = Post::with(['user', 'tags', 'mentions'])
             ->withCount(['likes', 'comments'])
             ->whereNotIn('user_id', $followingIds)
             ->where('user_id', '!=', $authUser->user_id)
             ->whereHas('user', fn($q) => $q->where('is_private', 0))
-            ->whereNotIn('post_id', $pinnedIds)
             ->inRandomOrder()
             ->take($countRandom)
             ->get();
 
+        // Posts yang disukai oleh following
         $likedByFollowingIds = DB::table('likes')
             ->whereIn('user_id', $followingIds)
             ->pluck('post_id');
@@ -146,17 +122,17 @@ public function index(Request $request)
             ->withCount(['likes', 'comments'])
             ->whereIn('post_id', $likedByFollowingIds)
             ->whereHas('user', fn($q) => $q->where('is_private', 0))
-            ->whereNotIn('post_id', $pinnedIds)
             ->orderByDesc('created_at')
             ->take($countLiked)
             ->get();
 
-        // 🔥 Shuffle setiap kategori
+        // 🔥 Shuffle tiap kategori
         $timelinePosts = $timelinePosts->shuffle();
         $relasiPosts   = $relasiPosts->shuffle();
         $randomPosts   = $randomPosts->shuffle();
         $likedPosts    = $likedPosts->shuffle();
 
+        // Gabungkan
         $mainPosts = $timelinePosts
             ->merge($relasiPosts)
             ->merge($randomPosts)
@@ -256,15 +232,9 @@ public function index(Request $request)
     ->values();
 
     // ========== MERGE POSTS + SUGGESTIONS ==========
-    $feed = collect();
-    if ($page === 1) {
-        $feed = $feed->merge($pinnedPosts);
-    }
-    $feed = $feed->merge($postsSlice)->values();
-
     $feedWithSuggestions = collect();
     $postCount = 0;
-    foreach ($feed as $item) {
+    foreach ($postsSlice as $item) {
         $feedWithSuggestions->push($item);
         $postCount++;
         if ($postCount === 2 || ($postCount > 2 && $postCount % 8 === 0)) {
