@@ -71,7 +71,8 @@ public function index(Request $request)
                 $post->user = $this->attachStoryInfo($post->user, $authUser);
 
                 return $post;
-            });
+            })
+            ->shuffle(); // 🔥 pinned acak
     }
     $pinnedIds = $pinnedPosts->pluck('post_id');
 
@@ -90,12 +91,10 @@ public function index(Request $request)
                 $post->is_bookmarked = $post->bookmarks()->where('user_id', $authUser->user_id)->exists();
                 $post->type = 'post';
 
-                // tambahkan story info
                 $post->user = $this->attachStoryInfo($post->user, $authUser);
-
                 return $post;
             })
-            ->shuffle() // 🔥 acak feed untuk non-following
+            ->shuffle() // 🔥 acak feed non-following
             ->values();
     } else {
         // distribusi feed
@@ -152,7 +151,7 @@ public function index(Request $request)
             ->take($countLiked)
             ->get();
 
-        // 🔥 Shuffle setiap kategori sebelum merge
+        // 🔥 Shuffle setiap kategori
         $timelinePosts = $timelinePosts->shuffle();
         $relasiPosts   = $relasiPosts->shuffle();
         $randomPosts   = $randomPosts->shuffle();
@@ -167,9 +166,7 @@ public function index(Request $request)
                 $post->is_bookmarked = $post->bookmarks()->where('user_id', $authUser->user_id)->exists();
                 $post->type = 'post';
 
-                // tambahkan story info
                 $post->user = $this->attachStoryInfo($post->user, $authUser);
-
                 return $post;
             })
             ->shuffle() // 🔥 acak lagi setelah merge
@@ -251,13 +248,10 @@ public function index(Request $request)
             ->exists();
 
         $user->is_follow_back = $isFollowBack;
-
-        // tambahkan story info
         $user = $this->attachStoryInfo($user, $authUser);
-
         return $user;
     })
-    ->shuffle() // 🔥 shuffle suggestions biar beda tiap refresh
+    ->shuffle() // 🔥 suggestions acak setiap refresh
     ->sortByDesc('is_follow_back')
     ->values();
 
