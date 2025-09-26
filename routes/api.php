@@ -8,6 +8,8 @@ use Illuminate\Support\Facades\Hash;
 use Illuminate\Support\Facades\Password;
 use Illuminate\Support\Facades\Broadcast;
 use Illuminate\Support\Facades\Auth;
+use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Validator;
 use Illuminate\Validation\ValidationException;
 use Illuminate\Auth\Events\PasswordReset;
 use App\Http\Controllers\UserSuggestionController;
@@ -15,8 +17,6 @@ use Illuminate\Auth\Events\Verified;
 use Illuminate\Foundation\Auth\EmailVerificationRequest;
 use Illuminate\Support\Str;
 use App\Models\User;
-use Illuminate\Support\Facades\DB;
-use Illuminate\Support\Facades\Validator;
 use App\Models\Group;
 use App\Http\Controllers\{
     PostController,
@@ -43,33 +43,38 @@ use App\Http\Controllers\{
 
 // 🚀 PUBLIC ROUTES
 Route::post('/register', function (Request $request) {
+    // 🔹 Buat validator manual
     $validator = Validator::make($request->all(), [
         'username' => [
             'required',
             'string',
-            'unique:users',
+            'unique:users,username',
             'regex:/^[a-zA-Z0-9._]+$/'
         ],
         'full_name' => 'required|string',
-        'email' => 'required|email|unique:users',
+        'email' => 'required|email|unique:users,email',
         'password' => 'required|min:6',
         'role' => 'in:teacher,parent,student,other'
     ], [
-        'username.regex' => 'Username hanya boleh berisi huruf, angka, titik, dan underscore tanpa spasi atau simbol lain.'
+        'username.regex' => 'Username hanya boleh berisi huruf, angka, titik, dan underscore tanpa spasi atau simbol lain.',
     ]);
 
+    // 🔹 Kalau validasi gagal -> return JSON
     if ($validator->fails()) {
         return response()->json([
+            'message' => 'Validation failed',
             'errors' => $validator->errors()
         ], 422);
     }
 
+    // 🔹 Cek role dev
     if ($request->role === 'dev') {
         return response()->json([
             'message' => 'Role "dev" tidak diizinkan untuk registrasi publik.'
         ], 403);
     }
 
+    // 🔹 Simpan user baru
     $user = User::create([
         'username' => strtolower($request->username),
         'full_name' => $request->full_name,
@@ -80,8 +85,10 @@ Route::post('/register', function (Request $request) {
         'banner_url' => 'https://api-new.portalsi.com/storage/default-banner.png',
     ]);
 
+    // 🔹 Kirim verifikasi email
     $user->sendEmailVerificationNotification();
 
+    // 🔹 Buat token
     $token = $user->createToken('api-token')->plainTextToken;
 
     return response()->json([
