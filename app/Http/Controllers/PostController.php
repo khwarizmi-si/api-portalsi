@@ -466,72 +466,60 @@ public function explore(Request $request)
     ]);
 }
 
-public function clips(Request $request)
+public function clips($id, Request $request)
 {
-    $page = max(1, (int) $request->input('page', 1));
-    // 🔥 per_page max 2
-    $perPage = min(max(1, (int) $request->input('per_page', 2)), 2);
+    $authUser = Auth::user();
 
-    $query = Post::with(['user', 'tags'])
+    // Ambil clip utama
+    $mainClip = Post::with(['user', 'tags'])
         ->withCount(['likes', 'comments'])
+        ->where('is_video', true)
         ->where('is_archived', false)
-        ->where('is_video', true); // hanya ambil video (clips)
+        ->findOrFail($id);
 
-    // Filter berdasarkan tag (opsional)
-    if ($request->filled('tag')) {
-        $tagName = $request->tag;
-        $query->whereHas('tags', fn($q) => $q->where('tag_name', $tagName));
-    }
+    // Tambahkan info is_liked & is_bookmarked
+    $mainClip->is_liked = $authUser
+        ? $mainClip->likes()->where('user_id', $authUser->user_id)->exists()
+        : false;
 
-    // Sorting
-    $sort = $request->input('sort', 'random');
-    if ($sort === 'popular') {
-        $query->orderByDesc('likes_count');
-    } elseif ($sort === 'newest') {
-        $query->orderByDesc('created_at');
-    } else {
-        $query->inRandomOrder();
-    }
+    $mainClip->is_bookmarked = $authUser
+        ? $mainClip->bookmarks()->where('user_id', $authUser->user_id)->exists()
+        : false;
 
-    $total = $query->count();
+    $mainClip->type = 'clip';
 
-    $posts = $query->skip(($page - 1) * $perPage)
-                   ->take($perPage)
-                   ->get()
-                   ->map(function ($post) {
-                        $post->type = 'clip'; // tandai sebagai clip
-                        return $post;
-                   });
+    // Ambil 2 clip setelah id ini (urut berdasarkan post_id naik)
+    $nextClips = Post::with(['user', 'tags'])
+        ->withCount(['likes', 'comments'])
+        ->where('is_video', true)
+        ->where('is_archived', false)
+        ->where('post_id', '>', $id)
+        ->orderBy('post_id', 'asc')
+        ->take(2)
+        ->get()
+        ->map(function ($post) use ($authUser) {
+            $post->is_liked = $authUser
+                ? $post->likes()->where('user_id', $authUser->user_id)->exists()
+                : false;
 
-    $paginator = new LengthAwarePaginator(
-        $posts,
-        $total,
-        $perPage,
-        $page,
-        [
-            'path' => $request->url(),
-            'query' => $request->query(),
-        ]
-    );
+            $post->is_bookmarked = $authUser
+                ? $post->bookmarks()->where('user_id', $authUser->user_id)->exists()
+                : false;
 
-    $nextPage = $paginator->currentPage() < $paginator->lastPage()
-        ? $request->url() . '?' . http_build_query(array_merge($request->query(), ['page' => $paginator->currentPage() + 1]))
+            $post->type = 'clip';
+            return $post;
+        });
+
+    // Buat next_page_url berdasarkan id terakhir
+    $lastId = $nextClips->last()?->post_id;
+    $nextPageUrl = $lastId
+        ? url('/api/clips/' . $lastId)
         : null;
-
-    $prevPage = $paginator->currentPage() > 1
-        ? $request->url() . '?' . http_build_query(array_merge($request->query(), ['page' => $paginator->currentPage() - 1]))
-        : null;
-
-    $lastPage = $request->url() . '?' . http_build_query(array_merge($request->query(), ['page' => $paginator->lastPage()]));
 
     return response()->json([
-        'current_page' => $paginator->currentPage(),
-        'per_page' => $paginator->perPage(),
-        'total' => $paginator->total(),
-        'next_page_url' => $nextPage,
-        'prev_page_url' => $prevPage,
-        'last_page_url' => $lastPage,
-        'clips' => $posts
+        'clip' => $mainClip,
+        'next_clips' => $nextClips,
+        'next_page_url' => $nextPageUrl
     ]);
 }
 
