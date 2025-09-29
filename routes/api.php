@@ -425,6 +425,7 @@ Route::middleware(['auth:sanctum'])->group(function () {
     Route::get('/notifications', [NotificationController::class, 'index']);
     Route::get('/explore', [PostController::class, 'explore']);
     Route::get('/users/search', [ProfileController::class, 'search']);
+    Route::get('/circle-avatars', [PostController::class, 'circleAvatars']);
 
     // 🔐 Only for verified users
     Route::middleware('verified.api')->group(function () {
