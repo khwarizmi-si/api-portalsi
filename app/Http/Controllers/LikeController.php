@@ -91,29 +91,29 @@ public function index($post_id)
 {
     $authUser = Auth::user();
 
-    $followingIds = [];
-    if ($authUser) {
-        $followingIds = \App\Models\Follow::where('follower_id', $authUser->id)
-            ->where('status', 'accepted')
-            ->pluck('followed_id')
-            ->toArray();
-    }
+    // Ambil ID semua user yang di-follow oleh current user (status accepted saja)
+    $followingIds = $authUser 
+        ? $authUser->following()->wherePivot('status', 'accepted')->pluck('users.user_id')->toArray()
+        : [];
 
     $likes = Like::where('post_id', $post_id)
-        ->with('user')
+        ->with('user') // pastikan Like model ada relasi user()
         ->get()
-        ->map(function ($like) use ($followingIds) {
+        ->map(function ($like) use ($followingIds, $authUser) {
             return [
-                'id' => $like->id,
+                'id' => $like->like_id,
                 'post_id' => $like->post_id,
                 'user' => $like->user,
                 'created_at' => $like->created_at,
-                'is_following_status' => in_array($like->user_id, $followingIds), // cek ke LIKER
+                'is_following_status' => $authUser 
+                    ? in_array($like->user_id, $followingIds) 
+                    : false,
             ];
         });
 
     return response()->json($likes);
 }
+
 
 
 }
