@@ -466,4 +466,74 @@ public function explore(Request $request)
     ]);
 }
 
+public function clips(Request $request)
+{
+    $page = max(1, (int) $request->input('page', 1));
+    // 🔥 per_page max 2
+    $perPage = min(max(1, (int) $request->input('per_page', 2)), 2);
+
+    $query = Post::with(['user', 'tags'])
+        ->withCount(['likes', 'comments'])
+        ->where('is_archived', false)
+        ->where('is_video', true); // hanya ambil video (clips)
+
+    // Filter berdasarkan tag (opsional)
+    if ($request->filled('tag')) {
+        $tagName = $request->tag;
+        $query->whereHas('tags', fn($q) => $q->where('tag_name', $tagName));
+    }
+
+    // Sorting
+    $sort = $request->input('sort', 'random');
+    if ($sort === 'popular') {
+        $query->orderByDesc('likes_count');
+    } elseif ($sort === 'newest') {
+        $query->orderByDesc('created_at');
+    } else {
+        $query->inRandomOrder();
+    }
+
+    $total = $query->count();
+
+    $posts = $query->skip(($page - 1) * $perPage)
+                   ->take($perPage)
+                   ->get()
+                   ->map(function ($post) {
+                        $post->type = 'clip'; // tandai sebagai clip
+                        return $post;
+                   });
+
+    $paginator = new LengthAwarePaginator(
+        $posts,
+        $total,
+        $perPage,
+        $page,
+        [
+            'path' => $request->url(),
+            'query' => $request->query(),
+        ]
+    );
+
+    $nextPage = $paginator->currentPage() < $paginator->lastPage()
+        ? $request->url() . '?' . http_build_query(array_merge($request->query(), ['page' => $paginator->currentPage() + 1]))
+        : null;
+
+    $prevPage = $paginator->currentPage() > 1
+        ? $request->url() . '?' . http_build_query(array_merge($request->query(), ['page' => $paginator->currentPage() - 1]))
+        : null;
+
+    $lastPage = $request->url() . '?' . http_build_query(array_merge($request->query(), ['page' => $paginator->lastPage()]));
+
+    return response()->json([
+        'current_page' => $paginator->currentPage(),
+        'per_page' => $paginator->perPage(),
+        'total' => $paginator->total(),
+        'next_page_url' => $nextPage,
+        'prev_page_url' => $prevPage,
+        'last_page_url' => $lastPage,
+        'clips' => $posts
+    ]);
+}
+
+
 }
