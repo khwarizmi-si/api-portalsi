@@ -453,35 +453,27 @@ public function explore(Request $request)
         return response()->json(['message' => 'Post deleted']);
     }
 
-    public function circleAvatars(Request $request)
+    public function circleAvatars($id)
 {
     $authUser = Auth::user();
+    $targetUser = User::findOrFail($id);
 
-    // ambil following + diri sendiri
-    $followingIds = $authUser->following()
+    // Ambil following dari user target
+    $followingIds = $targetUser->following()
         ->where('status', 'accepted')
         ->pluck('followed_id');
 
-    $userIds = $followingIds->push($authUser->user_id);
-
-    // ambil data user
-    $users = User::select('user_id', 'profile_picture_url')
-        ->whereIn('user_id', $userIds)
-        ->get();
-
-    // tambahkan info story
-    $users = $users->map(function ($user) use ($authUser) {
-        $user = $this->attachStoryInfo($user, $authUser);
-        // hanya ambil field yang dibutuhkan
-        return [
-            'user_id' => $user->user_id,
-            'profile_picture_url' => $user->profile_picture_url,
-            'has_story' => $user->has_story,
-        ];
-    })->values();
+    $users = User::whereIn('user_id', $followingIds)
+        ->select('user_id', 'profile_picture_url')
+        ->get()
+        ->map(function ($user) use ($authUser) {
+            // Pakai attachStoryInfo biar ada has_story + story_viewed
+            return $this->attachStoryInfo($user, $authUser);
+        })
+        ->values();
 
     return response()->json([
-        'avatars' => $users
+        'circle_avatars' => $users
     ]);
 }
 
