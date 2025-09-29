@@ -12,6 +12,7 @@ use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\Storage;
 use Illuminate\Pagination\LengthAwarePaginator;
 use DB;
+use Carbon\Carbon;
 
 class PostController extends Controller
 {
@@ -19,27 +20,27 @@ class PostController extends Controller
      * Tambahkan info story (has_story & story_viewed) ke user
      */
     private function attachStoryInfo($user, $authUser)
-    {
-        $storyIds = DB::table('stories')
-            ->where('user_id', $user->user_id)
-            ->pluck('story_id');
+{
+    $storyIds = DB::table('stories')
+        ->where('user_id', $user->user_id)
+        ->where('created_at', '>=', Carbon::now()->subHours(24)) // ⬅️ tambahin filter waktu
+        ->pluck('story_id');
 
-        $user->has_story = $storyIds->isNotEmpty();
+    $user->has_story = $storyIds->isNotEmpty();
 
-        if ($storyIds->isNotEmpty()) {
-            $viewedCount = DB::table('story_views')
-                ->whereIn('story_id', $storyIds)
-                ->where('viewer_id', $authUser->user_id)
-                ->count();
+    if ($storyIds->isNotEmpty()) {
+        $viewedCount = DB::table('story_views')
+            ->whereIn('story_id', $storyIds)
+            ->where('viewer_id', $authUser->user_id)
+            ->count();
 
-            // Jika jumlah story yang dilihat = jumlah story → sudah semua dilihat
-            $user->story_viewed = ($viewedCount === $storyIds->count());
-        } else {
-            $user->story_viewed = false;
-        }
-
-        return $user;
+        $user->story_viewed = ($viewedCount === $storyIds->count());
+    } else {
+        $user->story_viewed = false;
     }
+
+    return $user;
+}
 
 public function index(Request $request)
 {
