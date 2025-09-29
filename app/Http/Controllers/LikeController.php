@@ -104,7 +104,7 @@ public function index($post_id)
         ->get()
         ->map(function ($like) use ($followingIds) {
             return [
-                'id' => $like->id,
+                'like_id' => $like->like_id,
                 'post_id' => $like->post_id,
                 'user' => $like->user,
                 'created_at' => $like->created_at,
