@@ -200,51 +200,50 @@ public function conversation($user_id)
     /**
      * List user yang pernah di-chat
      */
-    public function chatList()
-    {
-        $auth_id = Auth::id();
+public function chatList()
+{
+    $auth_id = Auth::id();
 
-        // 🔹 1. Ambil chat pribadi (sama seperti sebelumnya)
-        $subQuery = DirectMessage::select(
-            DB::raw("CASE 
-                        WHEN sender_id = $auth_id THEN receiver_id 
-                        ELSE sender_id 
-                     END as user_id"),
-            DB::raw("MAX(sent_at) as last_sent_at")
+    // 🔹 1. Ambil chat pribadi (sama seperti sebelumnya)
+    $subQuery = DirectMessage::select(
+        DB::raw("CASE 
+                    WHEN sender_id = $auth_id THEN receiver_id 
+                    ELSE sender_id 
+                 END as user_id"),
+        DB::raw("MAX(sent_at) as last_sent_at")
+    )
+        ->where(function ($q) use ($auth_id) {
+            $q->where('sender_id', $auth_id)
+                ->orWhere('receiver_id', $auth_id);
+        })
+        ->groupBy('user_id');
+
+    $lastChats = DB::table('direct_messages as dm')
+        ->joinSub($subQuery, 'sq', function ($join) use ($auth_id) {
+            $join->on(DB::raw("CASE WHEN dm.sender_id = $auth_id THEN dm.receiver_id ELSE dm.sender_id END"), '=', 'sq.user_id')
+                ->on('dm.sent_at', '=', 'sq.last_sent_at');
+        })
+        ->select(
+            DB::raw("CASE WHEN dm.sender_id = $auth_id THEN dm.receiver_id ELSE dm.sender_id END as user_id"),
+            'dm.sender_id', 
+            'dm.content',
+            'dm.media_url',
+            'dm.sent_at',
+            'dm.is_read'
         )
-            ->where(function ($q) use ($auth_id) {
-                $q->where('sender_id', $auth_id)
-                    ->orWhere('receiver_id', $auth_id);
-            })
-            ->groupBy('user_id');
+        ->orderBy('dm.sent_at', 'desc')
+        ->get();
 
-            $lastChats = DB::table('direct_messages as dm')
-                ->joinSub($subQuery, 'sq', function ($join) use ($auth_id) {
-                    $join->on(DB::raw("CASE WHEN dm.sender_id = $auth_id THEN dm.receiver_id ELSE dm.sender_id END"), '=', 'sq.user_id')
-                        ->on('dm.sent_at', '=', 'sq.last_sent_at');
-                })
-                ->select(
-                    DB::raw("CASE WHEN dm.sender_id = $auth_id THEN dm.receiver_id ELSE dm.sender_id END as user_id"),
-                    'dm.sender_id', // ✅ tambahin ini
-                    'dm.content',
-                    'dm.media_url',
-                    'dm.sent_at',
-                    'dm.is_read'
-                )
-                ->orderBy('dm.sent_at', 'desc')
-                ->get();
-
-
-   $userIds = $lastChats->pluck('user_id')->toArray();
+    // 🔹 2. Ambil data user + is_verified
+    $userIds = $lastChats->pluck('user_id')->toArray();
     $users = User::whereIn('user_id', $userIds)
-        ->select('user_id', 'username', 'full_name', 'profile_picture_url')
+        ->select('user_id', 'username', 'full_name', 'profile_picture_url', 'is_verified')
         ->get()
         ->keyBy('user_id');
 
     $chatUsers = $lastChats->map(function ($chat) use ($users, $auth_id) {
         $user = $users[$chat->user_id] ?? null;
 
-        // 👇 PERUBAHAN UTAMA: Buat objek terpisah
         return [
             'type' => 'user',
             'conversation' => [
@@ -252,6 +251,7 @@ public function conversation($user_id)
                 'name' => $user->full_name ?? $user->username,
                 'username' => $user->username ?? null,
                 'profile_picture_url' => $user->profile_picture_url ?? null,
+                'is_verified' => (bool) ($user->is_verified ?? false), // 👈 tambahkan ini
             ],
             'last_chat' => [
                 'content' => $chat->content ?? '📎 Media',
@@ -262,46 +262,43 @@ public function conversation($user_id)
         ];
     });
 
+    // 🔹 3. Ambil grup + last message
+    $groups = \App\Models\GroupMember::with('group')
+        ->where('user_id', $auth_id)
+        ->get()
+        ->map(function ($member) {
+            $lastMessage = GroupMessage::where('group_id', $member->group->id)
+                ->orderBy('sent_at', 'desc')
+                ->first();
 
-        // 🔹 2. Ambil grup + last message
-        $groups = \App\Models\GroupMember::with('group')
-            ->where('user_id', $auth_id)
-            ->get()
-            ->map(function ($member) {
-                // cari last message
-                $lastMessage = GroupMessage::where('group_id', $member->group->id)
-                    ->orderBy('sent_at', 'desc')
-                    ->first();
+            return [
+                'type' => 'group',
+                'id' => $member->group->id,
+                'name' => $member->group->name,
+                'description' => $member->group->description ?? '',
+                'avatar_url' => $member->group->avatar_url ?? '',
+                'cover_url' => $member->group->cover_url ?? '',
+                'role' => $member->role,
+                'joined_at' => $member->joined_at,
+                'is_muted' => (bool) $member->is_muted,
 
-                return [
-                    'type' => 'group',
-                    'id' => $member->group->id,
-                    'name' => $member->group->name,
-                    'description' => $member->group->description ?? '',
-                    'avatar_url' => $member->group->avatar_url ?? '',
-                    'cover_url' => $member->group->cover_url ?? '',
-                    'role' => $member->role,
-                    'joined_at' => $member->joined_at,
-                    'is_muted' => (bool) $member->is_muted,
+                'last_message' => $lastMessage
+                    ? ($lastMessage->is_deleted ? '[Pesan telah dihapus]' : ($lastMessage->content ?: '📎 Media'))
+                    : '',
+                'last_media' => $lastMessage && !$lastMessage->is_deleted ? ($lastMessage->media_url ?? '') : '',
+                'sent_at' => $lastMessage ? $lastMessage->sent_at : '',
+            ];
+        });
 
-                    // 🔹 jaga jangan ada null
-                    'last_message' => $lastMessage
-                        ? ($lastMessage->is_deleted ? '[Pesan telah dihapus]' : ($lastMessage->content ?: '📎 Media'))
-                        : '',
-                    'last_media' => $lastMessage && !$lastMessage->is_deleted ? ($lastMessage->media_url ?? '') : '',
-                    'sent_at' => $lastMessage ? $lastMessage->sent_at : '',
-                ];
-            });
+    // 🔹 4. Gabungkan user chat + group chat
+    $result = $chatUsers->merge($groups);
 
+    // 🔹 5. Urutkan berdasarkan waktu terbaru
+    $result = $result->sortByDesc('sent_at')->values();
 
-        // 🔹 3. Gabungkan user chat + group chat
-        $result = $chatUsers->merge($groups);
+    return response()->json($result);
+}
 
-        // 🔹 4. Urutkan berdasarkan waktu terbaru (sent_at)
-        $result = $result->sortByDesc('sent_at')->values();
-
-        return response()->json($result);
-    }
 
     // 🔹 List pesan belum dibaca
     public function unreadConversation($user_id)
