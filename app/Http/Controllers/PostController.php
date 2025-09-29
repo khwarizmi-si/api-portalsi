@@ -470,6 +470,15 @@ public function clips($id, Request $request)
 {
     $authUser = Auth::user();
 
+    // Ambil daftar exclude dari query param (kalau ada)
+    $excludeIds = $request->input('exclude', []);
+    if (!is_array($excludeIds)) {
+        $excludeIds = [$excludeIds];
+    }
+
+    // Pastikan clip utama juga di-exclude dari next
+    $excludeIds[] = $id;
+
     // Ambil clip utama
     $mainClip = Post::with(['user', 'tags'])
         ->withCount(['likes', 'comments'])
@@ -477,7 +486,6 @@ public function clips($id, Request $request)
         ->where('is_archived', false)
         ->findOrFail($id);
 
-    // Tambahkan info is_liked & is_bookmarked
     $mainClip->is_liked = $authUser
         ? $mainClip->likes()->where('user_id', $authUser->user_id)->exists()
         : false;
@@ -488,13 +496,13 @@ public function clips($id, Request $request)
 
     $mainClip->type = 'clip';
 
-    // Ambil 2 clip setelah id ini (urut berdasarkan post_id naik)
+    // Ambil 2 clip random, exclude id utama + exclude dari param
     $nextClips = Post::with(['user', 'tags'])
         ->withCount(['likes', 'comments'])
         ->where('is_video', true)
         ->where('is_archived', false)
-        ->where('post_id', '>', $id)
-        ->orderBy('post_id', 'asc')
+        ->whereNotIn('post_id', $excludeIds)
+        ->inRandomOrder()
         ->take(2)
         ->get()
         ->map(function ($post) use ($authUser) {
@@ -510,10 +518,13 @@ public function clips($id, Request $request)
             return $post;
         });
 
-    // Buat next_page_url berdasarkan id terakhir
+    // Update exclude list dengan id baru yang sudah dipakai
+    $newExcludeIds = array_merge($excludeIds, $nextClips->pluck('post_id')->toArray());
+
+    // Buat next_page_url, bawa exclude list biar ga duplikat
     $lastId = $nextClips->last()?->post_id;
     $nextPageUrl = $lastId
-        ? url('/api/clips/' . $lastId)
+        ? url('/api/clips/' . $lastId . '?' . http_build_query(['exclude' => $newExcludeIds]))
         : null;
 
     return response()->json([
