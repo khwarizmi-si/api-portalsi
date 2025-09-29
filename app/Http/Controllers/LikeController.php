@@ -10,6 +10,7 @@ use App\Events\NotificationCreated;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
 use Carbon\Carbon;
+use App\Models\Follow; // pastikan ada model Follow
 
 class LikeController extends Controller
 {
@@ -86,9 +87,32 @@ class LikeController extends Controller
         }
     }
 
-    public function index($post_id)
-    {
-        $likes = Like::where('post_id', $post_id)->with('user')->get();
-        return response()->json($likes);
+public function index($post_id)
+{
+    $authUser = Auth::user();
+
+    $followingIds = [];
+    if ($authUser) {
+        $followingIds = \App\Models\Follow::where('follower_id', $authUser->id)
+            ->where('status', 'accepted')
+            ->pluck('followed_id')
+            ->toArray();
     }
+
+    $likes = Like::where('post_id', $post_id)
+        ->with('user')
+        ->get()
+        ->map(function ($like) use ($followingIds) {
+            return [
+                'id' => $like->id,
+                'post_id' => $like->post_id,
+                'user' => $like->user,
+                'created_at' => $like->created_at,
+                'is_following_status' => in_array($like->user_id, $followingIds),
+            ];
+        });
+
+    return response()->json($likes);
+}
+
 }
