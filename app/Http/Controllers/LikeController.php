@@ -104,15 +104,16 @@ public function index($post_id)
         ->get()
         ->map(function ($like) use ($followingIds) {
             return [
-                'like_id' => $like->like_id,
+                'id' => $like->id,
                 'post_id' => $like->post_id,
                 'user' => $like->user,
                 'created_at' => $like->created_at,
-                'is_following_status' => in_array($like->user_id, $followingIds),
+                'is_following_status' => in_array($like->user_id, $followingIds), // cek ke LIKER
             ];
         });
 
     return response()->json($likes);
 }
+
 
 }
