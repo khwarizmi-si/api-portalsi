@@ -25,7 +25,7 @@ public function show(Request $request, $username)
     $recentPosts = $canViewPosts
         ? $user->posts()
             ->latest()
-            ->select('post_id', 'caption', 'media_url', 'created_at')
+            ->select('post_id', 'caption', 'media_url', 'is_video', 'created_at')
             ->get()
             ->map(function ($post) {
                 // Cek ekstensi dari media_url
