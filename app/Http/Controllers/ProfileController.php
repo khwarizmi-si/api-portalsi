@@ -88,39 +88,49 @@ public function search(Request $request)
 
 
     public function me(Request $request)
-    {
-        $authUser = Auth::user();
+{
+    $authUser = Auth::user();
 
-        if (!$authUser) {
-            return response()->json(['message' => 'Unauthorized'], 401);
-        }
-
-        // Ambil data user + followers/following/posts count
-        $user = User::where('user_id', $authUser->user_id)
-            ->withCount(['followers', 'following', 'posts'])
-            ->with('followers')
-            ->firstOrFail();
-
-        $recentPosts = $user->posts()
-            ->latest()
-            ->select('post_id', 'caption', 'media_url', 'created_at')
-            ->get();
-
-        return response()->json([
-            'user_id'             => $user->user_id,
-            'username'            => $user->username,
-            'full_name'           => $user->full_name,
-            'bio'                 => $user->bio,
-            'email'               => $user->email,
-            'email_verified'      => $user->hasVerifiedEmail(),
-            'profile_picture_url' => $user->profile_picture_url,
-            'banner_url'          => $user->banner_url,
-            'is_verified'         => $user->is_verified,
-            'is_private'          => $user->is_private,
-            'followers_count'     => $user->followers_count,
-            'following_count'     => $user->following_count,
-            'posts_count'         => $user->posts_count,
-            'recent_posts'        => $recentPosts,
-        ]);
+    if (!$authUser) {
+        return response()->json(['message' => 'Unauthorized'], 401);
     }
+
+    // Ambil data user + followers/following/posts count
+    $user = User::where('user_id', $authUser->user_id)
+        ->withCount(['followers', 'following', 'posts'])
+        ->with('followers')
+        ->firstOrFail();
+
+    $recentPosts = $user->posts()
+        ->latest()
+        ->select('post_id', 'caption', 'media_url', 'created_at') // hilangkan is_video dari DB
+        ->get()
+        ->map(function ($post) {
+            $isVideo = preg_match('/\.(mp4|mov|avi|mkv|webm)$/i', $post->media_url) ? 1 : 0;
+            return [
+                'post_id'    => $post->post_id,
+                'caption'    => $post->caption,
+                'media_url'  => $post->media_url,
+                'is_video'   => $isVideo,
+                'created_at' => $post->created_at,
+            ];
+        });
+
+    return response()->json([
+        'user_id'             => $user->user_id,
+        'username'            => $user->username,
+        'full_name'           => $user->full_name,
+        'bio'                 => $user->bio,
+        'email'               => $user->email,
+        'email_verified'      => $user->hasVerifiedEmail(),
+        'profile_picture_url' => $user->profile_picture_url,
+        'banner_url'          => $user->banner_url,
+        'is_verified'         => $user->is_verified,
+        'is_private'          => $user->is_private,
+        'followers_count'     => $user->followers_count,
+        'following_count'     => $user->following_count,
+        'posts_count'         => $user->posts_count,
+        'recent_posts'        => $recentPosts,
+    ]);
+}
 }
