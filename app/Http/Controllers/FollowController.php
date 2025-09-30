@@ -108,34 +108,36 @@ public function unfollow($id)
 
 
     // ✅ LIHAT FOLLOWERS
-    public function followers($id)
-    {
-        $user = User::findOrFail($id);
-        $followers = $user->followers()
-            ->wherePivot('status', 'accepted')
-            ->select('users.user_id', 'username', 'full_name')
-            ->get();
+public function followers($id)
+{
+    $user = User::findOrFail($id);
 
-        return response()->json([
-            'followers_count' => $followers->count(),
-            'followers' => $followers
-        ]);
-    }
+    $followers = $user->followers()
+        ->wherePivot('status', 'accepted')
+        ->select('users.user_id', 'username', 'full_name', 'profile_picture_url', 'is_verified')
+        ->get();
 
-    // ✅ LIHAT FOLLOWING
-    public function following($id)
-    {
-        $user = User::findOrFail($id);
-        $following = $user->following()
-            ->wherePivot('status', 'accepted')
-            ->select('users.user_id', 'username', 'full_name')
-            ->get();
+    return response()->json([
+        'followers_count' => $followers->count(),
+        'followers'       => $followers
+    ]);
+}
 
-        return response()->json([
-            'following_count' => $following->count(),
-            'following' => $following
-        ]);
-    }
+// ✅ LIHAT FOLLOWING
+public function following($id)
+{
+    $user = User::findOrFail($id);
+
+    $following = $user->following()
+        ->wherePivot('status', 'accepted')
+        ->select('users.user_id', 'username', 'full_name', 'profile_picture_url', 'is_verified')
+        ->get();
+
+    return response()->json([
+        'following_count' => $following->count(),
+        'following'       => $following
+    ]);
+}
 
     // ✅ TERIMA PERMINTAAN FOLLOW
 public function acceptFollowRequest($followerId)
