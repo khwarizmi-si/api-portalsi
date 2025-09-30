@@ -25,13 +25,17 @@ public function show(Request $request, $username)
     $recentPosts = $canViewPosts
         ? $user->posts()
             ->latest()
-            ->select('post_id', 'caption', 'media_url', 'is_video', 'created_at')
+            ->select('post_id', 'caption', 'media_url', 'created_at') // jangan ambil is_video dari DB
             ->get()
             ->map(function ($post) {
-                // Cek ekstensi dari media_url
                 $isVideo = preg_match('/\.(mp4|mov|avi|mkv|webm)$/i', $post->media_url) ? 1 : 0;
-                $post->is_video = $isVideo;
-                return $post;
+                return [
+                    'post_id'    => $post->post_id,
+                    'caption'    => $post->caption,
+                    'media_url'  => $post->media_url,
+                    'is_video'   => $isVideo,
+                    'created_at' => $post->created_at,
+                ];
             })
         : [];
 
