@@ -76,7 +76,7 @@ public function search(Request $request)
                 $q->orWhere('full_name', 'like', "%{$fullName}%");
             }
         })
-        ->select('user_id', 'username', 'full_name', 'profile_picture_url')
+        ->select('user_id', 'username', 'full_name', 'is_verified', 'profile_picture_url')
         ->get();
 
     if ($users->isEmpty()) {
