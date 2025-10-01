@@ -66,8 +66,18 @@ public function index(Request $request)
                 $post->is_liked = (bool) $post->likes()->where('user_id', $authUser->user_id)->exists();
                 $post->is_bookmarked = (bool) $post->bookmarks()->where('user_id', $authUser->user_id)->exists();
                 $post->type = 'post';
+                // attach story & verified
                 $post->user = $this->attachStoryInfo($post->user, $authUser);
                 $post->user->is_verified = (bool) $post->user->is_verified;
+
+                // ✨ Tambahkan field musik eksplisit ke objek post
+                $post->music_track_name        = $post->music_track_name ?? null;
+                $post->music_artist_name       = $post->music_artist_name ?? null;
+                $post->music_preview_url       = $post->music_preview_url ?? null;
+                $post->music_album_art_url     = $post->music_album_art_url ?? null;
+                $post->music_start_position_ms = $post->music_start_position_ms ?? null;
+                $post->music_clip_duration_ms  = $post->music_clip_duration_ms ?? null;
+
                 return $post;
             })
             ->shuffle()
@@ -144,6 +154,15 @@ public function index(Request $request)
                 $post->type = 'post';
                 $post->user = $this->attachStoryInfo($post->user, $authUser);
                 $post->user->is_verified = (bool) $post->user->is_verified;
+
+                // ✨ Tambahkan field musik eksplisit ke objek post
+                $post->music_track_name        = $post->music_track_name ?? null;
+                $post->music_artist_name       = $post->music_artist_name ?? null;
+                $post->music_preview_url       = $post->music_preview_url ?? null;
+                $post->music_album_art_url     = $post->music_album_art_url ?? null;
+                $post->music_start_position_ms = $post->music_start_position_ms ?? null;
+                $post->music_clip_duration_ms  = $post->music_clip_duration_ms ?? null;
+
                 return $post;
             })
             ->shuffle()
@@ -273,6 +292,7 @@ public function index(Request $request)
 
 public function explore(Request $request)
 {
+    $authUser = Auth::user();
     $page = max(1, (int) $request->input('page', 1));
     $perPage = max(1, (int) $request->input('per_page', 15));
 
@@ -294,7 +314,25 @@ public function explore(Request $request)
 
     $posts = $query->skip(($page - 1) * $perPage)
                    ->take($perPage)
-                   ->get();
+                   ->get()
+                   ->map(function ($post) use ($authUser) {
+                        // tambahkan is_liked / is_bookmarked jika ada auth
+                        $post->is_liked = $authUser ? $post->likes()->where('user_id', $authUser->user_id)->exists() : false;
+                        $post->is_bookmarked = $authUser ? $post->bookmarks()->where('user_id', $authUser->user_id)->exists() : false;
+                        $post->type = 'post';
+                        $post->user = $this->attachStoryInfo($post->user, $authUser);
+                        $post->user->is_verified = (bool) $post->user->is_verified;
+
+                        // ✨ Field musik
+                        $post->music_track_name        = $post->music_track_name ?? null;
+                        $post->music_artist_name       = $post->music_artist_name ?? null;
+                        $post->music_preview_url       = $post->music_preview_url ?? null;
+                        $post->music_album_art_url     = $post->music_album_art_url ?? null;
+                        $post->music_start_position_ms = $post->music_start_position_ms ?? null;
+                        $post->music_clip_duration_ms  = $post->music_clip_duration_ms ?? null;
+
+                        return $post;
+                   });
 
     $paginator = new LengthAwarePaginator(
         $posts,
@@ -307,43 +345,56 @@ public function explore(Request $request)
     return response()->json($paginator);
 }
 
-    public function show($id)
-    {
-        $authUser = Auth::user();
+public function show($id)
+{
+    $authUser = Auth::user();
 
-        $post = Post::with(['user', 'tags', 'mentions'])
-            ->withCount(['likes', 'comments'])
-            ->findOrFail($id);
+    $post = Post::with(['user', 'tags', 'mentions'])
+        ->withCount(['likes', 'comments'])
+        ->findOrFail($id);
 
-        $owner = $post->user;
+    $owner = $post->user;
 
-        // 🔒 Cek apakah post bisa dilihat
-        $canView = !$owner->is_private ||
-            ($authUser && (
-                $authUser->user_id === $owner->user_id ||
-                $owner->followers()
-                    ->where('follower_id', $authUser->user_id)
-                    ->where('status', 'accepted')
-                    ->exists()
-            ));
+    // 🔒 Cek apakah post bisa dilihat
+    $canView = !$owner->is_private ||
+        ($authUser && (
+            $authUser->user_id === $owner->user_id ||
+            $owner->followers()
+                ->where('follower_id', $authUser->user_id)
+                ->where('status', 'accepted')
+                ->exists()
+        ));
 
-        if (!$canView) {
-            return response()->json([
-                'message' => 'Post ini hanya bisa dilihat oleh followers yang telah diterima.'
-            ], 403);
-        }
-
-        // ❤️ Tambahkan informasi apakah sudah di-like / di-bookmark oleh user login
-        $post->is_liked = $authUser 
-            ? $post->likes()->where('user_id', $authUser->user_id)->exists()
-            : false;
-
-        $post->is_bookmarked = $authUser 
-            ? $post->bookmarks()->where('user_id', $authUser->user_id)->exists()
-            : false;
-
-        return response()->json($post);
+    if (!$canView) {
+        return response()->json([
+            'message' => 'Post ini hanya bisa dilihat oleh followers yang telah diterima.'
+        ], 403);
     }
+
+    // ❤️ Tambahkan informasi apakah sudah di-like / di-bookmark oleh user login
+    $post->is_liked = $authUser
+        ? $post->likes()->where('user_id', $authUser->user_id)->exists()
+        : false;
+
+    $post->is_bookmarked = $authUser
+        ? $post->bookmarks()->where('user_id', $authUser->user_id)->exists()
+        : false;
+
+    // pastikan user info story & verified
+    $post->user = $this->attachStoryInfo($post->user, $authUser);
+    $post->user->is_verified = (bool) $post->user->is_verified;
+
+    // ✨ Pastikan field musik ada di response
+    $post->music_track_name        = $post->music_track_name ?? null;
+    $post->music_artist_name       = $post->music_artist_name ?? null;
+    $post->music_preview_url       = $post->music_preview_url ?? null;
+    $post->music_album_art_url     = $post->music_album_art_url ?? null;
+    $post->music_start_position_ms = $post->music_start_position_ms ?? null;
+    $post->music_clip_duration_ms  = $post->music_clip_duration_ms ?? null;
+
+    return response()->json($post);
+}
+
 
 
 // 🆕 Buat post baru (media upload pakai file)
@@ -542,6 +593,16 @@ public function clips($id, Request $request)
         : false;
 
     $mainClip->type = 'clip';
+    $mainClip->user = $this->attachStoryInfo($mainClip->user, $authUser);
+    $mainClip->user->is_verified = (bool) $mainClip->user->is_verified;
+
+    // ✨ Field musik untuk mainClip
+    $mainClip->music_track_name        = $mainClip->music_track_name ?? null;
+    $mainClip->music_artist_name       = $mainClip->music_artist_name ?? null;
+    $mainClip->music_preview_url       = $mainClip->music_preview_url ?? null;
+    $mainClip->music_album_art_url     = $mainClip->music_album_art_url ?? null;
+    $mainClip->music_start_position_ms = $mainClip->music_start_position_ms ?? null;
+    $mainClip->music_clip_duration_ms  = $mainClip->music_clip_duration_ms ?? null;
 
     // Ambil 2 clip random, exclude id utama + exclude dari param
     $nextClips = Post::with(['user', 'tags'])
@@ -562,6 +623,17 @@ public function clips($id, Request $request)
                 : false;
 
             $post->type = 'clip';
+            $post->user = $this->attachStoryInfo($post->user, $authUser);
+            $post->user->is_verified = (bool) $post->user->is_verified;
+
+            // ✨ Field musik untuk next clips
+            $post->music_track_name        = $post->music_track_name ?? null;
+            $post->music_artist_name       = $post->music_artist_name ?? null;
+            $post->music_preview_url       = $post->music_preview_url ?? null;
+            $post->music_album_art_url     = $post->music_album_art_url ?? null;
+            $post->music_start_position_ms = $post->music_start_position_ms ?? null;
+            $post->music_clip_duration_ms  = $post->music_clip_duration_ms ?? null;
+
             return $post;
         });
 
@@ -580,6 +652,5 @@ public function clips($id, Request $request)
         'next_page_url' => $nextPageUrl
     ]);
 }
-
 
 }
