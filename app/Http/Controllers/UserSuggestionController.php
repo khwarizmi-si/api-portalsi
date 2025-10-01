@@ -31,7 +31,8 @@ class UserSuggestionController extends Controller
 
             // cek dulu apakah ada userIds, kalau kosong jangan pakai FIELD()
             $users = $userIds->isNotEmpty()
-                ? User::whereIn('user_id', $userIds)
+                ? User::select('user_id', 'username', 'full_name', 'profile_picture_url', 'is_verified')
+                    ->whereIn('user_id', $userIds)
                     ->orderByRaw("FIELD(user_id, " . implode(',', $userIds->toArray()) . ")")
                     ->get()
                 : collect();
@@ -43,7 +44,8 @@ class UserSuggestionController extends Controller
         if ($suggestions->count() < 10) {
             $need = 10 - $suggestions->count();
 
-            $randomUsers = User::where('user_id', '!=', $authUser->user_id)
+            $randomUsers = User::select('user_id', 'username', 'full_name', 'profile_picture_url', 'is_verified')
+                ->where('user_id', '!=', $authUser->user_id)
                 ->whereNotIn('user_id', $followingIds)
                 ->whereNotIn('user_id', $suggestions->pluck('user_id'))
                 ->inRandomOrder()
@@ -52,6 +54,12 @@ class UserSuggestionController extends Controller
 
             $suggestions = $suggestions->merge($randomUsers);
         }
+
+        // pastikan is_verified jadi boolean true/false, bukan 1/0
+        $suggestions = $suggestions->map(function ($user) {
+            $user->is_verified = (bool) $user->is_verified;
+            return $user;
+        });
 
         return response()->json([
             'count' => $suggestions->count(),

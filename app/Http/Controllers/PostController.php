@@ -63,14 +63,14 @@ public function index(Request $request)
             ->orderByDesc('created_at')
             ->get()
             ->map(function ($post) use ($authUser) {
-                $post->is_liked = $post->likes()->where('user_id', $authUser->user_id)->exists();
-                $post->is_bookmarked = $post->bookmarks()->where('user_id', $authUser->user_id)->exists();
+                $post->is_liked = (bool) $post->likes()->where('user_id', $authUser->user_id)->exists();
+                $post->is_bookmarked = (bool) $post->bookmarks()->where('user_id', $authUser->user_id)->exists();
                 $post->type = 'post';
-
                 $post->user = $this->attachStoryInfo($post->user, $authUser);
+                $post->user->is_verified = (bool) $post->user->is_verified;
                 return $post;
             })
-            ->shuffle() // 🔥 acak feed non-following
+            ->shuffle()
             ->values();
     } else {
         // Distribusi feed
@@ -104,7 +104,7 @@ public function index(Request $request)
             ->take($countRelasi)
             ->get();
 
-        // Random posts dari user lain
+        // Random posts
         $randomPosts = Post::with(['user', 'tags', 'mentions'])
             ->withCount(['likes', 'comments'])
             ->whereNotIn('user_id', $followingIds)
@@ -114,7 +114,7 @@ public function index(Request $request)
             ->take($countRandom)
             ->get();
 
-        // Posts yang disukai oleh following
+        // Posts yang disukai following
         $likedByFollowingIds = DB::table('likes')
             ->whereIn('user_id', $followingIds)
             ->pluck('post_id');
@@ -139,14 +139,14 @@ public function index(Request $request)
             ->merge($randomPosts)
             ->merge($likedPosts)
             ->map(function ($post) use ($authUser) {
-                $post->is_liked = $post->likes()->where('user_id', $authUser->user_id)->exists();
-                $post->is_bookmarked = $post->bookmarks()->where('user_id', $authUser->user_id)->exists();
+                $post->is_liked = (bool) $post->likes()->where('user_id', $authUser->user_id)->exists();
+                $post->is_bookmarked = (bool) $post->bookmarks()->where('user_id', $authUser->user_id)->exists();
                 $post->type = 'post';
-
                 $post->user = $this->attachStoryInfo($post->user, $authUser);
+                $post->user->is_verified = (bool) $post->user->is_verified;
                 return $post;
             })
-            ->shuffle() // 🔥 acak lagi setelah merge
+            ->shuffle()
             ->values();
     }
 
@@ -224,11 +224,12 @@ public function index(Request $request)
             ->where('status', 'accepted')
             ->exists();
 
-        $user->is_follow_back = $isFollowBack;
+        $user->is_follow_back = (bool) $isFollowBack;
         $user = $this->attachStoryInfo($user, $authUser);
+        $user->is_verified = (bool) $user->is_verified;
         return $user;
     })
-    ->shuffle() // 🔥 suggestions acak setiap refresh
+    ->shuffle()
     ->sortByDesc('is_follow_back')
     ->values();
 
@@ -241,7 +242,20 @@ public function index(Request $request)
         if ($postCount === 2 || ($postCount > 2 && $postCount % 8 === 0)) {
             $feedWithSuggestions->push((object)[
                 'type' => 'suggestion',
-                'users' => $suggestions->shuffle()->take(15)->values()
+                'users' => $suggestions->shuffle()
+                    ->take(15)
+                    ->map(function ($user) {
+                        return [
+                            'user_id'            => $user->user_id,
+                            'username'           => $user->username,
+                            'profile_picture_url'=> $user->profile_picture_url,
+                            'is_follow_back'     => (bool) $user->is_follow_back,
+                            'is_verified'        => (bool) $user->is_verified,
+                            'has_story'          => (bool) $user->has_story,
+                            'story_viewed'       => (bool) $user->story_viewed,
+                        ];
+                    })
+                    ->values()
             ]);
         }
     }
@@ -256,7 +270,6 @@ public function index(Request $request)
         'feed' => $feedWithSuggestions
     ]);
 }
-
 
 public function explore(Request $request)
 {
