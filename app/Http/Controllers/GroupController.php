@@ -288,37 +288,50 @@ public function addMember(Request $request, Group $group)
 
 public function listMembers(Group $group)
 {
-    $authUser = Auth::user();
+    $authUserId = Auth::id();
 
+    if (!$authUserId) {
+        return response()->json(['error' => 'Unauthorized'], 401);
+    }
+
+    // Ambil semua member group
     $members = GroupMember::with('user')
         ->where('group_id', $group->id)
-        ->get()
-        ->map(function ($member) use ($authUser) {
-            $isFollowing = \DB::table('follows')
-                ->where('follower_id', $authUser->id)
-                ->where('following_id', $member->user_id)
-                ->exists();
+        ->get();
 
-            return [
-                'user_id' => $member->user_id,
-                'full_name' => $member->user->full_name,
-                'role' => $member->role,
-                'joined_at' => $member->joined_at,
-                'is_muted' => (bool) $member->is_muted,
-                'username' => $member->user->username,
-                'profile_picture_url' => $member->user->profile_picture_url,
-                'is_verified' => (bool) $member->user->is_verified,
-                'is_online' => (bool) $member->user->is_online,
-                'last_seen' => $member->user->last_seen,
-                'is_following' => $isFollowing,
-            ];
-        })
-        // 🔹 sortir: true dulu, lalu false
-        ->sortByDesc('is_following')
-        ->values();
+    // Ambil semua user_id member
+    $memberIds = $members->pluck('user_id');
+
+    // Ambil semua yang di-follow oleh auth user (status accepted)
+    $following = \DB::table('follows')
+        ->where('follower_id', $authUserId)
+        ->whereIn('followed_id', $memberIds)
+        ->where('status', 'accepted')
+        ->pluck('followed_id')
+        ->toArray();
+
+    // Map hasilnya
+    $result = $members->map(function ($member) use ($following) {
+        return [
+            'user_id' => $member->user_id,
+            'full_name' => $member->user->full_name,
+            'role' => $member->role,
+            'joined_at' => $member->joined_at,
+            'is_muted' => (bool) $member->is_muted,
+            'username' => $member->user->username,
+            'profile_picture_url' => $member->user->profile_picture_url,
+            'is_verified' => (bool) $member->user->is_verified,
+            'is_online' => (bool) $member->user->is_online,
+            'last_seen' => $member->user->last_seen,
+            'is_following' => in_array($member->user_id, $following),
+        ];
+    })
+    // 🔹 sort yang sudah difollow di atas
+    ->sortByDesc('is_following')
+    ->values();
 
     return response()->json([
-        'data' => $members
+        'data' => $result
     ]);
 }
 
