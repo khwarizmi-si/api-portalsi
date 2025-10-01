@@ -288,10 +288,17 @@ public function addMember(Request $request, Group $group)
 
 public function listMembers(Group $group)
 {
+    $authUser = Auth::user();
+
     $members = GroupMember::with('user')
         ->where('group_id', $group->id)
         ->get()
-        ->map(function ($member) {
+        ->map(function ($member) use ($authUser) {
+            $isFollowing = \DB::table('follows')
+                ->where('follower_id', $authUser->id)
+                ->where('following_id', $member->user_id)
+                ->exists();
+
             return [
                 'user_id' => $member->user_id,
                 'full_name' => $member->user->full_name,
@@ -303,13 +310,18 @@ public function listMembers(Group $group)
                 'is_verified' => (bool) $member->user->is_verified,
                 'is_online' => (bool) $member->user->is_online,
                 'last_seen' => $member->user->last_seen,
+                'is_following' => $isFollowing,
             ];
-        });
+        })
+        // 🔹 sortir: true dulu, lalu false
+        ->sortByDesc('is_following')
+        ->values();
 
     return response()->json([
         'data' => $members
     ]);
 }
+
 
 
 public function promoteToAdmin(Group $group, User $user)
