@@ -310,9 +310,13 @@ public function listMembers(Group $group)
         ->pluck('followed_id')
         ->toArray();
 
-    // Map hasilnya
-    $result = $members->map(function ($member) use ($following, $authUserId) {
-        return [
+    // Bikin struktur hasil
+    $me = [];
+    $followings = [];
+    $notFollowings = [];
+
+    foreach ($members as $member) {
+        $data = [
             'user_id' => $member->user_id,
             'full_name' => $member->user->full_name,
             'role' => $member->role,
@@ -324,20 +328,21 @@ public function listMembers(Group $group)
             'is_online' => (bool) $member->user->is_online,
             'last_seen' => $member->user->last_seen,
             'is_following' => in_array($member->user_id, $following),
-            'is_me' => $member->user_id == $authUserId, // ✅ Tambahan flag
         ];
-    })
-    // 🔹 Urutkan: 1) diri sendiri paling atas, 2) yang sudah difollow, 3) sisanya
-    ->sortByDesc(function ($item) {
-        return [
-            $item['is_me'] ? 1 : 0,
-            $item['is_following'] ? 1 : 0,
-        ];
-    })
-    ->values();
+
+        if ($member->user_id == $authUserId) {
+            $me[] = $data;
+        } elseif ($data['is_following']) {
+            $followings[] = $data;
+        } else {
+            $notFollowings[] = $data;
+        }
+    }
 
     return response()->json([
-        'data' => $result
+        'me' => $me,
+        'following' => $followings,
+        'not_following' => $notFollowings,
     ]);
 }
 
