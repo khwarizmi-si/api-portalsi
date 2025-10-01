@@ -19,6 +19,12 @@ class Post extends Model
         'location',
         'is_archived',
         'is_video',
+        'music_track_name',
+        'music_artist_name',
+        'music_preview_url',
+        'music_album_art_url',
+        'music_start_position_ms',
+        'music_clip_duration_ms',
     ];
 
     public function user()

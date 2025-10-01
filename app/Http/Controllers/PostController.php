@@ -345,107 +345,140 @@ public function explore(Request $request)
         return response()->json($post);
     }
 
-    // 🆕 Buat post baru (media upload pakai file)
-    public function store(Request $request)
-    {
-        $request->validate([
-            'caption'     => 'nullable|string',
-            'media' => 'required|file|mimes:jpg,jpeg,png,mp4,mov,webm,avi,3gp,mkv|max:512000',
-            'location'    => 'nullable|string',
-            'is_archived' => 'nullable|boolean',
-            'is_video'    => 'nullable|boolean',
-        ]);
 
-        // 🗂 Simpan file ke storage
+// 🆕 Buat post baru (media upload pakai file)
+public function store(Request $request)
+{
+    $request->validate([
+        'caption'                 => 'nullable|string',
+        'media'                   => 'required|file|mimes:jpg,jpeg,png,mp4,mov,webm,avi,3gp,mkv|max:512000',
+        'location'                => 'nullable|string',
+        'is_archived'             => 'nullable|boolean',
+        'is_video'                => 'nullable|boolean',
+        // 🎵 Field musik
+        'music_track_name'        => 'nullable|string|max:255',
+        'music_artist_name'       => 'nullable|string|max:255',
+        'music_preview_url'       => 'nullable|string',
+        'music_album_art_url'     => 'nullable|string|max:255',
+        'music_start_position_ms' => 'nullable|integer',
+        'music_clip_duration_ms'  => 'nullable|string|max:255',
+    ]);
+
+    // 🗂 Simpan file ke storage
+    $mediaPath = $request->file('media')->store('uploads/posts', 'public');
+    $mediaUrl = asset('storage/' . $mediaPath);
+
+    $post = Post::create([
+        'user_id'                 => Auth::id(),
+        'caption'                 => $request->caption,
+        'media_url'               => $mediaUrl,
+        'location'                => $request->location,
+        'is_archived'             => $request->is_archived ?? false,
+        'is_video'                => $request->is_video ?? false,
+        // 🎵 Field musik
+        'music_track_name'        => $request->music_track_name,
+        'music_artist_name'       => $request->music_artist_name,
+        'music_preview_url'       => $request->music_preview_url,
+        'music_album_art_url'     => $request->music_album_art_url,
+        'music_start_position_ms' => $request->music_start_position_ms,
+        'music_clip_duration_ms'  => $request->music_clip_duration_ms,
+    ]);
+
+    // 🎯 Tangani hashtag
+    if ($request->filled('caption')) {
+        preg_match_all('/#(\w+)/', $request->caption, $tags);
+        foreach ($tags[1] as $tagName) {
+            $tag = Tag::firstOrCreate(['tag_name' => $tagName]);
+            $post->tags()->attach($tag->tag_id);
+        }
+    }
+
+    // 👥 Tangani mention
+    if ($request->filled('caption')) {
+        preg_match_all('/@(\w+)/', $request->caption, $mentions);
+        foreach ($mentions[1] as $username) {
+            $mentionedUser = User::where('username', $username)->first();
+            if ($mentionedUser && $mentionedUser->user_id !== Auth::id()) {
+                PostMention::create([
+                    'post_id' => $post->post_id,
+                    'mentioned_user_id' => $mentionedUser->user_id
+                ]);
+                Notification::create([
+                    'recipient_id'     => $mentionedUser->user_id,
+                    'type'             => 'mention',
+                    'related_user_id'  => Auth::id(),
+                    'related_post_id'  => $post->post_id,
+                    'created_at'       => now(),
+                    'is_read'          => false,
+                ]);
+            }
+        }
+    }
+
+    return response()->json([
+        'message' => 'Post created',
+        'post' => $post
+    ], 201);
+}
+
+
+// ✏️ Edit post (media optional)
+public function update(Request $request, $id)
+{
+    $post = Post::findOrFail($id);
+
+    if ($post->user_id !== Auth::id()) {
+        return response()->json(['error' => 'Unauthorized'], 403);
+    }
+
+    $request->validate([
+        'caption'                 => 'nullable|string',
+        'media'                   => 'nullable|file|mimes:jpg,jpeg,png,mp4,mov,webm,avi,3gp,mkv|max:512000',
+        'location'                => 'nullable|string',
+        'is_archived'             => 'nullable|boolean',
+        'is_video'                => 'nullable|boolean',
+        // 🎵 Field musik
+        'music_track_name'        => 'nullable|string|max:255',
+        'music_artist_name'       => 'nullable|string|max:255',
+        'music_preview_url'       => 'nullable|string',
+        'music_album_art_url'     => 'nullable|string|max:255',
+        'music_start_position_ms' => 'nullable|integer',
+        'music_clip_duration_ms'  => 'nullable|string|max:255',
+    ]);
+
+    // 🔄 Ganti file jika ada media baru
+    if ($request->hasFile('media')) {
+        // Hapus media lama (opsional)
+        if ($post->media_url) {
+            $path = str_replace(asset('storage') . '/', '', $post->media_url);
+            Storage::disk('public')->delete($path);
+        }
         $mediaPath = $request->file('media')->store('uploads/posts', 'public');
-        $mediaUrl = asset('storage/' . $mediaPath);
-
-        $post = Post::create([
-            'user_id'     => Auth::id(),
-            'caption'     => $request->caption,
-            'media_url'   => $mediaUrl,
-            'location'    => $request->location,
-            'is_archived' => $request->is_archived ?? false,
-            'is_video'    => $request->is_video ?? false,
-        ]);
-
-        // 🎯 Tangani hashtag
-        if ($request->filled('caption')) {
-            preg_match_all('/#(\w+)/', $request->caption, $tags);
-            foreach ($tags[1] as $tagName) {
-                $tag = Tag::firstOrCreate(['tag_name' => $tagName]);
-                $post->tags()->attach($tag->tag_id);
-            }
-        }
-
-        // 👥 Tangani mention
-        if ($request->filled('caption')) {
-            preg_match_all('/@(\w+)/', $request->caption, $mentions);
-            foreach ($mentions[1] as $username) {
-                $mentionedUser = User::where('username', $username)->first();
-                if ($mentionedUser && $mentionedUser->user_id !== Auth::id()) {
-                    PostMention::create([
-                        'post_id' => $post->post_id,
-                        'mentioned_user_id' => $mentionedUser->user_id
-                    ]);
-                    Notification::create([
-                        'recipient_id'     => $mentionedUser->user_id,
-                        'type'             => 'mention',
-                        'related_user_id'  => Auth::id(),
-                        'related_post_id'  => $post->post_id,
-                        'created_at'       => now(),
-                        'is_read'          => false,
-                    ]);
-                }
-            }
-        }
-
-        return response()->json([
-            'message' => 'Post created',
-            'post' => $post
-        ], 201);
+        $post->media_url = asset('storage/' . $mediaPath);
     }
 
-    // ✏️ Edit post (media optional)
-    public function update(Request $request, $id)
-    {
-        $post = Post::findOrFail($id);
+    // Update field lama
+    $post->caption     = $request->caption ?? $post->caption;
+    $post->location    = $request->location ?? $post->location;
+    $post->is_archived = $request->is_archived ?? $post->is_archived;
+    $post->is_video    = $request->is_video ?? $post->is_video;
 
-        if ($post->user_id !== Auth::id()) {
-            return response()->json(['error' => 'Unauthorized'], 403);
-        }
+    // 🎵 Update field musik
+    $post->music_track_name        = $request->music_track_name ?? $post->music_track_name;
+    $post->music_artist_name       = $request->music_artist_name ?? $post->music_artist_name;
+    $post->music_preview_url       = $request->music_preview_url ?? $post->music_preview_url;
+    $post->music_album_art_url     = $request->music_album_art_url ?? $post->music_album_art_url;
+    $post->music_start_position_ms = $request->music_start_position_ms ?? $post->music_start_position_ms;
+    $post->music_clip_duration_ms  = $request->music_clip_duration_ms ?? $post->music_clip_duration_ms;
 
-        $request->validate([
-            'caption'     => 'nullable|string',
-            'media'       => 'nullable|file|mimes:jpg,jpeg,png,mp4,mov,webm,avi,3gp,mkv|max:512000',
-            'location'    => 'nullable|string',
-            'is_archived' => 'nullable|boolean',
-            'is_video'    => 'nullable|boolean',
-        ]);
+    $post->save();
 
-        // 🔄 Ganti file jika ada media baru
-        if ($request->hasFile('media')) {
-            // Hapus media lama (opsional)
-            if ($post->media_url) {
-                $path = str_replace(asset('storage') . '/', '', $post->media_url);
-                Storage::disk('public')->delete($path);
-            }
-            $mediaPath = $request->file('media')->store('uploads/posts', 'public');
-            $post->media_url = asset('storage/' . $mediaPath);
-        }
+    return response()->json([
+        'message' => 'Post updated',
+        'post' => $post
+    ]);
+}
 
-        // Update field lainnya
-        $post->caption = $request->caption ?? $post->caption;
-        $post->location = $request->location ?? $post->location;
-        $post->is_archived = $request->is_archived ?? $post->is_archived;
-        $post->is_video = $request->is_video ?? $post->is_video;
-        $post->save();
-
-        return response()->json([
-            'message' => 'Post updated',
-            'post' => $post
-        ]);
-    }
 
     // 🗑 Hapus post
     public function destroy($id)
