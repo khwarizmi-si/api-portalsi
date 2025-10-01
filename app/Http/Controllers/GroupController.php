@@ -300,6 +300,7 @@ public function listMembers(Group $group)
                 'is_muted' => (bool) $member->is_muted,
                 'username' => $member->user->username,
                 'profile_picture_url' => $member->user->profile_picture_url,
+                'is_verified' => (bool) $member->user->is_verified,
                 'is_online' => (bool) $member->user->is_online,
                 'last_seen' => $member->user->last_seen,
             ];
