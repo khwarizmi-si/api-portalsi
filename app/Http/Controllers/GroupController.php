@@ -134,32 +134,39 @@ public function store(Request $request)
         return response()->json(['message' => 'Berhasil keluar dari grup.']);
     }
 
-    // 🔹 4. Detail grup
-    public function show(Group $group)
-    {
-        $group->load(['owner:user_id,username', 'members.user:user_id,username']);
+// 🔹 4. Detail grup
+public function show(Group $group)
+{
+    // 🔹 Load relasi owner & members dengan field tambahan
+    $group->load([
+        'owner:user_id,username,is_verified',
+        'members.user:user_id,username,is_verified'
+    ]);
 
-        return response()->json([
-            'group' => [
-                'id' => $group->id,
-                'name' => $group->name,
-                'description' => $group->description,
-                'avatar_url' => $group->avatar_url,
-                'cover_url' => $group->cover_url,
-                'owner' => [
-                    'user_id' => $group->owner->user_id,
-                    'username' => $group->owner->username,
-                ],
+    return response()->json([
+        'group' => [
+            'id'          => $group->id,
+            'name'        => $group->name,
+            'description' => $group->description,
+            'avatar_url'  => $group->avatar_url,
+            'cover_url'   => $group->cover_url,
+            'owner' => [
+                'user_id'    => $group->owner->user_id,
+                'username'   => $group->owner->username,
+                'is_verified'=> (bool) $group->owner->is_verified,
             ],
-            'members' => $group->members->map(function ($member) {
-                return [
-                    'user_id' => $member->user->user_id,
-                    'username' => $member->user->username,
-                    'role' => $member->role,
-                ];
-            }),
-        ]);
-    }
+        ],
+        'members' => $group->members->map(function ($member) {
+            return [
+                'user_id'    => $member->user->user_id,
+                'username'   => $member->user->username,
+                'is_verified'=> (bool) $member->user->is_verified,
+                'role'       => $member->role,
+            ];
+        }),
+    ]);
+}
+
 
     // 🔹 5. Update grup (PUT /groups/{group})
     public function update(Request $request, Group $group)

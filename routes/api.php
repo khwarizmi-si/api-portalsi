@@ -43,7 +43,7 @@ use App\Http\Controllers\{
 
 // 🚀 PUBLIC ROUTES
 Route::post('/register', function (Request $request) {
-    // 🔹 Buat validator manual
+    // 🔹 Validasi input
     $validator = Validator::make($request->all(), [
         'username' => [
             'required',
@@ -56,18 +56,28 @@ Route::post('/register', function (Request $request) {
         'password' => 'required|min:6',
         'role' => 'in:teacher,parent,student,other'
     ], [
-        'username.regex' => 'Username hanya boleh berisi huruf, angka, titik, dan underscore tanpa spasi atau simbol lain.',
+        // 🔹 Custom error messages
+        'username.required' => 'Username wajib diisi.',
+        'username.unique'   => 'Username sudah digunakan, silakan gunakan yang lain.',
+        'username.regex'    => 'Username hanya boleh berisi huruf, angka, titik, dan underscore.',
+        'full_name.required'=> 'Nama lengkap wajib diisi.',
+        'email.required'    => 'Email wajib diisi.',
+        'email.email'       => 'Format email tidak valid.',
+        'email.unique'      => 'Email sudah terdaftar, silahkan gunakan email lainnya.',
+        'password.required' => 'Password wajib diisi.',
+        'password.min'      => 'Password minimal 6 karakter.',
+        'role.in'           => 'Role tidak valid.'
     ]);
 
-    // 🔹 Kalau validasi gagal -> return JSON
+    // 🔹 Kalau validasi gagal -> return JSON rapi
     if ($validator->fails()) {
         return response()->json([
             'message' => 'Validation failed',
-            'errors' => $validator->errors()
+            'errors'  => $validator->errors()
         ], 422);
     }
 
-    // 🔹 Cek role dev
+    // 🔹 Cek role dev (tidak boleh daftar publik)
     if ($request->role === 'dev') {
         return response()->json([
             'message' => 'Role "dev" tidak diizinkan untuk registrasi publik.'
@@ -76,25 +86,25 @@ Route::post('/register', function (Request $request) {
 
     // 🔹 Simpan user baru
     $user = User::create([
-        'username' => strtolower($request->username),
-        'full_name' => $request->full_name,
-        'email' => strtolower($request->email),
-        'password_hash' => bcrypt($request->password),
-        'role' => $request->role ?? 'student',
+        'username'            => strtolower($request->username),
+        'full_name'           => $request->full_name,
+        'email'               => strtolower($request->email),
+        'password_hash'       => bcrypt($request->password),
+        'role'                => $request->role ?? 'student',
         'profile_picture_url' => 'https://api-new.portalsi.com/storage/default-profile.png',
-        'banner_url' => 'https://api-new.portalsi.com/storage/default-banner.png',
+        'banner_url'          => 'https://api-new.portalsi.com/storage/default-banner.png',
     ]);
 
     // 🔹 Kirim verifikasi email
     $user->sendEmailVerificationNotification();
 
-    // 🔹 Buat token
+    // 🔹 Buat token API
     $token = $user->createToken('api-token')->plainTextToken;
 
     return response()->json([
         'message' => 'User registered successfully. Please verify your email.',
-        'token' => $token,
-        'user' => $user
+        'token'   => $token,
+        'user'    => $user
     ], 201);
 });
 
