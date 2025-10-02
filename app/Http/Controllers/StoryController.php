@@ -182,35 +182,29 @@ if ($request->filled('caption')) {
      * Lihat story (catat view jika bukan milik sendiri)
      */
     public function view($id)
-    {
-        $user = Auth::user();
-        $story = Story::findOrFail($id);
+{
+    $user = Auth::user();
+    $story = Story::findOrFail($id);
 
-        if ($story->user_id !== $user->user_id) {
-            $alreadyViewed = StoryView::where('story_id', $story->story_id)
-                ->where('viewer_id', $user->user_id)
-                ->exists();
+    // cek apakah sudah pernah lihat sebelumnya
+    $alreadyViewed = StoryView::where('story_id', $story->story_id)
+        ->where('viewer_id', $user->user_id)
+        ->exists();
 
-            if (!$alreadyViewed) {
-                StoryView::create([
-                    'story_id' => $story->story_id,
-                    'viewer_id' => $user->user_id,
-                    'viewed_at' => now()
-                ]);
-            }
-
-            return response()->json([
-                'message' => $alreadyViewed
-                    ? 'Story sudah pernah dilihat.'
-                    : 'Story berhasil dilihat dan dicatat.'
-            ]);
-        }
-
-        return response()->json([
-            'message' => 'Story milik sendiri berhasil dilihat (tanpa dicatat).'
+    if (!$alreadyViewed) {
+        StoryView::create([
+            'story_id' => $story->story_id,
+            'viewer_id' => $user->user_id,
+            'viewed_at' => now()
         ]);
     }
 
+    return response()->json([
+        'message' => $alreadyViewed
+            ? 'Story sudah pernah dilihat.'
+            : 'Story berhasil dilihat dan dicatat.'
+    ]);
+}
     /**
      * Ambil semua story milik sendiri
      */
