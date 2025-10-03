@@ -356,14 +356,23 @@ public function show($id)
     $owner = $post->user;
 
     // 🔒 Cek apakah post bisa dilihat
-    $canView = !$owner->is_private ||
-        ($authUser && (
-            $authUser->user_id === $owner->user_id ||
-            $owner->followers()
+    $canView = false;
+
+    if ($authUser) {
+        if ($authUser->user_id === $owner->user_id) {
+            // ✅ Jika post milik sendiri, auto bisa lihat (anggap auto-follow)
+            $canView = true;
+        } else {
+            // ✅ Jika private, cek follow status
+            $canView = !$owner->is_private || $owner->followers()
                 ->where('follower_id', $authUser->user_id)
                 ->where('status', 'accepted')
-                ->exists()
-        ));
+                ->exists();
+        }
+    } else {
+        // ✅ User belum login -> hanya bisa lihat jika tidak private
+        $canView = !$owner->is_private;
+    }
 
     if (!$canView) {
         return response()->json([
