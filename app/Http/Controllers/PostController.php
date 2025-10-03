@@ -356,23 +356,14 @@ public function show($id)
     $owner = $post->user;
 
     // 🔒 Cek apakah post bisa dilihat
-    $canView = false;
-
-    if ($authUser) {
-        if ($authUser->user_id === $owner->user_id) {
-            // ✅ Jika post milik sendiri, auto bisa lihat (anggap auto-follow)
-            $canView = true;
-        } else {
-            // ✅ Jika private, cek follow status
-            $canView = !$owner->is_private || $owner->followers()
+    $canView = !$owner->is_private ||
+        ($authUser && (
+            $authUser->user_id === $owner->user_id ||
+            $owner->followers()
                 ->where('follower_id', $authUser->user_id)
                 ->where('status', 'accepted')
-                ->exists();
-        }
-    } else {
-        // ✅ User belum login -> hanya bisa lihat jika tidak private
-        $canView = !$owner->is_private;
-    }
+                ->exists()
+        ));
 
     if (!$canView) {
         return response()->json([
@@ -388,6 +379,21 @@ public function show($id)
     $post->is_bookmarked = $authUser
         ? $post->bookmarks()->where('user_id', $authUser->user_id)->exists()
         : false;
+
+    // 👥 Tambahkan informasi follow
+    if ($authUser) {
+        if ($authUser->user_id === $owner->user_id) {
+            // ✅ Kalau post milik sendiri, auto follow
+            $post->user->is_following = true;
+        } else {
+            $post->user->is_following = $owner->followers()
+                ->where('follower_id', $authUser->user_id)
+                ->where('status', 'accepted')
+                ->exists();
+        }
+    } else {
+        $post->user->is_following = false;
+    }
 
     // pastikan user info story & verified
     $post->user = $this->attachStoryInfo($post->user, $authUser);
