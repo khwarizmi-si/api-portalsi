@@ -48,6 +48,7 @@ public function show(Request $request, $username)
         'profile_picture_url' => $user->profile_picture_url,
         'banner_url'          => $user->banner_url,
         'is_verified'         => $user->is_verified,
+        'role'                => $user->role,
         'is_private'          => $user->is_private,
         'followers_count'     => $user->followers_count,
         'following_count'     => $user->following_count,

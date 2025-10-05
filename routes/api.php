@@ -370,6 +370,34 @@ Route::post('/reset-password', function (Request $request) {
     ], $status === Password::PASSWORD_RESET ? 200 : 400);
 });
 
+// 📌 Bind Email Pertama Kali
+Route::post('/bind-email', function (Request $request) {
+    $request->validate([
+        'email' => 'required|email|unique:users,email',
+    ]);
+
+    $user = $request->user(); // user login pakai token Sanctum
+
+    // pastikan user belum punya email
+    if (!empty($user->email)) {
+        return response()->json([
+            'message' => 'Email sudah terikat dengan akun ini.'
+        ], 400);
+    }
+
+    // simpan email baru
+    $user->email = strtolower($request->email);
+    $user->email_verified_at = null; // reset dulu
+    $user->save();
+
+    // kirim verifikasi email
+    $user->sendEmailVerificationNotification();
+
+    return response()->json([
+        'message' => 'Email berhasil ditambahkan. Silakan verifikasi melalui link yang dikirim.'
+    ]);
+})->middleware(['auth:sanctum']);
+
 Route::middleware(['auth:sanctum'])->get('/special-groups', function (Request $request) {
     $user = $request->user();
 
