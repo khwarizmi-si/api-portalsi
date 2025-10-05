@@ -133,4 +133,31 @@ public function search(Request $request)
         'recent_posts'        => $recentPosts,
     ]);
 }
+
+public function mutuals(Request $request)
+{
+    $authUser = Auth::user();
+
+    if (!$authUser) {
+        return response()->json(['message' => 'Unauthorized'], 401);
+    }
+
+    $perPage = $request->input('per_page', 10);
+
+    // Ambil ID yang kita follow
+    $followingIds = $authUser->following()->pluck('users.user_id')->toArray();
+
+    // Ambil ID yang follow kita
+    $followerIds = $authUser->followers()->pluck('users.user_id')->toArray();
+
+    // Cari irisan (mutual)
+    $mutualIds = array_intersect($followingIds, $followerIds);
+
+    $mutuals = User::whereIn('user_id', $mutualIds)
+        ->select('user_id', 'username', 'full_name', 'is_verified', 'profile_picture_url')
+        ->paginate($perPage);
+
+    return response()->json($mutuals);
+}
+
 }
