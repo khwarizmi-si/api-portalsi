@@ -105,7 +105,7 @@ public function conversation($user_id)
         ->orWhere(function ($q) use ($auth_id, $user_id) {
             $q->where('sender_id', $user_id)->where('receiver_id', $auth_id);
         })
-        ->orderBy('sent_at', 'asc')
+        ->orderBy('sent_at', 'desc')
         ->get()
         ->map(function ($msg) use ($auth_id) {
             // kalau message dari kita sendiri, selalu is_read = true
