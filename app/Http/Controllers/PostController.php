@@ -481,6 +481,27 @@ public function store(Request $request)
         }
     }
 
+       $author = $post->user;
+
+    $followers = $author->followers()->withPivot('created_at')->get();
+
+    foreach ($followers as $follower) {
+        $postCountSinceFollow = Post::where('user_id', $author->user_id)
+            ->where('created_at', '>=', $follower->pivot->created_at)
+            ->count();
+        
+        if ($postCountSinceFollow <= 2) {
+            $notification = Notification::create([
+                'recipient_id'    => $follower->user_id,
+                'type'              => 'new_post',
+                'related_user_id'   => $author->user_id,
+                'related_post_id'   => $post->id,
+            ]);
+            broadcast(new \App\Events\NotificationCreated($notification));
+        }
+    }
+    
+
     return response()->json([
         'message' => 'Post created',
         'post' => $post
