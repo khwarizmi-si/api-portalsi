@@ -437,6 +437,7 @@ Route::middleware(['auth:sanctum'])->group(function () {
     Route::get('/users/search', [ProfileController::class, 'search']);
     Route::get('/circle-avatar/{id}', [PostController::class, 'circleAvatar']);
     Route::get('/clips/{id}', [PostController::class, 'clips']);
+    Route::get('/mutuals', [ProfileController::class, 'mutuals']);
 
 
     // 🔐 Only for verified users
