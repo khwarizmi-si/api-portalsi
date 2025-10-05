@@ -483,12 +483,15 @@ public function store(Request $request)
 
        $author = $post->user;
 
-    $followers = $author->followers()->withPivot('created_at')->get();
+   $followers = $author->followers()->withPivot('followed_at')->get();
 
-    foreach ($followers as $follower) {
-        $postCountSinceFollow = Post::where('user_id', $author->user_id)
-            ->where('created_at', '>=', $follower->pivot->created_at)
-            ->count();
+foreach ($followers as $follower) {
+    
+    // PERUBAHAN 2: Ganti 'created_at' menjadi 'followed_at'
+    $postCountSinceFollow = Post::where('user_id', $author->user_id)
+        ->where('created_at', '>=', $follower->pivot->followed_at) 
+        ->count();
+    
         
         if ($postCountSinceFollow <= 2) {
             $notification = Notification::create([
