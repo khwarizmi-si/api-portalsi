@@ -79,7 +79,12 @@ public function search(Request $request)
             }
         })
         ->select('user_id', 'username', 'full_name', 'is_verified', 'profile_picture_url')
-        ->paginate($perPage); // 🔑 pakai paginate
+        ->paginate($perPage)
+        ->appends([ // ✅ jaga parameter tetap ada di URL pagination
+            'username'  => $username,
+            'full_name' => $fullName,
+            'per_page'  => $perPage,
+        ]);
 
     if ($users->isEmpty()) {
         return response()->json(['message' => 'Tidak ada hasil yang ditemukan.'], 404);
