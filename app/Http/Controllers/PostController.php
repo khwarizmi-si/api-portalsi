@@ -481,6 +481,30 @@ public function store(Request $request)
         }
     }
 
+       $author = $post->user;
+
+   $followers = $author->followers()->withPivot('followed_at')->get();
+
+foreach ($followers as $follower) {
+    
+    // PERUBAHAN 2: Ganti 'created_at' menjadi 'followed_at'
+    $postCountSinceFollow = Post::where('user_id', $author->user_id)
+        ->where('created_at', '>=', $follower->pivot->followed_at) 
+        ->count();
+    
+        
+        if ($postCountSinceFollow <= 2) {
+            $notification = Notification::create([
+                'recipient_id'    => $follower->user_id,
+                'type'              => 'new_post',
+                'related_user_id'   => $author->user_id,
+                'related_post_id'   => $post->id,
+            ]);
+            broadcast(new \App\Events\NotificationCreated($notification));
+        }
+    }
+    
+
     return response()->json([
         'message' => 'Post created',
         'post' => $post
