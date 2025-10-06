@@ -59,10 +59,12 @@ public function show(Request $request, $username)
 }
 
     // ✅ Search user by username and/or full_name
+// ✅ Search user by username and/or full_name
 public function search(Request $request)
 {
     $username = $request->input('username');
     $fullName = $request->input('full_name');
+    $perPage  = $request->input('per_page', 10); // default 10 data per page
 
     if (!$username && !$fullName) {
         return response()->json(['message' => 'Parameter username atau full_name diperlukan.'], 400);
@@ -78,7 +80,7 @@ public function search(Request $request)
             }
         })
         ->select('user_id', 'username', 'full_name', 'is_verified', 'profile_picture_url')
-        ->get();
+        ->paginate($perPage); // 🔑 pakai paginate
 
     if ($users->isEmpty()) {
         return response()->json(['message' => 'Tidak ada hasil yang ditemukan.'], 404);
@@ -86,6 +88,7 @@ public function search(Request $request)
 
     return response()->json($users);
 }
+
 
 
     public function me(Request $request)
