@@ -58,7 +58,6 @@ public function show(Request $request, $username)
     ]);
 }
 
-    // ✅ Search user by username and/or full_name
 // ✅ Search user by username and/or full_name
 public function search(Request $request)
 {

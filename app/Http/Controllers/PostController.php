@@ -643,14 +643,14 @@ public function clips($id, Request $request)
     $mainClip->music_start_position_ms = $mainClip->music_start_position_ms ?? null;
     $mainClip->music_clip_duration_ms  = $mainClip->music_clip_duration_ms ?? null;
 
-    // Ambil 2 clip random, exclude id utama + exclude dari param
+    // Ambil 1 clip random, exclude id utama + exclude dari param
     $nextClips = Post::with(['user', 'tags'])
         ->withCount(['likes', 'comments'])
         ->where('is_video', true)
         ->where('is_archived', false)
         ->whereNotIn('post_id', $excludeIds)
         ->inRandomOrder()
-        ->take(2)
+        ->take(1)
         ->get()
         ->map(function ($post) use ($authUser) {
             $post->is_liked = $authUser
