@@ -45,7 +45,7 @@ class StoryViewController extends Controller
         $viewers = DB::table('story_views')
             ->join('users', 'story_views.viewer_id', '=', 'users.user_id')
             ->where('story_views.story_id', $story_id)
-            ->select('users.user_id', 'users.username', 'users.profile_picture_url', 'story_views.viewed_at')
+            ->select('users.user_id', 'users.username', 'users.profile_picture_url', 'users.is_verified', 'story_views.viewed_at')
             ->orderBy('story_views.viewed_at', 'desc')
             ->get();
 
