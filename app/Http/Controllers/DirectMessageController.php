@@ -32,19 +32,17 @@ public function send(Request $request)
         'content'             => 'nullable|string',
         'media'               => 'nullable|file|mimes:jpg,jpeg,png,mp4,pdf|max:51200',
         'is_story_response'   => 'nullable|boolean',
-        'story_id'            => 'nullable|integer|exists:stories,story_id', // ubah jika nama tabel stories beda
+        'story_id'            => 'nullable|integer|exists:stories,story_id',
         'responded_media_url' => 'nullable|string|max:255',
     ]);
 
     $mediaUrl = null;
 
-    // ✅ Upload file media jika ada
     if ($request->hasFile('media')) {
         $mediaPath = $request->file('media')->store('uploads/direct_messages', 'public');
         $mediaUrl  = asset('storage/' . $mediaPath);
     }
 
-    // ✅ Buat pesan baru
     $message = DirectMessage::create([
         'sender_id'           => Auth::id(),
         'receiver_id'         => $request->receiver_id,
@@ -57,12 +55,10 @@ public function send(Request $request)
         'is_read'             => false,
     ]);
 
-    $message->refresh(); // pastikan data datetime langsung terbaca
+    $message->refresh();
 
-    // ✨ Broadcast pesan baru ke penerima (real-time)
     broadcast(new NewDirectMessage($message))->toOthers();
 
-    // ✨ Siapkan data untuk pembaruan chat list
     $sender   = Auth::user();
     $receiver = User::findOrFail($request->receiver_id);
 
@@ -76,13 +72,11 @@ public function send(Request $request)
         'last_media'          => $message->media_url,
         'sent_at'             => $message->sent_at?->toIso8601String(),
         'is_read'             => $message->is_read,
-        // ⬇️ tambahan metadata reply story
         'is_story_response'   => (bool) $message->is_story_response,
         'story_id'            => $message->story_id,
         'responded_media_url' => $message->responded_media_url,
     ];
 
-    // ✨ Broadcast update chat list ke penerima
     $dataForReceiver = $conversationData;
     $dataForReceiver['id']                  = $sender->user_id;
     $dataForReceiver['name']                = $sender->full_name ?? $sender->username;
@@ -91,7 +85,6 @@ public function send(Request $request)
     $dataForReceiver['recipient_id']        = $receiver->user_id;
     broadcast(new ChatListUpdated($dataForReceiver));
 
-    // ✨ Broadcast update chat list ke pengirim
     $dataForSender = $conversationData;
     $dataForSender['recipient_id'] = $sender->user_id;
     broadcast(new ChatListUpdated($dataForSender));
@@ -101,8 +94,6 @@ public function send(Request $request)
         'data'    => $message
     ], 201);
 }
-
-
 
     /**
      * Ambil semua chat antara 2 user
