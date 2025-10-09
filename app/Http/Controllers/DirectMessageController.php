@@ -28,33 +28,41 @@ class DirectMessageController extends Controller
 public function send(Request $request)
 {
     $request->validate([
-        'receiver_id' => 'required|exists:users,user_id',
-        'content'     => 'nullable|string',
-        'media'       => 'nullable|file|mimes:jpg,jpeg,png,mp4,pdf|max:51200',
+        'receiver_id'         => 'required|exists:users,user_id',
+        'content'             => 'nullable|string',
+        'media'               => 'nullable|file|mimes:jpg,jpeg,png,mp4,pdf|max:51200',
+        'is_story_response'   => 'nullable|boolean',
+        'story_id'            => 'nullable|integer|exists:stories,id', // ubah jika nama tabel stories beda
+        'responded_media_url' => 'nullable|string|max:255',
     ]);
 
     $mediaUrl = null;
+
+    // ✅ Upload file media jika ada
     if ($request->hasFile('media')) {
         $mediaPath = $request->file('media')->store('uploads/direct_messages', 'public');
-        $mediaUrl = asset('storage/' . $mediaPath);
+        $mediaUrl  = asset('storage/' . $mediaPath);
     }
 
+    // ✅ Buat pesan baru
     $message = DirectMessage::create([
-        'sender_id'   => Auth::id(),
-        'receiver_id' => $request->receiver_id,
-        'content'     => $request->content,
-        'media_url'   => $mediaUrl,
-        'sent_at'     => now(),
-        'is_read'     => false
+        'sender_id'           => Auth::id(),
+        'receiver_id'         => $request->receiver_id,
+        'content'             => $request->content,
+        'media_url'           => $mediaUrl,
+        'is_story_response'   => $request->boolean('is_story_response', false),
+        'story_id'            => $request->is_story_response ? $request->story_id : null,
+        'responded_media_url' => $request->is_story_response ? $request->responded_media_url : null,
+        'sent_at'             => now(),
+        'is_read'             => false,
     ]);
 
-    // pastikan nilai cast datetime langsung terbaca
-    $message->refresh();
+    $message->refresh(); // pastikan data datetime langsung terbaca
 
-    // ✨ SIARKAN PESAN BARU
+    // ✨ Broadcast pesan baru ke penerima (real-time)
     broadcast(new NewDirectMessage($message))->toOthers();
-    
-    // ✨ 2. SIAPKAN DAN SIARKAN UPDATE UNTUK CHAT LIST
+
+    // ✨ Siapkan data untuk pembaruan chat list
     $sender   = Auth::user();
     $receiver = User::findOrFail($request->receiver_id);
 
@@ -66,21 +74,24 @@ public function send(Request $request)
         'profile_picture_url' => $receiver->profile_picture_url,
         'last_message'        => $message->content ?? '📎 Media',
         'last_media'          => $message->media_url,
-        // ⬇️ null-safe biar gak error walau kosong
         'sent_at'             => $message->sent_at?->toIso8601String(),
         'is_read'             => $message->is_read,
+        // ⬇️ tambahan metadata reply story
+        'is_story_response'   => (bool) $message->is_story_response,
+        'story_id'            => $message->story_id,
+        'responded_media_url' => $message->responded_media_url,
     ];
-    
-    // ✨ 3. PANGGIL BROADCAST UNTUK PENERIMA
+
+    // ✨ Broadcast update chat list ke penerima
     $dataForReceiver = $conversationData;
-    $dataForReceiver['id']              = $sender->user_id; 
-    $dataForReceiver['name']            = $sender->full_name ?? $sender->username;
-    $dataForReceiver['username']        = $sender->username;
+    $dataForReceiver['id']                  = $sender->user_id;
+    $dataForReceiver['name']                = $sender->full_name ?? $sender->username;
+    $dataForReceiver['username']            = $sender->username;
     $dataForReceiver['profile_picture_url'] = $sender->profile_picture_url;
-    $dataForReceiver['recipient_id']    = $receiver->user_id;
+    $dataForReceiver['recipient_id']        = $receiver->user_id;
     broadcast(new ChatListUpdated($dataForReceiver));
 
-    // ✨ 4. PANGGIL BROADCAST UNTUK PENGIRIM
+    // ✨ Broadcast update chat list ke pengirim
     $dataForSender = $conversationData;
     $dataForSender['recipient_id'] = $sender->user_id;
     broadcast(new ChatListUpdated($dataForSender));
@@ -90,6 +101,7 @@ public function send(Request $request)
         'data'    => $message
     ], 201);
 }
+
 
 
     /**
