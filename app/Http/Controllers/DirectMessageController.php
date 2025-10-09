@@ -32,7 +32,7 @@ public function send(Request $request)
         'content'             => 'nullable|string',
         'media'               => 'nullable|file|mimes:jpg,jpeg,png,mp4,pdf|max:51200',
         'is_story_response'   => 'nullable|boolean',
-        'story_id'            => 'nullable|integer|exists:stories,id', // ubah jika nama tabel stories beda
+        'story_id'            => 'nullable|integer|exists:stories,story_id', // ubah jika nama tabel stories beda
         'responded_media_url' => 'nullable|string|max:255',
     ]);
 
