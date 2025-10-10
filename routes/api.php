@@ -460,7 +460,7 @@ Route::middleware(['auth:sanctum'])->group(function () {
     Route::get('/users/{id}/followers', [FollowController::class, 'followers']);
     Route::get('/users/{id}/following', [FollowController::class, 'following']);
     Route::get('/stories/feed', [StoryController::class, 'feed']);
-    Route::get('/stories/feed/next-user', [StoryController::class, 'feedNextUser']);
+    Route::get('/stories/feed/next-user/{user_id}', [StoryController::class, 'feedNextUser']);
     Route::get('/notifications', [NotificationController::class, 'index']);
     Route::get('/explore', [PostController::class, 'explore']);
     Route::get('/users/search', [ProfileController::class, 'search']);

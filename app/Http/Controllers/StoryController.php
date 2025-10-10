@@ -163,45 +163,50 @@ class StoryController extends Controller
         return response()->json($grouped);
     }
 
-    public function feedNextUser(Request $request)
+public function feedNextUser(Request $request, $userId)
 {
     $authUser = Auth::user();
-    $page = max(1, (int) $request->input('page', 1)); // user ke-n
 
-    // ambil semua user yang diikuti + diri sendiri
+    // ambil daftar user di feed utama (urutannya sama persis)
     $followedIds = $authUser->following()->pluck('users.user_id')->toArray();
-    $allIds = array_merge($followedIds, [$authUser->user_id]);
+    $allIds = array_merge([$authUser->user_id], $followedIds);
 
-    // ambil semua user yang punya story aktif
+    // urutan sama seperti feed utama (biasanya berdasarkan waktu story terbaru)
     $usersWithStories = Story::with('user:user_id,username,profile_picture_url')
         ->whereIn('user_id', $allIds)
         ->where('expires_at', '>', now())
         ->select('user_id')
         ->distinct()
-        ->orderByRaw('MAX(created_at) DESC') // urutkan berdasarkan waktu story terbaru
+        ->orderByRaw('MAX(created_at) DESC')
         ->groupBy('user_id')
         ->get()
         ->values();
 
-    $totalUsers = $usersWithStories->count();
-    $targetUser = $usersWithStories->slice($page - 1, 1)->first();
+    // cari index posisi user sekarang
+    $currentIndex = $usersWithStories->search(function ($item) use ($userId) {
+        return $item->user_id == $userId;
+    });
 
-    if (!$targetUser) {
+    if ($currentIndex === false) {
+        return response()->json(['message' => 'User tidak ditemukan di daftar feed.'], 404);
+    }
+
+    // ambil user berikutnya
+    $nextUser = $usersWithStories->get($currentIndex + 1);
+
+    if (!$nextUser) {
         return response()->json([
             'message' => 'Tidak ada user lagi yang memiliki story aktif.',
-            'current_page' => $page,
-            'total_users' => $totalUsers,
             'data' => []
         ], 404);
     }
 
-    // ambil semua story milik user tersebut
-    $stories = Story::where('user_id', $targetUser->user_id)
+    // ambil semua story milik user berikutnya
+    $stories = Story::where('user_id', $nextUser->user_id)
         ->where('expires_at', '>', now())
         ->orderBy('created_at', 'asc')
         ->get();
 
-    // format data story
     $formattedStories = $stories->map(function ($story) use ($authUser) {
         $alreadyViewed = \DB::table('story_views')
             ->where('story_id', $story->story_id)
@@ -229,21 +234,19 @@ class StoryController extends Controller
         ];
     });
 
-    // pagination antar user
-    $nextPage = $page < $totalUsers ? $page + 1 : null;
-    $prevPage = $page > 1 ? $page - 1 : null;
+    // cari user sebelum dan sesudah (biar frontend bisa tahu prev/next id)
+    $prevUser = $currentIndex > 0 ? $usersWithStories->get($currentIndex - 1) : null;
+    $nextNextUser = $usersWithStories->get($currentIndex + 2);
 
     return response()->json([
-        'current_page' => $page,
-        'total_users' => $totalUsers,
-        'user' => [
-            'user_id' => $targetUser->user->user_id,
-            'username' => $targetUser->user->username,
-            'profile_picture_url' => $targetUser->user->profile_picture_url,
+        'current_user' => [
+            'user_id' => $nextUser->user->user_id,
+            'username' => $nextUser->user->username,
+            'profile_picture_url' => $nextUser->user->profile_picture_url,
         ],
         'stories' => $formattedStories,
-        'next_page_url' => $nextPage ? url("/api/stories/feed/next-user?page={$nextPage}") : null,
-        'prev_page_url' => $prevPage ? url("/api/stories/feed/next-user?page={$prevPage}") : null,
+        'prev_user_id' => $prevUser ? $prevUser->user_id : null,
+        'next_user_id' => $nextNextUser ? $nextNextUser->user_id : null,
     ]);
 }
 
