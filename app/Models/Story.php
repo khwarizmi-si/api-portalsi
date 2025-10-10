@@ -21,12 +21,13 @@ class Story extends Model
         'music_track_name',
         'music_artist_name',
         'music_preview_url',
-        'music_album_art_url',       // ✅ baru
+        'music_album_art_url',
         'music_start_position_ms',
-        'music_clip_duration_ms',    // ✅ baru
+        'music_clip_duration_ms',
         'music_display_style',
-        'music_sticker_position_x',  // ✅ baru
-        'music_sticker_position_y',  // ✅ baru
+        'music_sticker_position_x',
+        'music_sticker_position_y',
+        'color_pallete', // ✅ tambahkan di fillable
         'created_at',
         'expires_at'
     ];
@@ -38,6 +39,9 @@ class Story extends Model
         'music_clip_duration_ms' => 'integer',
         'music_sticker_position_x' => 'float',
         'music_sticker_position_y' => 'float',
+
+        // ✅ otomatis decode/encode JSON string jadi array
+        'color_pallete' => 'array',
     ];
 
     public function user()
@@ -46,8 +50,7 @@ class Story extends Model
     }
 
     public function mentions()
-{
-    return $this->hasMany(StoryMention::class, 'story_id');
-}
-
+    {
+        return $this->hasMany(StoryMention::class, 'story_id');
+    }
 }
