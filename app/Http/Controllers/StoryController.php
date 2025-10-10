@@ -102,28 +102,88 @@ class StoryController extends Controller
     /**
      * Ambil story dari user yang diikuti + diri sendiri
      */
-public function feed(Request $request)
+    public function feed()
+    {
+        $user = Auth::user();
+
+        $followedIds = $user->following()->pluck('users.user_id')->toArray();
+        $allIds = array_merge($followedIds, [$user->user_id]);
+
+        $stories = Story::with(['user:user_id,username,profile_picture_url'])
+            ->whereIn('user_id', $allIds)
+            ->where('expires_at', '>', now())
+            ->latest()
+            ->get();
+
+        $grouped = $stories->groupBy('user.user_id')->map(function ($userStories) use ($user) {
+            $storyOwner = $userStories->first()->user;
+
+            $storyIds = $userStories->pluck('story_id')->toArray();
+            $viewedCount = \DB::table('story_views')
+                ->whereIn('story_id', $storyIds)
+                ->where('viewer_id', $user->user_id)
+                ->count();
+
+            $isAllViewed = $viewedCount >= count($storyIds);
+
+            return [
+                'user_id' => $storyOwner->user_id,
+                'username' => $storyOwner->username,
+                'profile_picture_url' => $storyOwner->profile_picture_url,
+                'is_viewed' => $isAllViewed,
+                'stories' => $userStories->map(function ($story) use ($user) {
+                    $alreadyViewed = \DB::table('story_views')
+                        ->where('story_id', $story->story_id)
+                        ->where('viewer_id', $user->user_id)
+                        ->exists();
+
+                    return [
+                        'story_id' => $story->story_id,
+                        'type' => $story->type,
+                        'media_url' => $story->media_url,
+                        'caption' => $story->caption,
+                        'music_track_name' => $story->music_track_name,
+                        'music_artist_name' => $story->music_artist_name,
+                        'music_preview_url' => $story->music_preview_url,
+                        'music_album_art_url' => $story->music_album_art_url,
+                        'music_start_position_ms' => $story->music_start_position_ms,
+                        'music_clip_duration_ms' => $story->music_clip_duration_ms,
+                        'music_display_style' => $story->music_display_style,
+                        'music_sticker_position_x' => $story->music_sticker_position_x,
+                        'music_sticker_position_y' => $story->music_sticker_position_y,
+                        'color_pallete' => $story->color_pallete, // ✅ baru
+                        'created_at' => $story->created_at,
+                        'expires_at' => $story->expires_at,
+                        'is_viewed' => $alreadyViewed,
+                    ];
+                })->values()
+            ];
+        })->values();
+
+        return response()->json($grouped);
+    }
+
+    public function feedNextUser(Request $request)
 {
     $authUser = Auth::user();
-    $page = max(1, (int) $request->input('page', 1)); // pagination per user
+    $page = max(1, (int) $request->input('page', 1)); // user ke-n
 
-    // ambil semua user yang punya story aktif (termasuk diri sendiri + yang diikuti)
+    // ambil semua user yang diikuti + diri sendiri
     $followedIds = $authUser->following()->pluck('users.user_id')->toArray();
     $allIds = array_merge($followedIds, [$authUser->user_id]);
 
-    // cari user yang memiliki story aktif
+    // ambil semua user yang punya story aktif
     $usersWithStories = Story::with('user:user_id,username,profile_picture_url')
         ->whereIn('user_id', $allIds)
         ->where('expires_at', '>', now())
         ->select('user_id')
         ->distinct()
-        ->orderByDesc('user_id') // bisa diganti ke orderByRaw('MAX(created_at) DESC') kalau ingin berdasarkan story terbaru
+        ->orderByRaw('MAX(created_at) DESC') // urutkan berdasarkan waktu story terbaru
+        ->groupBy('user_id')
         ->get()
         ->values();
 
     $totalUsers = $usersWithStories->count();
-
-    // ambil user target berdasarkan halaman
     $targetUser = $usersWithStories->slice($page - 1, 1)->first();
 
     if (!$targetUser) {
@@ -135,12 +195,13 @@ public function feed(Request $request)
         ], 404);
     }
 
-    // ambil semua story milik user target
+    // ambil semua story milik user tersebut
     $stories = Story::where('user_id', $targetUser->user_id)
         ->where('expires_at', '>', now())
         ->orderBy('created_at', 'asc')
         ->get();
 
+    // format data story
     $formattedStories = $stories->map(function ($story) use ($authUser) {
         $alreadyViewed = \DB::table('story_views')
             ->where('story_id', $story->story_id)
@@ -168,6 +229,7 @@ public function feed(Request $request)
         ];
     });
 
+    // pagination antar user
     $nextPage = $page < $totalUsers ? $page + 1 : null;
     $prevPage = $page > 1 ? $page - 1 : null;
 
@@ -180,10 +242,11 @@ public function feed(Request $request)
             'profile_picture_url' => $targetUser->user->profile_picture_url,
         ],
         'stories' => $formattedStories,
-        'next_page_url' => $nextPage ? url("/api/stories/feed?page={$nextPage}") : null,
-        'prev_page_url' => $prevPage ? url("/api/stories/feed?page={$prevPage}") : null,
+        'next_page_url' => $nextPage ? url("/api/stories/feed/next-user?page={$nextPage}") : null,
+        'prev_page_url' => $prevPage ? url("/api/stories/feed/next-user?page={$prevPage}") : null,
     ]);
 }
+
 
     /**
      * Hapus story milik sendiri
