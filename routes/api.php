@@ -499,10 +499,6 @@ Route::middleware(['auth:sanctum'])->group(function () {
         Route::get('/stories/{id}/viewers', [StoryViewController::class, 'viewers']);
         Route::get('/stories/user/{userId}', [StoryController::class, 'getByUser']);
         Route::get('/stories/my/archived', [StoryController::class, 'myArchivedStories']);
-        Route::get('/stories/feed/paginated', [StoryController::class, 'feedPaginated']);
-        Route::get('/stories/feed/next', [StoryController::class, 'feedNextUser']);
-
-
 
         // Notifications
         Route::patch('/notifications/{id}/read', [NotificationController::class, 'markAsRead']);
