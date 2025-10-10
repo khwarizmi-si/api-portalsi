@@ -163,15 +163,15 @@ class StoryController extends Controller
         return response()->json($grouped);
     }
 
-public function feedNextUser(Request $request, $userId)
+public function feedUser(Request $request, $userId)
 {
     $authUser = Auth::user();
 
-    // ambil daftar user di feed utama (urutannya sama persis)
+    // 🔹 Ambil daftar user_id yang masuk feed (diri sendiri + yang diikuti)
     $followedIds = $authUser->following()->pluck('users.user_id')->toArray();
     $allIds = array_merge([$authUser->user_id], $followedIds);
 
-    // urutan sama seperti feed utama (biasanya berdasarkan waktu story terbaru)
+    // 🔹 Ambil daftar user yang punya story aktif (urutkan seperti feed utama)
     $usersWithStories = Story::with('user:user_id,username,profile_picture_url')
         ->whereIn('user_id', $allIds)
         ->where('expires_at', '>', now())
@@ -182,27 +182,27 @@ public function feedNextUser(Request $request, $userId)
         ->get()
         ->values();
 
-    // cari index posisi user sekarang
-    $currentIndex = $usersWithStories->search(function ($item) use ($userId) {
-        return $item->user_id == $userId;
-    });
-
-    if ($currentIndex === false) {
-        return response()->json(['message' => 'User tidak ditemukan di daftar feed.'], 404);
-    }
-
-    // ambil user berikutnya
-    $nextUser = $usersWithStories->get($currentIndex + 1);
-
-    if (!$nextUser) {
+    if ($usersWithStories->isEmpty()) {
         return response()->json([
-            'message' => 'Tidak ada user lagi yang memiliki story aktif.',
+            'message' => 'Tidak ada story aktif.',
             'data' => []
         ], 404);
     }
 
-    // ambil semua story milik user berikutnya
-    $stories = Story::where('user_id', $nextUser->user_id)
+    // 🔹 Cari posisi user sekarang
+    $currentIndex = $usersWithStories->search(fn($u) => $u->user_id == $userId);
+
+    if ($currentIndex === false) {
+        return response()->json([
+            'message' => 'User tidak ditemukan di feed.',
+            'data' => []
+        ], 404);
+    }
+
+    $currentUser = $usersWithStories->get($currentIndex);
+
+    // 🔹 Ambil story milik user saat ini
+    $stories = Story::where('user_id', $currentUser->user_id)
         ->where('expires_at', '>', now())
         ->orderBy('created_at', 'asc')
         ->get();
@@ -234,19 +234,19 @@ public function feedNextUser(Request $request, $userId)
         ];
     });
 
-    // cari user sebelum dan sesudah (biar frontend bisa tahu prev/next id)
+    // 🔹 Ambil prev dan next user_id sesuai urutan feed
     $prevUser = $currentIndex > 0 ? $usersWithStories->get($currentIndex - 1) : null;
-    $nextNextUser = $usersWithStories->get($currentIndex + 2);
+    $nextUser = $usersWithStories->get($currentIndex + 1);
 
     return response()->json([
         'current_user' => [
-            'user_id' => $nextUser->user->user_id,
-            'username' => $nextUser->user->username,
-            'profile_picture_url' => $nextUser->user->profile_picture_url,
+            'user_id' => $currentUser->user->user_id,
+            'username' => $currentUser->user->username,
+            'profile_picture_url' => $currentUser->user->profile_picture_url,
         ],
         'stories' => $formattedStories,
         'prev_user_id' => $prevUser ? $prevUser->user_id : null,
-        'next_user_id' => $nextNextUser ? $nextNextUser->user_id : null,
+        'next_user_id' => $nextUser ? $nextUser->user_id : null,
     ]);
 }
 
