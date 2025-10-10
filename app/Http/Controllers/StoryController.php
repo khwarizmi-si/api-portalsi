@@ -15,21 +15,6 @@ use Carbon\Carbon;
 
 class StoryController extends Controller
 {
-
-        private function getFeedUsers($authId)
-    {
-        return Story::selectRaw('user_id, MAX(created_at) as latest_story_time')
-            ->where('expires_at', '>', now())
-            ->whereHas('user', function ($q) use ($authId) {
-                $q->where('user_id', '!=', $authId);
-            })
-            ->with(['user:user_id,username,profile_picture_url'])
-            ->groupBy('user_id')
-            ->orderByDesc('latest_story_time')
-            ->get()
-            ->values();
-    }
-    
     /**
      * Upload story baru (image, video, music)
      */
@@ -115,118 +100,155 @@ class StoryController extends Controller
     }
 
     /**
-     * 🔹 Endpoint utama: ambil semua story feed (semua user dengan story aktif)
+     * Ambil story dari user yang diikuti + diri sendiri
      */
-    public function feed(Request $request)
+    public function feed()
     {
-        $authId = auth()->id();
+        $user = Auth::user();
 
-        $usersWithStories = $this->getFeedUsers($authId);
+        $followedIds = $user->following()->pluck('users.user_id')->toArray();
+        $allIds = array_merge($followedIds, [$user->user_id]);
 
-        $feed = $usersWithStories->map(function ($item) {
-            $stories = Story::where('user_id', $item->user_id)
-                ->where('expires_at', '>', now())
-                ->orderBy('created_at', 'asc')
-                ->get();
+        $stories = Story::with(['user:user_id,username,profile_picture_url'])
+            ->whereIn('user_id', $allIds)
+            ->where('expires_at', '>', now())
+            ->latest()
+            ->get();
+
+        $grouped = $stories->groupBy('user.user_id')->map(function ($userStories) use ($user) {
+            $storyOwner = $userStories->first()->user;
+
+            $storyIds = $userStories->pluck('story_id')->toArray();
+            $viewedCount = \DB::table('story_views')
+                ->whereIn('story_id', $storyIds)
+                ->where('viewer_id', $user->user_id)
+                ->count();
+
+            $isAllViewed = $viewedCount >= count($storyIds);
 
             return [
-                'user_id' => $item->user->user_id,
-                'username' => $item->user->username,
-                'profile_picture_url' => $item->user->profile_picture_url,
-                'is_viewed' => false,
-                'stories' => $stories,
+                'user_id' => $storyOwner->user_id,
+                'username' => $storyOwner->username,
+                'profile_picture_url' => $storyOwner->profile_picture_url,
+                'is_viewed' => $isAllViewed,
+                'stories' => $userStories->map(function ($story) use ($user) {
+                    $alreadyViewed = \DB::table('story_views')
+                        ->where('story_id', $story->story_id)
+                        ->where('viewer_id', $user->user_id)
+                        ->exists();
+
+                    return [
+                        'story_id' => $story->story_id,
+                        'type' => $story->type,
+                        'media_url' => $story->media_url,
+                        'caption' => $story->caption,
+                        'music_track_name' => $story->music_track_name,
+                        'music_artist_name' => $story->music_artist_name,
+                        'music_preview_url' => $story->music_preview_url,
+                        'music_album_art_url' => $story->music_album_art_url,
+                        'music_start_position_ms' => $story->music_start_position_ms,
+                        'music_clip_duration_ms' => $story->music_clip_duration_ms,
+                        'music_display_style' => $story->music_display_style,
+                        'music_sticker_position_x' => $story->music_sticker_position_x,
+                        'music_sticker_position_y' => $story->music_sticker_position_y,
+                        'color_pallete' => $story->color_pallete, // ✅ baru
+                        'created_at' => $story->created_at,
+                        'expires_at' => $story->expires_at,
+                        'is_viewed' => $alreadyViewed,
+                    ];
+                })->values()
             ];
-        });
+        })->values();
 
-        return response()->json([
-            'message' => 'Berhasil mengambil story feed.',
-            'data' => $feed,
-        ]);
+        return response()->json($grouped);
     }
 
-    /**
-     * 🔹 Endpoint: ambil story user selanjutnya berdasarkan urutan feed
-     * Param: ?current_user_id=...
-     */
-    public function feedNextUser(Request $request)
-    {
-        $currentUserId = $request->input('current_user_id');
+public function feedNextUser(Request $request, $userId)
+{
+    $authUser = Auth::user();
 
-        if (!$currentUserId) {
-            return response()->json(['message' => 'Parameter current_user_id diperlukan.'], 400);
-        }
+    // ambil daftar user di feed utama (urutannya sama persis)
+    $followedIds = $authUser->following()->pluck('users.user_id')->toArray();
+    $allIds = array_merge([$authUser->user_id], $followedIds);
 
-        $authId = auth()->id();
-        $usersWithStories = $this->getFeedUsers($authId);
+    // urutan sama seperti feed utama (biasanya berdasarkan waktu story terbaru)
+    $usersWithStories = Story::with('user:user_id,username,profile_picture_url')
+        ->whereIn('user_id', $allIds)
+        ->where('expires_at', '>', now())
+        ->select('user_id')
+        ->distinct()
+        ->orderByRaw('MAX(created_at) DESC')
+        ->groupBy('user_id')
+        ->get()
+        ->values();
 
-        $currentIndex = $usersWithStories->search(fn($item) => (int)$item->user_id === (int)$currentUserId);
+    // cari index posisi user sekarang
+    $currentIndex = $usersWithStories->search(function ($item) use ($userId) {
+        return $item->user_id == $userId;
+    });
 
-        if ($currentIndex === false || $currentIndex + 1 >= $usersWithStories->count()) {
-            return response()->json([
-                'message' => 'Tidak ada user lagi yang memiliki story aktif (next).',
-                'data' => []
-            ]);
-        }
-
-        $nextUser = $usersWithStories[$currentIndex + 1];
-
-        $stories = Story::where('user_id', $nextUser->user_id)
-            ->where('expires_at', '>', now())
-            ->orderBy('created_at', 'asc')
-            ->get();
-
-        return response()->json([
-            'message' => 'Berhasil mengambil story user selanjutnya.',
-            'data' => [
-                'user_id' => $nextUser->user->user_id,
-                'username' => $nextUser->user->username,
-                'profile_picture_url' => $nextUser->user->profile_picture_url,
-                'stories' => $stories,
-            ]
-        ]);
+    if ($currentIndex === false) {
+        return response()->json(['message' => 'User tidak ditemukan di daftar feed.'], 404);
     }
 
-    /**
-     * 🔹 Endpoint: ambil story user sebelumnya berdasarkan urutan feed
-     * Param: ?current_user_id=...
-     */
-    public function feedPreviousUser(Request $request)
-    {
-        $currentUserId = $request->input('current_user_id');
+    // ambil user berikutnya
+    $nextUser = $usersWithStories->get($currentIndex + 1);
 
-        if (!$currentUserId) {
-            return response()->json(['message' => 'Parameter current_user_id diperlukan.'], 400);
-        }
-
-        $authId = auth()->id();
-        $usersWithStories = $this->getFeedUsers($authId);
-
-        $currentIndex = $usersWithStories->search(fn($item) => (int)$item->user_id === (int)$currentUserId);
-
-        if ($currentIndex === false || $currentIndex - 1 < 0) {
-            return response()->json([
-                'message' => 'Tidak ada user sebelumnya yang memiliki story aktif.',
-                'data' => []
-            ]);
-        }
-
-        $prevUser = $usersWithStories[$currentIndex - 1];
-
-        $stories = Story::where('user_id', $prevUser->user_id)
-            ->where('expires_at', '>', now())
-            ->orderBy('created_at', 'asc')
-            ->get();
-
+    if (!$nextUser) {
         return response()->json([
-            'message' => 'Berhasil mengambil story user sebelumnya.',
-            'data' => [
-                'user_id' => $prevUser->user->user_id,
-                'username' => $prevUser->user->username,
-                'profile_picture_url' => $prevUser->user->profile_picture_url,
-                'stories' => $stories,
-            ]
-        ]);
+            'message' => 'Tidak ada user lagi yang memiliki story aktif.',
+            'data' => []
+        ], 404);
     }
+
+    // ambil semua story milik user berikutnya
+    $stories = Story::where('user_id', $nextUser->user_id)
+        ->where('expires_at', '>', now())
+        ->orderBy('created_at', 'asc')
+        ->get();
+
+    $formattedStories = $stories->map(function ($story) use ($authUser) {
+        $alreadyViewed = \DB::table('story_views')
+            ->where('story_id', $story->story_id)
+            ->where('viewer_id', $authUser->user_id)
+            ->exists();
+
+        return [
+            'story_id' => $story->story_id,
+            'type' => $story->type,
+            'media_url' => $story->media_url,
+            'caption' => $story->caption,
+            'music_track_name' => $story->music_track_name,
+            'music_artist_name' => $story->music_artist_name,
+            'music_preview_url' => $story->music_preview_url,
+            'music_album_art_url' => $story->music_album_art_url,
+            'music_start_position_ms' => $story->music_start_position_ms,
+            'music_clip_duration_ms' => $story->music_clip_duration_ms,
+            'music_display_style' => $story->music_display_style,
+            'music_sticker_position_x' => $story->music_sticker_position_x,
+            'music_sticker_position_y' => $story->music_sticker_position_y,
+            'color_pallete' => $story->color_pallete,
+            'created_at' => $story->created_at,
+            'expires_at' => $story->expires_at,
+            'is_viewed' => $alreadyViewed,
+        ];
+    });
+
+    // cari user sebelum dan sesudah (biar frontend bisa tahu prev/next id)
+    $prevUser = $currentIndex > 0 ? $usersWithStories->get($currentIndex - 1) : null;
+    $nextNextUser = $usersWithStories->get($currentIndex + 2);
+
+    return response()->json([
+        'current_user' => [
+            'user_id' => $nextUser->user->user_id,
+            'username' => $nextUser->user->username,
+            'profile_picture_url' => $nextUser->user->profile_picture_url,
+        ],
+        'stories' => $formattedStories,
+        'prev_user_id' => $prevUser ? $prevUser->user_id : null,
+        'next_user_id' => $nextNextUser ? $nextNextUser->user_id : null,
+    ]);
+}
 
 
     /**
