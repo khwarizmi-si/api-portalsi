@@ -191,14 +191,13 @@ public function feedUser(Request $request, $userId)
     $followedIds = $authUser->following()->pluck('users.user_id')->toArray();
     $allIds = array_merge([$authUser->user_id], $followedIds);
 
-    // 🔹 Ambil daftar user yang punya story aktif (urutkan seperti feed utama)
+    // 🔹 Ambil daftar user yang punya story aktif (urutkan seperti feed)
     $usersWithStories = Story::with('user:user_id,username,profile_picture_url')
         ->whereIn('user_id', $allIds)
         ->where('expires_at', '>', now())
-        ->select('user_id')
-        ->distinct()
-        ->orderByRaw('MAX(created_at) DESC')
+        ->selectRaw('user_id, MAX(created_at) as latest_story_time')
         ->groupBy('user_id')
+        ->orderByDesc('latest_story_time')
         ->get()
         ->values();
 
@@ -254,9 +253,9 @@ public function feedUser(Request $request, $userId)
         ];
     });
 
-    // 🔹 Ambil prev dan next user_id sesuai urutan feed
-    $prevUser = $currentIndex > 0 ? $usersWithStories->get($currentIndex - 1) : null;
-    $nextUser = $usersWithStories->get($currentIndex + 1);
+    // 🔹 Perbaiki urutan navigasi
+    $nextUser = $currentIndex > 0 ? $usersWithStories->get($currentIndex - 1) : null; // ✅ dibalik
+    $prevUser = $usersWithStories->get($currentIndex + 1); // ✅ dibalik
 
     return response()->json([
         'current_user' => [
@@ -269,7 +268,6 @@ public function feedUser(Request $request, $userId)
         'next_user_id' => $nextUser ? $nextUser->user_id : null,
     ]);
 }
-
 
     /**
      * Hapus story milik sendiri
