@@ -102,76 +102,89 @@ class StoryController extends Controller
     /**
      * Ambil story dari user yang diikuti + diri sendiri
      */
-    public function feed()
+public function feed()
 {
     $user = Auth::user();
 
-    // Ambil semua user yang diikuti + diri sendiri
+    // 🔹 Ambil semua user yang diikuti + diri sendiri
     $followedIds = $user->following()->pluck('users.user_id')->toArray();
-    $allIds = array_merge($followedIds, [$user->user_id]);
+    $allIds = array_merge([$user->user_id], $followedIds);
 
-    // Ambil semua story yang masih aktif (belum expired)
-    $stories = Story::with(['user:user_id,username,profile_picture_url'])
+    // 🔹 Ambil daftar user yang punya story aktif
+    $usersWithStories = Story::with('user:user_id,username,profile_picture_url')
         ->whereIn('user_id', $allIds)
         ->where('expires_at', '>', now())
-        ->latest() // urutkan story dari terbaru
-        ->get();
-
-    // Grouping berdasarkan user, lalu balik urutannya (terbaru dulu)
-    $grouped = $stories->groupBy('user.user_id')
-        ->map(function ($userStories) use ($user) {
-            $storyOwner = $userStories->first()->user;
-
-            $storyIds = $userStories->pluck('story_id')->toArray();
-            $viewedCount = \DB::table('story_views')
-                ->whereIn('story_id', $storyIds)
-                ->where('viewer_id', $user->user_id)
-                ->count();
-
-            $isAllViewed = $viewedCount >= count($storyIds);
-
-            return [
-                'user_id' => $storyOwner->user_id,
-                'username' => $storyOwner->username,
-                'profile_picture_url' => $storyOwner->profile_picture_url,
-                'is_viewed' => $isAllViewed,
-                'latest_story_time' => $userStories->max('created_at'), // untuk sorting antar user
-                'stories' => $userStories
-                    ->sortByDesc('created_at') // urutkan story terbaru dulu
-                    ->values()
-                    ->map(function ($story) use ($user) {
-                        $alreadyViewed = \DB::table('story_views')
-                            ->where('story_id', $story->story_id)
-                            ->where('viewer_id', $user->user_id)
-                            ->exists();
-
-                        return [
-                            'story_id' => $story->story_id,
-                            'type' => $story->type,
-                            'media_url' => $story->media_url,
-                            'caption' => $story->caption,
-                            'music_track_name' => $story->music_track_name,
-                            'music_artist_name' => $story->music_artist_name,
-                            'music_preview_url' => $story->music_preview_url,
-                            'music_album_art_url' => $story->music_album_art_url,
-                            'music_start_position_ms' => $story->music_start_position_ms,
-                            'music_clip_duration_ms' => $story->music_clip_duration_ms,
-                            'music_display_style' => $story->music_display_style,
-                            'music_sticker_position_x' => $story->music_sticker_position_x,
-                            'music_sticker_position_y' => $story->music_sticker_position_y,
-                            'color_pallete' => $story->color_pallete,
-                            'created_at' => $story->created_at,
-                            'expires_at' => $story->expires_at,
-                            'is_viewed' => $alreadyViewed,
-                        ];
-                    }),
-            ];
-        })
-        ->sortByDesc('latest_story_time') // urutkan user dari yang terbaru upload
+        ->select('user_id')
+        ->distinct()
+        ->orderByRaw('MAX(created_at) DESC') // ✅ urut sesuai feedUser
+        ->groupBy('user_id')
+        ->get()
         ->values();
 
-    return response()->json($grouped);
+    // Kalau tidak ada story aktif
+    if ($usersWithStories->isEmpty()) {
+        return response()->json([]);
     }
+
+    // 🔹 Ambil semua story user yang ditemukan (urutkan ASC dalam tiap user)
+    $stories = Story::with(['user:user_id,username,profile_picture_url'])
+        ->whereIn('user_id', $usersWithStories->pluck('user_id'))
+        ->where('expires_at', '>', now())
+        ->orderBy('created_at', 'asc')
+        ->get();
+
+    // 🔹 Grouping per user dan format hasilnya
+    $grouped = $usersWithStories->map(function ($userWithStory) use ($stories, $user) {
+        $userStories = $stories->where('user_id', $userWithStory->user_id);
+
+        if ($userStories->isEmpty()) return null;
+
+        $storyOwner = $userStories->first()->user;
+
+        $storyIds = $userStories->pluck('story_id')->toArray();
+        $viewedCount = \DB::table('story_views')
+            ->whereIn('story_id', $storyIds)
+            ->where('viewer_id', $user->user_id)
+            ->count();
+
+        $isAllViewed = $viewedCount >= count($storyIds);
+
+        return [
+            'user_id' => $storyOwner->user_id,
+            'username' => $storyOwner->username,
+            'profile_picture_url' => $storyOwner->profile_picture_url,
+            'is_viewed' => $isAllViewed,
+            'stories' => $userStories->map(function ($story) use ($user) {
+                $alreadyViewed = \DB::table('story_views')
+                    ->where('story_id', $story->story_id)
+                    ->where('viewer_id', $user->user_id)
+                    ->exists();
+
+                return [
+                    'story_id' => $story->story_id,
+                    'type' => $story->type,
+                    'media_url' => $story->media_url,
+                    'caption' => $story->caption,
+                    'music_track_name' => $story->music_track_name,
+                    'music_artist_name' => $story->music_artist_name,
+                    'music_preview_url' => $story->music_preview_url,
+                    'music_album_art_url' => $story->music_album_art_url,
+                    'music_start_position_ms' => $story->music_start_position_ms,
+                    'music_clip_duration_ms' => $story->music_clip_duration_ms,
+                    'music_display_style' => $story->music_display_style,
+                    'music_sticker_position_x' => $story->music_sticker_position_x,
+                    'music_sticker_position_y' => $story->music_sticker_position_y,
+                    'color_pallete' => $story->color_pallete,
+                    'created_at' => $story->created_at,
+                    'expires_at' => $story->expires_at,
+                    'is_viewed' => $alreadyViewed,
+                ];
+            })->values()
+        ];
+    })->filter()->values();
+
+    return response()->json($grouped);
+}
 
 public function feedUser(Request $request, $userId)
 {
