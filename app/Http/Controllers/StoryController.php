@@ -103,19 +103,23 @@ class StoryController extends Controller
      * Ambil story dari user yang diikuti + diri sendiri
      */
     public function feed()
-    {
-        $user = Auth::user();
+{
+    $user = Auth::user();
 
-        $followedIds = $user->following()->pluck('users.user_id')->toArray();
-        $allIds = array_merge($followedIds, [$user->user_id]);
+    // Ambil semua user yang diikuti + diri sendiri
+    $followedIds = $user->following()->pluck('users.user_id')->toArray();
+    $allIds = array_merge($followedIds, [$user->user_id]);
 
-        $stories = Story::with(['user:user_id,username,profile_picture_url'])
-            ->whereIn('user_id', $allIds)
-            ->where('expires_at', '>', now())
-            ->latest()
-            ->get();
+    // Ambil semua story yang masih aktif (belum expired)
+    $stories = Story::with(['user:user_id,username,profile_picture_url'])
+        ->whereIn('user_id', $allIds)
+        ->where('expires_at', '>', now())
+        ->latest() // urutkan story dari terbaru
+        ->get();
 
-        $grouped = $stories->groupBy('user.user_id')->map(function ($userStories) use ($user) {
+    // Grouping berdasarkan user, lalu balik urutannya (terbaru dulu)
+    $grouped = $stories->groupBy('user.user_id')
+        ->map(function ($userStories) use ($user) {
             $storyOwner = $userStories->first()->user;
 
             $storyIds = $userStories->pluck('story_id')->toArray();
@@ -131,36 +135,42 @@ class StoryController extends Controller
                 'username' => $storyOwner->username,
                 'profile_picture_url' => $storyOwner->profile_picture_url,
                 'is_viewed' => $isAllViewed,
-                'stories' => $userStories->map(function ($story) use ($user) {
-                    $alreadyViewed = \DB::table('story_views')
-                        ->where('story_id', $story->story_id)
-                        ->where('viewer_id', $user->user_id)
-                        ->exists();
+                'latest_story_time' => $userStories->max('created_at'), // untuk sorting antar user
+                'stories' => $userStories
+                    ->sortByDesc('created_at') // urutkan story terbaru dulu
+                    ->values()
+                    ->map(function ($story) use ($user) {
+                        $alreadyViewed = \DB::table('story_views')
+                            ->where('story_id', $story->story_id)
+                            ->where('viewer_id', $user->user_id)
+                            ->exists();
 
-                    return [
-                        'story_id' => $story->story_id,
-                        'type' => $story->type,
-                        'media_url' => $story->media_url,
-                        'caption' => $story->caption,
-                        'music_track_name' => $story->music_track_name,
-                        'music_artist_name' => $story->music_artist_name,
-                        'music_preview_url' => $story->music_preview_url,
-                        'music_album_art_url' => $story->music_album_art_url,
-                        'music_start_position_ms' => $story->music_start_position_ms,
-                        'music_clip_duration_ms' => $story->music_clip_duration_ms,
-                        'music_display_style' => $story->music_display_style,
-                        'music_sticker_position_x' => $story->music_sticker_position_x,
-                        'music_sticker_position_y' => $story->music_sticker_position_y,
-                        'color_pallete' => $story->color_pallete, // ✅ baru
-                        'created_at' => $story->created_at,
-                        'expires_at' => $story->expires_at,
-                        'is_viewed' => $alreadyViewed,
-                    ];
-                })->values()
+                        return [
+                            'story_id' => $story->story_id,
+                            'type' => $story->type,
+                            'media_url' => $story->media_url,
+                            'caption' => $story->caption,
+                            'music_track_name' => $story->music_track_name,
+                            'music_artist_name' => $story->music_artist_name,
+                            'music_preview_url' => $story->music_preview_url,
+                            'music_album_art_url' => $story->music_album_art_url,
+                            'music_start_position_ms' => $story->music_start_position_ms,
+                            'music_clip_duration_ms' => $story->music_clip_duration_ms,
+                            'music_display_style' => $story->music_display_style,
+                            'music_sticker_position_x' => $story->music_sticker_position_x,
+                            'music_sticker_position_y' => $story->music_sticker_position_y,
+                            'color_pallete' => $story->color_pallete,
+                            'created_at' => $story->created_at,
+                            'expires_at' => $story->expires_at,
+                            'is_viewed' => $alreadyViewed,
+                        ];
+                    }),
             ];
-        })->values();
+        })
+        ->sortByDesc('latest_story_time') // urutkan user dari yang terbaru upload
+        ->values();
 
-        return response()->json($grouped);
+    return response()->json($grouped);
     }
 
 public function feedUser(Request $request, $userId)
