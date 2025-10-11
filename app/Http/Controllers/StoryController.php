@@ -110,13 +110,13 @@ public function feed()
     $followedIds = $authUser->following()->pluck('users.user_id')->toArray();
     $allIds = array_merge([$authUser->user_id], $followedIds);
 
-    // 🔹 Ambil daftar user yang punya story aktif (urutkan seperti feedUser)
+    // 🔹 Ambil daftar user yang punya story aktif (dibalik urutan: lama → baru)
     $usersWithStories = Story::with('user:user_id,username,profile_picture_url')
         ->whereIn('user_id', $allIds)
         ->where('expires_at', '>', now())
         ->selectRaw('user_id, MAX(created_at) as latest_story_time')
         ->groupBy('user_id')
-        ->orderByDesc('latest_story_time') // ✅ sama seperti feedUser
+        ->orderBy('latest_story_time', 'asc') // 🔁 urutan dibalik
         ->get();
 
     if ($usersWithStories->isEmpty()) {
@@ -127,10 +127,10 @@ public function feed()
     $stories = Story::with(['user:user_id,username,profile_picture_url'])
         ->whereIn('user_id', $usersWithStories->pluck('user_id'))
         ->where('expires_at', '>', now())
-        ->orderBy('created_at', 'asc') // ✅ urutan story dalam 1 user: lama → baru
+        ->orderBy('created_at', 'asc') // urutan story dalam user tetap lama → baru
         ->get();
 
-    // 🔹 Format hasil: urut user sama seperti feedUser
+    // 🔹 Format hasil sesuai urutan baru
     $grouped = $usersWithStories->map(function ($userWithStory) use ($stories, $authUser) {
         $userStories = $stories->where('user_id', $userWithStory->user_id);
 
