@@ -106,39 +106,16 @@ public function feed()
 {
     $user = Auth::user();
 
-    // 🔹 Ambil semua user yang diikuti + diri sendiri
     $followedIds = $user->following()->pluck('users.user_id')->toArray();
-    $allIds = array_merge([$user->user_id], $followedIds);
+    $allIds = array_merge($followedIds, [$user->user_id]);
 
-    // 🔹 Ambil daftar user yang punya story aktif
-    $usersWithStories = Story::with('user:user_id,username,profile_picture_url')
+    $stories = Story::with(['user:user_id,username,profile_picture_url'])
         ->whereIn('user_id', $allIds)
         ->where('expires_at', '>', now())
-        ->select('user_id')
-        ->distinct()
-        ->orderByRaw('MAX(created_at) DESC') // ✅ urut sesuai feedUser
-        ->groupBy('user_id')
-        ->get()
-        ->values();
-
-    // Kalau tidak ada story aktif
-    if ($usersWithStories->isEmpty()) {
-        return response()->json([]);
-    }
-
-    // 🔹 Ambil semua story user yang ditemukan (urutkan ASC dalam tiap user)
-    $stories = Story::with(['user:user_id,username,profile_picture_url'])
-        ->whereIn('user_id', $usersWithStories->pluck('user_id'))
-        ->where('expires_at', '>', now())
-        ->orderBy('created_at', 'asc')
+        ->latest()
         ->get();
 
-    // 🔹 Grouping per user dan format hasilnya
-    $grouped = $usersWithStories->map(function ($userWithStory) use ($stories, $user) {
-        $userStories = $stories->where('user_id', $userWithStory->user_id);
-
-        if ($userStories->isEmpty()) return null;
-
+    $grouped = $stories->groupBy('user.user_id')->map(function ($userStories) use ($user) {
         $storyOwner = $userStories->first()->user;
 
         $storyIds = $userStories->pluck('story_id')->toArray();
@@ -181,7 +158,9 @@ public function feed()
                 ];
             })->values()
         ];
-    })->filter()->values();
+    })
+    ->sortByDesc('user_id') // ✅ urutan user dibalik berdasarkan user_id
+    ->values();
 
     return response()->json($grouped);
 }
