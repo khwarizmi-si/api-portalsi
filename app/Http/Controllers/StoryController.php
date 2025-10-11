@@ -104,24 +104,44 @@ class StoryController extends Controller
      */
 public function feed()
 {
-    $user = Auth::user();
+    $authUser = Auth::user();
 
-    $followedIds = $user->following()->pluck('users.user_id')->toArray();
-    $allIds = array_merge($followedIds, [$user->user_id]);
+    // 🔹 Ambil daftar user_id yang masuk feed (diri sendiri + yang diikuti)
+    $followedIds = $authUser->following()->pluck('users.user_id')->toArray();
+    $allIds = array_merge([$authUser->user_id], $followedIds);
 
-    $stories = Story::with(['user:user_id,username,profile_picture_url'])
+    // 🔹 Ambil daftar user yang punya story aktif (urutkan seperti feedUser)
+    $usersWithStories = Story::with('user:user_id,username,profile_picture_url')
         ->whereIn('user_id', $allIds)
         ->where('expires_at', '>', now())
-        ->latest()
+        ->selectRaw('user_id, MAX(created_at) as latest_story_time')
+        ->groupBy('user_id')
+        ->orderByDesc('latest_story_time') // ✅ sama seperti feedUser
         ->get();
 
-    $grouped = $stories->groupBy('user.user_id')->map(function ($userStories) use ($user) {
+    if ($usersWithStories->isEmpty()) {
+        return response()->json([]);
+    }
+
+    // 🔹 Ambil semua story aktif dari user tersebut
+    $stories = Story::with(['user:user_id,username,profile_picture_url'])
+        ->whereIn('user_id', $usersWithStories->pluck('user_id'))
+        ->where('expires_at', '>', now())
+        ->orderBy('created_at', 'asc') // ✅ urutan story dalam 1 user: lama → baru
+        ->get();
+
+    // 🔹 Format hasil: urut user sama seperti feedUser
+    $grouped = $usersWithStories->map(function ($userWithStory) use ($stories, $authUser) {
+        $userStories = $stories->where('user_id', $userWithStory->user_id);
+
+        if ($userStories->isEmpty()) return null;
+
         $storyOwner = $userStories->first()->user;
 
         $storyIds = $userStories->pluck('story_id')->toArray();
         $viewedCount = \DB::table('story_views')
             ->whereIn('story_id', $storyIds)
-            ->where('viewer_id', $user->user_id)
+            ->where('viewer_id', $authUser->user_id)
             ->count();
 
         $isAllViewed = $viewedCount >= count($storyIds);
@@ -131,10 +151,10 @@ public function feed()
             'username' => $storyOwner->username,
             'profile_picture_url' => $storyOwner->profile_picture_url,
             'is_viewed' => $isAllViewed,
-            'stories' => $userStories->map(function ($story) use ($user) {
+            'stories' => $userStories->map(function ($story) use ($authUser) {
                 $alreadyViewed = \DB::table('story_views')
                     ->where('story_id', $story->story_id)
-                    ->where('viewer_id', $user->user_id)
+                    ->where('viewer_id', $authUser->user_id)
                     ->exists();
 
                 return [
@@ -158,9 +178,7 @@ public function feed()
                 ];
             })->values()
         ];
-    })
-    ->sortByDesc('user_id') // ✅ urutan user dibalik berdasarkan user_id
-    ->values();
+    })->filter()->values();
 
     return response()->json($grouped);
 }
