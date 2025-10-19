@@ -13,6 +13,8 @@ class ProfileController extends Controller
 public function show(Request $request, $username)
 {
     $authUser = Auth::user();
+    $page     = (int) $request->input('page', 1);
+    $perPage  = (int) $request->input('per_page', 9);
 
     $user = User::whereRaw('LOWER(username) = ?', [strtolower($username)])
         ->withCount(['followers', 'following', 'posts'])
@@ -22,22 +24,37 @@ public function show(Request $request, $username)
     $canViewPosts = !$user->is_private ||
         ($authUser && ($authUser->user_id === $user->user_id || $user->followers->contains($authUser->user_id)));
 
-    $recentPosts = $canViewPosts
-        ? $user->posts()
+    $recentPosts = [];
+    $pagination = null;
+
+    if ($canViewPosts) {
+        $postsQuery = $user->posts()
             ->latest()
-            ->select('post_id', 'caption', 'media_url', 'created_at') // jangan ambil is_video dari DB
-            ->get()
-            ->map(function ($post) {
-                $isVideo = preg_match('/\.(mp4|mov|avi|mkv|webm)$/i', $post->media_url) ? 1 : 0;
-                return [
-                    'post_id'    => $post->post_id,
-                    'caption'    => $post->caption,
-                    'media_url'  => $post->media_url,
-                    'is_video'   => $isVideo,
-                    'created_at' => $post->created_at,
-                ];
-            })
-        : [];
+            ->select('post_id', 'caption', 'media_url', 'created_at');
+
+        // Gunakan pagination bawaan Laravel
+        $paginatedPosts = $postsQuery->paginate($perPage, ['*'], 'page', $page);
+
+        $recentPosts = $paginatedPosts->getCollection()->map(function ($post) {
+            $isVideo = preg_match('/\.(mp4|mov|avi|mkv|webm)$/i', $post->media_url) ? 1 : 0;
+            return [
+                'post_id'    => $post->post_id,
+                'caption'    => $post->caption,
+                'media_url'  => $post->media_url,
+                'is_video'   => $isVideo,
+                'created_at' => $post->created_at,
+            ];
+        });
+
+        // Ambil info pagination (buat infinite scroll)
+        $pagination = [
+            'current_page' => $paginatedPosts->currentPage(),
+            'last_page'    => $paginatedPosts->lastPage(),
+            'per_page'     => $paginatedPosts->perPage(),
+            'total'        => $paginatedPosts->total(),
+            'next_page_url'=> $paginatedPosts->nextPageUrl(),
+        ];
+    }
 
     return response()->json([
         'user_id'             => $user->user_id,
@@ -54,6 +71,7 @@ public function show(Request $request, $username)
         'following_count'     => $user->following_count,
         'posts_count'         => $user->posts_count,
         'recent_posts'        => $recentPosts,
+        'pagination'          => $pagination,
         'message'             => $canViewPosts ? null : 'Akun private, follow untuk melihat postingan.',
     ]);
 }
