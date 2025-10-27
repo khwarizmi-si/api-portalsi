@@ -42,8 +42,7 @@ class PostController extends Controller
     return $user;
 }
 
-
-    public function index(Request $request)
+   public function index(Request $request)
     {
         $authUser = Auth::user();
         $page = max(1, (int) $request->input('page', 1));
@@ -292,8 +291,6 @@ class PostController extends Controller
             'feed' => $feedWithSuggestions
         ]);
     }
-}
-
 
 public function explore(Request $request)
 {
