@@ -107,37 +107,60 @@ public function unfollow($id)
 }
 
 
-    // ✅ LIHAT FOLLOWERS
-public function followers($id)
+// ✅ LIHAT FOLLOWERS (dengan pagination)
+public function followers($id, Request $request)
 {
     $user = User::findOrFail($id);
 
-    $followers = $user->followers()
+    $perPage = (int) $request->input('per_page', 10); // default 10
+    $page    = (int) $request->input('page', 1);
+
+    $followersQuery = $user->followers()
         ->wherePivot('status', 'accepted')
-        ->select('users.user_id', 'username', 'full_name', 'profile_picture_url', 'is_verified')
-        ->get();
+        ->select('users.user_id', 'username', 'full_name', 'profile_picture_url', 'is_verified');
+
+    $paginatedFollowers = $followersQuery->paginate($perPage, ['*'], 'page', $page);
 
     return response()->json([
-        'followers_count' => $followers->count(),
-        'followers'       => $followers
+        'followers_count' => $paginatedFollowers->total(),
+        'followers'       => $paginatedFollowers->items(),
+        'pagination'      => [
+            'current_page'  => $paginatedFollowers->currentPage(),
+            'last_page'     => $paginatedFollowers->lastPage(),
+            'per_page'      => $paginatedFollowers->perPage(),
+            'total'         => $paginatedFollowers->total(),
+            'next_page_url' => $paginatedFollowers->nextPageUrl(),
+        ]
     ]);
 }
 
-// ✅ LIHAT FOLLOWING
-public function following($id)
+// ✅ LIHAT FOLLOWING (dengan pagination)
+public function following($id, Request $request)
 {
     $user = User::findOrFail($id);
 
-    $following = $user->following()
+    $perPage = (int) $request->input('per_page', 10); // default 10
+    $page    = (int) $request->input('page', 1);
+
+    $followingQuery = $user->following()
         ->wherePivot('status', 'accepted')
-        ->select('users.user_id', 'username', 'full_name', 'profile_picture_url', 'is_verified')
-        ->get();
+        ->select('users.user_id', 'username', 'full_name', 'profile_picture_url', 'is_verified');
+
+    $paginatedFollowing = $followingQuery->paginate($perPage, ['*'], 'page', $page);
 
     return response()->json([
-        'following_count' => $following->count(),
-        'following'       => $following
+        'following_count' => $paginatedFollowing->total(),
+        'following'       => $paginatedFollowing->items(),
+        'pagination'      => [
+            'current_page'  => $paginatedFollowing->currentPage(),
+            'last_page'     => $paginatedFollowing->lastPage(),
+            'per_page'      => $paginatedFollowing->perPage(),
+            'total'         => $paginatedFollowing->total(),
+            'next_page_url' => $paginatedFollowing->nextPageUrl(),
+        ]
     ]);
 }
+
 
     // ✅ TERIMA PERMINTAAN FOLLOW
 public function acceptFollowRequest($followerId)
