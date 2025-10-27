@@ -45,7 +45,7 @@ class ProfileController extends Controller
                     'caption'    => $post->caption,
                     'media_url'  => $post->media_url,
                     'is_video'   => $isVideo ? 1 : 0,
-                    'thumbnail'  => $thumbnail,
+                    'thumbnail_url'  => $thumbnail,
                     'created_at' => $post->created_at,
                 ];
             });
@@ -112,7 +112,7 @@ class ProfileController extends Controller
                 'caption'    => $post->caption,
                 'media_url'  => $post->media_url,
                 'is_video'   => $isVideo ? 1 : 0,
-                'thumbnail'  => $thumbnail,
+                'thumbnail_url'  => $thumbnail,
                 'created_at' => $post->created_at,
             ];
         });
