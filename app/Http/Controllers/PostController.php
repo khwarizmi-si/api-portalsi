@@ -42,11 +42,12 @@ class PostController extends Controller
     return $user;
 }
 
-    public function index(Request $request)
+   public function index(Request $request)
     {
         $authUser = Auth::user();
         $page = max(1, (int) $request->input('page', 1));
-        $perPage = 2; // 🔥 Ganti hanya di sini agar pagination per 2
+        $perPage = 2; // 🔥 Pagination per 2 post per halaman
+
         $followingIds = $authUser->following()
             ->where('status', 'accepted')
             ->pluck('followed_id');
@@ -166,33 +167,6 @@ class PostController extends Controller
                 ->values();
         }
 
-        // ========== PAGINATION ==========
-        $totalMainPosts = $mainPosts->count();
-        $postsSlice = $mainPosts
-            ->slice(($page - 1) * $perPage, $perPage)
-            ->values();
-
-        $paginator = new LengthAwarePaginator(
-            $postsSlice,
-            $totalMainPosts,
-            $perPage,
-            $page,
-            [
-                'path' => $request->url(),
-                'query' => $request->query(),
-            ]
-        );
-
-        $nextPage = $paginator->currentPage() < $paginator->lastPage()
-            ? $request->url() . '?' . http_build_query(array_merge($request->query(), ['page' => $paginator->currentPage() + 1]))
-            : null;
-
-        $prevPage = $paginator->currentPage() > 1
-            ? $request->url() . '?' . http_build_query(array_merge($request->query(), ['page' => $paginator->currentPage() - 1]))
-            : null;
-
-        $lastPage = $request->url() . '?' . http_build_query(array_merge($request->query(), ['page' => $paginator->lastPage()]));
-
         // ========== SUGGESTIONS ==========
         $suggestions = collect();
 
@@ -249,10 +223,10 @@ class PostController extends Controller
         ->sortByDesc('is_follow_back')
         ->values();
 
-        // ========== MERGE POSTS + SUGGESTIONS ==========
+        // ========== MERGE POSTS + SUGGESTIONS (FULL FEED DULU) ==========
         $feedWithSuggestions = collect();
         $postCount = 0;
-        foreach ($postsSlice as $item) {
+        foreach ($mainPosts as $item) {
             $feedWithSuggestions->push($item);
             $postCount++;
             if ($postCount === 2 || ($postCount > 2 && $postCount % 8 === 0)) {
@@ -276,6 +250,33 @@ class PostController extends Controller
             }
         }
 
+        // ✅ Sekarang baru di-paginate setelah feed full terbentuk
+        $totalFeed = $feedWithSuggestions->count();
+        $feedSlice = $feedWithSuggestions
+            ->slice(($page - 1) * $perPage, $perPage)
+            ->values();
+
+        $paginator = new LengthAwarePaginator(
+            $feedSlice,
+            $totalFeed,
+            $perPage,
+            $page,
+            [
+                'path' => $request->url(),
+                'query' => $request->query(),
+            ]
+        );
+
+        $nextPage = $paginator->currentPage() < $paginator->lastPage()
+            ? $request->url() . '?' . http_build_query(array_merge($request->query(), ['page' => $paginator->currentPage() + 1]))
+            : null;
+
+        $prevPage = $paginator->currentPage() > 1
+            ? $request->url() . '?' . http_build_query(array_merge($request->query(), ['page' => $paginator->currentPage() - 1]))
+            : null;
+
+        $lastPage = $request->url() . '?' . http_build_query(array_merge($request->query(), ['page' => $paginator->lastPage()]));
+
         return response()->json([
             'current_page' => $paginator->currentPage(),
             'per_page' => $paginator->perPage(),
@@ -283,7 +284,7 @@ class PostController extends Controller
             'next_page_url' => $nextPage,
             'prev_page_url' => $prevPage,
             'last_page_url' => $lastPage,
-            'feed' => $feedWithSuggestions
+            'feed' => $feedSlice
         ]);
     }
 
