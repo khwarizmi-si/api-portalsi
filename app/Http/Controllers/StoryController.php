@@ -110,30 +110,25 @@ public function feed()
     $followedIds = $authUser->following()->pluck('users.user_id')->toArray();
     $allIds = array_merge([$authUser->user_id], $followedIds);
 
-    // 🔹 Ambil daftar user yang punya story aktif (dibalik urutan: lama → baru)
+    // 🔹 Ambil daftar user yang punya story aktif
     $usersWithStories = Story::with('user:user_id,username,profile_picture_url')
         ->whereIn('user_id', $allIds)
         ->where('expires_at', '>', now())
         ->selectRaw('user_id, MAX(created_at) as latest_story_time')
         ->groupBy('user_id')
-        ->orderBy('latest_story_time', 'asc') // 🔁 urutan dibalik
+        ->orderBy('latest_story_time', 'asc')
         ->get();
 
-    if ($usersWithStories->isEmpty()) {
-        return response()->json([]);
-    }
-
-    // 🔹 Ambil semua story aktif dari user tersebut
+    // 🔹 Ambil semua story aktif
     $stories = Story::with(['user:user_id,username,profile_picture_url'])
         ->whereIn('user_id', $usersWithStories->pluck('user_id'))
         ->where('expires_at', '>', now())
-        ->orderBy('created_at', 'asc') // urutan story dalam user tetap lama → baru
+        ->orderBy('created_at', 'asc')
         ->get();
 
-    // 🔹 Format hasil sesuai urutan baru
+    // 🔹 Kelompokkan story per user
     $grouped = $usersWithStories->map(function ($userWithStory) use ($stories, $authUser) {
         $userStories = $stories->where('user_id', $userWithStory->user_id);
-
         if ($userStories->isEmpty()) return null;
 
         $storyOwner = $userStories->first()->user;
@@ -180,8 +175,61 @@ public function feed()
         ];
     })->filter()->values();
 
-    return response()->json($grouped);
+    $mutualCount = $grouped->count();
+    $suggestions = collect();
+
+    // 🔹 Tampilkan saran hanya jika story mutual < 3
+    if ($mutualCount < 3) {
+        $excludedIds = array_merge([$authUser->user_id], $followedIds);
+
+        /**
+         * 🔸 PRIORITAS 1: Followers yang belum difollow balik
+         */
+        $notFollowedBack = $authUser->followers()
+            ->whereNotIn('users.user_id', $followedIds)
+            ->where('users.user_id', '<>', $authUser->user_id)
+            ->limit(8)
+            ->get(['users.user_id', 'users.username', 'users.profile_picture_url']);
+
+        $suggestions = $suggestions->merge($notFollowedBack);
+
+        /**
+         * 🔸 PRIORITAS 2: "Teman dari teman" (orang yang diikuti oleh teman yang lu ikuti)
+         * Misal lu follow A, dan A follow B → maka B bisa jadi suggestion
+         */
+        if ($suggestions->count() < 8) {
+            $friendOfFriends = \DB::table('follows as f1')
+                ->join('follows as f2', 'f1.followed_id', '=', 'f2.follower_id')
+                ->join('users', 'users.user_id', '=', 'f2.followed_id')
+                ->whereIn('f1.follower_id', $followedIds)
+                ->whereNotIn('users.user_id', $excludedIds)
+                ->select('users.user_id', 'users.username', 'users.profile_picture_url')
+                ->distinct()
+                ->limit(8 - $suggestions->count())
+                ->get();
+
+            $suggestions = $suggestions->merge($friendOfFriends);
+        }
+
+        /**
+         * 🔸 PRIORITAS 3: Random user (cadangan)
+         */
+        if ($suggestions->count() < 8) {
+            $randomUsers = User::whereNotIn('user_id', $excludedIds)
+                ->inRandomOrder()
+                ->limit(8 - $suggestions->count())
+                ->get(['user_id', 'username', 'profile_picture_url']);
+
+            $suggestions = $suggestions->merge($randomUsers);
+        }
+    }
+
+    return response()->json([
+        'stories' => $grouped,
+        'suggestions' => $suggestions->values(),
+    ]);
 }
+
 
 public function feedUser(Request $request, $userId)
 {
