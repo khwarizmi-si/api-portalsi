@@ -42,14 +42,11 @@ class PostController extends Controller
     return $user;
 }
 
-   public function index(Request $request)
+    public function index(Request $request)
     {
         $authUser = Auth::user();
         $page = max(1, (int) $request->input('page', 1));
-
-        // ⚙️ Perubahan utama: pagination per 2 load (default 2 item per page)
-        $perPage = max(1, (int) $request->input('per_page', 2));
-
+        $perPage = 2; // 🔥 Ganti hanya di sini agar pagination per 2
         $followingIds = $authUser->following()
             ->where('status', 'accepted')
             ->pluck('followed_id');
@@ -68,11 +65,10 @@ class PostController extends Controller
                     $post->is_liked = (bool) $post->likes()->where('user_id', $authUser->user_id)->exists();
                     $post->is_bookmarked = (bool) $post->bookmarks()->where('user_id', $authUser->user_id)->exists();
                     $post->type = 'post';
-                    // attach story & verified
                     $post->user = $this->attachStoryInfo($post->user, $authUser);
                     $post->user->is_verified = (bool) $post->user->is_verified;
 
-                    // ✨ Tambahkan field musik eksplisit ke objek post
+                    // ✨ Tambahkan field musik eksplisit
                     $post->music_track_name        = $post->music_track_name ?? null;
                     $post->music_artist_name       = $post->music_artist_name ?? null;
                     $post->music_preview_url       = $post->music_preview_url ?? null;
@@ -157,7 +153,6 @@ class PostController extends Controller
                     $post->user = $this->attachStoryInfo($post->user, $authUser);
                     $post->user->is_verified = (bool) $post->user->is_verified;
 
-                    // ✨ Tambahkan field musik eksplisit ke objek post
                     $post->music_track_name        = $post->music_track_name ?? null;
                     $post->music_artist_name       = $post->music_artist_name ?? null;
                     $post->music_preview_url       = $post->music_preview_url ?? null;
