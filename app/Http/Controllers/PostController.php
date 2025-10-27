@@ -46,7 +46,7 @@ public function index(Request $request)
 {
     $authUser = Auth::user();
     $page = max(1, (int) $request->input('page', 1));
-    $perPage = max(1, (int) $request->input('per_page', 10));
+    $perPage = max(1, (int) $request->input('per_page', 2));
 
     $followingIds = $authUser->following()
         ->where('status', 'accepted')
