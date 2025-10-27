@@ -11,34 +11,50 @@ use Illuminate\Support\Str;
 class NotificationController extends Controller
 {
     // 🔔 GET /notifications - Tampilkan semua notifikasi user login
-    public function index()
-    {
-        $user = Auth::user();
-    
-        $notifications = Notification::where('recipient_id', $user->user_id)
-            ->orderBy('created_at', 'desc')
-            ->with(['sender', 'post', 'comment', 'reply']) // 🔹 tambahin relasi comment & reply
-            ->get()
-            ->map(function ($notif) {
-                return [
-                    'notification_id' => $notif->notification_id,
-                    'type' => $notif->type,
-                    'message' => $this->generateMessage($notif),
-                    'sender' => $notif->sender ? [
-                        'user_id' => $notif->sender->user_id,
-                        'username' => $notif->sender->username,
-                        'full_name' => $notif->sender->full_name,
-                        'profile_picture_url' => $notif->sender->profile_picture_url,
-                    ] : null,
-                    'related_post_id' => $notif->related_post_id,
-                    'is_read' => $notif->is_read,
-                    'created_at' => $notif->created_at
-                ];
-            });
-    
-        return response()->json($notifications);
-    }
-    
+public function index(Request $request)
+{
+    $user = Auth::user();
+
+    $perPage = (int) $request->input('per_page', 15); // default 15
+    $page    = (int) $request->input('page', 1);
+
+    $notificationsQuery = Notification::where('recipient_id', $user->user_id)
+        ->orderBy('created_at', 'desc')
+        ->with(['sender', 'post', 'comment', 'reply']);
+
+    $paginated = $notificationsQuery->paginate($perPage, ['*'], 'page', $page);
+
+    $notifications = $paginated->getCollection()->map(function ($notif) {
+        return [
+            'notification_id' => $notif->notification_id,
+            'type' => $notif->type,
+            'message' => $this->generateMessage($notif),
+            'sender' => $notif->sender ? [
+                'user_id' => $notif->sender->user_id,
+                'username' => $notif->sender->username,
+                'full_name' => $notif->sender->full_name,
+                'profile_picture_url' => $notif->sender->profile_picture_url,
+            ] : null,
+            'related_post_id' => $notif->related_post_id,
+            'is_read' => $notif->is_read,
+            'created_at' => $notif->created_at
+        ];
+    });
+
+    $pagination = [
+        'current_page'  => $paginated->currentPage(),
+        'last_page'     => $paginated->lastPage(),
+        'per_page'      => $paginated->perPage(),
+        'total'         => $paginated->total(),
+        'next_page_url' => $paginated->nextPageUrl(),
+    ];
+
+    return response()->json([
+        'notifications' => $notifications,
+        'pagination'    => $pagination,
+    ]);
+}
+
 
     // 🔔 PATCH /notifications/{id}/read - Tandai satu notif sebagai dibaca
     public function markAsRead($id)
