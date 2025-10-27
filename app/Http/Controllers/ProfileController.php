@@ -113,7 +113,7 @@ public function search(Request $request)
 
 
 
-    public function me(Request $request)
+ public function me(Request $request)
 {
     $authUser = Auth::user();
 
@@ -121,26 +121,42 @@ public function search(Request $request)
         return response()->json(['message' => 'Unauthorized'], 401);
     }
 
+    $page    = (int) $request->input('page', 1);
+    $perPage = (int) $request->input('per_page', 9);
+
     // Ambil data user + followers/following/posts count
     $user = User::where('user_id', $authUser->user_id)
         ->withCount(['followers', 'following', 'posts'])
         ->with('followers')
         ->firstOrFail();
 
-    $recentPosts = $user->posts()
+    // Query post dengan pagination
+    $postsQuery = $user->posts()
         ->latest()
-        ->select('post_id', 'caption', 'media_url', 'created_at') // hilangkan is_video dari DB
-        ->get()
-        ->map(function ($post) {
-            $isVideo = preg_match('/\.(mp4|mov|avi|mkv|webm)$/i', $post->media_url) ? 1 : 0;
-            return [
-                'post_id'    => $post->post_id,
-                'caption'    => $post->caption,
-                'media_url'  => $post->media_url,
-                'is_video'   => $isVideo,
-                'created_at' => $post->created_at,
-            ];
-        });
+        ->select('post_id', 'caption', 'media_url', 'created_at');
+
+    $paginatedPosts = $postsQuery->paginate($perPage, ['*'], 'page', $page);
+
+    // Map hasil post
+    $recentPosts = $paginatedPosts->getCollection()->map(function ($post) {
+        $isVideo = preg_match('/\.(mp4|mov|avi|mkv|webm)$/i', $post->media_url) ? 1 : 0;
+        return [
+            'post_id'    => $post->post_id,
+            'caption'    => $post->caption,
+            'media_url'  => $post->media_url,
+            'is_video'   => $isVideo,
+            'created_at' => $post->created_at,
+        ];
+    });
+
+    // Info pagination (buat infinite scroll)
+    $pagination = [
+        'current_page'  => $paginatedPosts->currentPage(),
+        'last_page'     => $paginatedPosts->lastPage(),
+        'per_page'      => $paginatedPosts->perPage(),
+        'total'         => $paginatedPosts->total(),
+        'next_page_url' => $paginatedPosts->nextPageUrl(),
+    ];
 
     return response()->json([
         'user_id'             => $user->user_id,
@@ -158,8 +174,10 @@ public function search(Request $request)
         'following_count'     => $user->following_count,
         'posts_count'         => $user->posts_count,
         'recent_posts'        => $recentPosts,
+        'pagination'          => $pagination,
     ]);
 }
+
 
 public function mutuals(Request $request)
 {
