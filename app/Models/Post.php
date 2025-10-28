@@ -16,6 +16,7 @@ class Post extends Model
         'user_id',
         'caption',
         'media_url',
+        'thumbnail_url',
         'location',
         'is_archived',
         'is_video',
