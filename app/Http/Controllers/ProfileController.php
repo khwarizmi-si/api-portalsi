@@ -5,12 +5,12 @@ namespace App\Http\Controllers;
 use App\Models\User;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
-use Illuminate\Support\Facades\Hash;
 use Illuminate\Support\Facades\Storage;
+use DB;
 
 class ProfileController extends Controller
 {
-    // ✅ Public Profile
+    // ---------------- Public Profile ----------------
     public function show(Request $request, $username)
     {
         $authUser = Auth::user();
@@ -31,15 +31,15 @@ class ProfileController extends Controller
         if ($canViewPosts) {
             $postsQuery = $user->posts()
                 ->latest()
-                ->select('post_id', 'caption', 'media_url', 'created_at', 'thumbnail', 'thumbnail_url'); // ambil field thumbnail kalau ada
+                ->select('post_id', 'caption', 'media_url', 'created_at', 'thumbnail_url');
 
             $paginatedPosts = $postsQuery->paginate($perPage, ['*'], 'page', $page);
 
             $recentPosts = $paginatedPosts->getCollection()->map(function ($post) {
-                $isVideo = preg_match('/\.(mp4|mov|avi|mkv|webm)$/i', $post->media_url);
+                $isVideo = preg_match('/\.(mp4|mov|avi|mkv|webm|3gp)$/i', $post->media_url);
                 $thumbnail = $isVideo
                     ? $this->generateThumbnailUrl($post->media_url, $post)
-                    : $this->normalizeMediaUrl($post->media_url); // untuk gambar, pakai media_url langsung (dinormalisasi)
+                    : null;
 
                 return [
                     'post_id'       => $post->post_id,
@@ -80,7 +80,7 @@ class ProfileController extends Controller
         ]);
     }
 
-    // ✅ Profile sendiri
+    // ---------------- Profile sendiri ----------------
     public function me(Request $request)
     {
         $authUser = Auth::user();
@@ -98,15 +98,15 @@ class ProfileController extends Controller
 
         $postsQuery = $user->posts()
             ->latest()
-            ->select('post_id', 'caption', 'media_url', 'created_at', 'thumbnail', 'thumbnail_url');
+            ->select('post_id', 'caption', 'media_url', 'created_at', 'thumbnail_url');
 
         $paginatedPosts = $postsQuery->paginate($perPage, ['*'], 'page', $page);
 
         $recentPosts = $paginatedPosts->getCollection()->map(function ($post) {
-            $isVideo = preg_match('/\.(mp4|mov|avi|mkv|webm)$/i', $post->media_url);
+            $isVideo = preg_match('/\.(mp4|mov|avi|mkv|webm|3gp)$/i', $post->media_url);
             $thumbnail = $isVideo
                 ? $this->generateThumbnailUrl($post->media_url, $post)
-                : $this->normalizeMediaUrl($post->media_url);
+                : null;
 
             return [
                 'post_id'       => $post->post_id,
@@ -146,12 +146,12 @@ class ProfileController extends Controller
         ]);
     }
 
-    // ✅ Search user
+    // ---------------- Search user ----------------
     public function search(Request $request)
     {
         $username = $request->input('username');
         $fullName = $request->input('full_name');
-        $perPage  = $request->input('per_page', 10);
+        $perPage  = (int) $request->input('per_page', 10);
 
         if (!$username && !$fullName) {
             return response()->json(['message' => 'Parameter username atau full_name diperlukan.'], 400);
@@ -177,7 +177,7 @@ class ProfileController extends Controller
         return response()->json($users);
     }
 
-    // ✅ Mutual followers
+    // ---------------- Mutual followers ----------------
     public function mutuals(Request $request)
     {
         $authUser = Auth::user();
@@ -185,10 +185,13 @@ class ProfileController extends Controller
             return response()->json(['message' => 'Unauthorized'], 401);
         }
 
-        $perPage = $request->input('per_page', 10);
+        $perPage = (int) $request->input('per_page', 10);
+
+        // ambil id following & followers
         $followingIds = $authUser->following()->pluck('users.user_id')->toArray();
-        $followerIds = $authUser->followers()->pluck('users.user_id')->toArray();
-        $mutualIds = array_intersect($followingIds, $followerIds);
+        $followerIds  = $authUser->followers()->pluck('users.user_id')->toArray();
+
+        $mutualIds = array_values(array_intersect($followingIds, $followerIds));
 
         $mutuals = User::whereIn('user_id', $mutualIds)
             ->select('user_id', 'username', 'full_name', 'is_verified', 'profile_picture_url')
@@ -197,31 +200,24 @@ class ProfileController extends Controller
         return response()->json($mutuals);
     }
 
+    // ---------------- Helper functions ----------------
+
     /**
      * Generate thumbnail URL for a video post.
-     * Tries (in order):
-     *  1. $post->thumbnail or $post->thumbnail_url if present
-     *  2. thumbnails file with same basename as media_url (e.g. uploads/posts/thumbnails/{basename})
-     *  3. thumbnails file with basename but .jpg extension (best-effort)
-     * Returns a full URL via Storage::disk('public')->url(...)
+     * Prioritas:
+     * 1) $post->thumbnail_url (jika ada)
+     * 2) Cek file di storage 'public' pada uploads/posts/thumbnails/{basename or name.jpg/png}
+     * 3) Fallback ke /storage/uploads/posts/thumbnails/{name}.jpg
      */
     private function generateThumbnailUrl($mediaUrl, $post = null)
     {
-        // 1) If model already stores thumbnail info, use it
-        if ($post) {
-            if (!empty($post->thumbnail_url)) {
-                return $this->normalizeMediaUrl($post->thumbnail_url);
-            }
-            if (!empty($post->thumbnail)) {
-                return $this->normalizeMediaUrl($post->thumbnail);
-            }
+        if ($post && !empty($post->thumbnail_url)) {
+            return $this->normalizeMediaUrl($post->thumbnail_url);
         }
 
-        // Normalize incoming mediaUrl to basename
         $basename = pathinfo($mediaUrl, PATHINFO_BASENAME);
         $nameOnly = pathinfo($basename, PATHINFO_FILENAME);
 
-        // Candidate filenames to check in storage/app/public/uploads/posts/thumbnails/
         $candidates = [
             $basename,
             $nameOnly . '.jpg',
@@ -230,23 +226,17 @@ class ProfileController extends Controller
         ];
 
         foreach ($candidates as $candidate) {
-            $path = "uploads/posts/thumbnails/{$candidate}";
-            if (Storage::disk('public')->exists($path)) {
-                return Storage::disk('public')->url($path); // returns /storage/uploads/...
+            $p = "uploads/posts/thumbnails/{$candidate}";
+            if (Storage::disk('public')->exists($p)) {
+                return Storage::disk('public')->url($p);
             }
         }
 
-        // Fallback: return a best-effort URL (most common layout)
-        $fallbackPath = "uploads/posts/thumbnails/{$nameOnly}.jpg";
-        return Storage::disk('public')->url($fallbackPath);
+        return Storage::disk('public')->url("uploads/posts/thumbnails/{$nameOnly}.jpg");
     }
 
     /**
-     * Normalize various stored paths/URLs to a usable URL for clients.
-     * - If it's already an HTTP(S) URL, return as-is.
-     * - If it's a /storage/... URL, return as-is.
-     * - If it's a filesystem path (starts with /home/.../storage/app/public), convert to Storage::url
-     * - Otherwise assume it's a path relative to storage/app/public and use Storage::url
+     * Normalize media URL / path menjadi URL yang bisa diakses klien.
      */
     private function normalizeMediaUrl($mediaUrl)
     {
@@ -254,27 +244,22 @@ class ProfileController extends Controller
             return null;
         }
 
-        // If already absolute URL (http/https) -> return
         if (preg_match('#^https?://#i', $mediaUrl)) {
             return $mediaUrl;
         }
 
-        // If already /storage/... path -> return as-is
         if (strpos($mediaUrl, '/storage/') === 0) {
             return $mediaUrl;
         }
 
-        // If contains storage/app/public (full filesystem path), try to extract relative part
         if (strpos($mediaUrl, 'storage/app/public') !== false) {
             $parts = explode('storage/app/public', $mediaUrl);
             $rel = ltrim($parts[1], '/\\');
             return Storage::disk('public')->url($rel);
         }
 
-        // If it's a filesystem path starting from /home/... and ends with uploads/..., extract basename and assume it's in uploads/posts/...
         if (strpos($mediaUrl, '/home/') === 0 || strpos($mediaUrl, 'C:\\') === 0) {
             $basename = pathinfo($mediaUrl, PATHINFO_BASENAME);
-            // try common locations
             $tryPaths = [
                 "uploads/posts/thumbnails/{$basename}",
                 "uploads/posts/{$basename}",
@@ -285,17 +270,14 @@ class ProfileController extends Controller
                     return Storage::disk('public')->url($p);
                 }
             }
-            // fallback to thumbnails/{basename}
-            return Storage::disk('public')->url("uploads/posts/thumbnails/{$basename}");
+            return Storage::disk('public')->url("uploads/posts/{$basename}");
         }
 
-        // Otherwise assume it's a relative path inside storage/app/public
         $rel = ltrim($mediaUrl, '/');
         if (Storage::disk('public')->exists($rel)) {
             return Storage::disk('public')->url($rel);
         }
 
-        // Final fallback: just prefix with /storage/ so clients still can try
         return '/storage/' . ltrim($rel, '/');
     }
 }
