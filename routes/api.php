@@ -310,6 +310,10 @@ Route::post('/login', function (Request $request) {
     ], 200);
 });
 
+//
+Route::post('/fcm/register', [App\Http\Controllers\FcmController::class, 'register']);
+
+
 
 // 📩 Email Verification
 Route::get('/email/verify/{id}/{hash}', function (Request $request, $id, $hash) {

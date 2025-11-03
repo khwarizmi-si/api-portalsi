@@ -19,6 +19,7 @@ use App\Models\Group;
 use App\Models\GroupMember;
 use App\Models\GroupMessage;
 use Illuminate\Support\Facades\Storage;
+use App\Services\FirebaseService;
 
 class DirectMessageController extends Controller
 {
@@ -77,6 +78,7 @@ public function send(Request $request)
         'responded_media_url' => $message->responded_media_url,
     ];
 
+    // 🔹 Update chat list untuk kedua user
     $dataForReceiver = $conversationData;
     $dataForReceiver['id']                  = $sender->user_id;
     $dataForReceiver['name']                = $sender->full_name ?? $sender->username;
@@ -88,6 +90,26 @@ public function send(Request $request)
     $dataForSender = $conversationData;
     $dataForSender['recipient_id'] = $sender->user_id;
     broadcast(new ChatListUpdated($dataForSender));
+
+     try {
+        // Cek apakah receiver offline (contoh logika sederhana)
+        if (is_null($receiver->last_seen) || $receiver->last_seen < now()->subMinutes(3)) {
+            $firebase = new FirebaseService();
+            $firebase->sendToUser(
+                $receiver->user_id,
+                "Pesan baru dari {$sender->username}",
+                $message->content ?: '📎 Mengirim media',
+                [
+                    'type' => 'dm',
+                    'sender_id' => (string) $sender->user_id,
+                    'receiver_id' => (string) $receiver->user_id,
+                    'message_id' => (string) $message->message_id,
+                ]
+            );
+        }
+    } catch (\Exception $e) {
+        \Log::error('Gagal kirim FCM: ' . $e->getMessage());
+    }
 
     return response()->json([
         'message' => 'Pesan berhasil dikirim.',
