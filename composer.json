@@ -13,6 +13,7 @@
         "laravel/reverb": "^1.5",
         "laravel/sanctum": "^3.3",
         "laravel/tinker": "^2.8",
+        "league/flysystem-aws-s3-v3": "3.0",
         "paragonie/sodium_compat": "^2.4",
         "predis/predis": "^3.2",
         "pusher/pusher-php-server": "^7.2"
@@ -68,8 +69,13 @@
         "allow-plugins": {
             "pestphp/pest-plugin": true,
             "php-http/discovery": true
-        }
+        },
+        "audit": {
+      "block-insecure": false
+    }
     },
     "minimum-stability": "stable",
     "prefer-stable": true
+
+    
 }

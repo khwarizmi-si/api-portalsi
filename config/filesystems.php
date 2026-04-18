@@ -13,7 +13,7 @@ return [
     |
     */
 
-    'default' => env('FILESYSTEM_DISK', 'local'),
+    'default' => env('FILESYSTEM_DISK', 'r2'),
 
     /*
     |--------------------------------------------------------------------------
@@ -53,6 +53,19 @@ return [
             'url' => env('AWS_URL'),
             'endpoint' => env('AWS_ENDPOINT'),
             'use_path_style_endpoint' => env('AWS_USE_PATH_STYLE_ENDPOINT', false),
+            'throw' => false,
+        ],
+
+        // Cloudflare R2 — S3-compatible object storage
+        'r2' => [
+            'driver' => 's3',
+            'key' => env('R2_ACCESS_KEY_ID'),
+            'secret' => env('R2_SECRET_ACCESS_KEY'),
+            'region' => 'auto',
+            'bucket' => env('R2_BUCKET'),
+            'url' => env('R2_URL'),          // URL publik CDN (misal: https://cdn.portalsi.com)
+            'endpoint' => env('R2_ENDPOINT'), // https://<ACCOUNT_ID>.r2.cloudflarestorage.com
+            'use_path_style_endpoint' => false,
             'throw' => false,
         ],
 
