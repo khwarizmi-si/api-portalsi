@@ -38,8 +38,8 @@ class GroupMessageController extends Controller
         $mediaUrl = null;
         if ($request->hasFile('media')) {
             $media = $request->file('media');
-            $path = $media->store('group-media', 'public');
-            $mediaUrl = asset('storage/' . $path);
+            $path = $media->store('group-media', 'r2');
+            $mediaUrl = \Illuminate\Support\Facades\Storage::disk('r2')->url($path);
         }
 
         // Simpan pesan

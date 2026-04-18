@@ -95,8 +95,8 @@ class PortfolioController extends Controller
 
         $mediaUrl = null;
         if ($request->hasFile('media')) {
-            $path = $request->file('media')->store('portfolio-media', 'public');
-            $mediaUrl = asset(Storage::url($path));
+            $path = $request->file('media')->store('portfolio-media', 'r2');
+            $mediaUrl = Storage::disk('r2')->url($path);
         }
 
         $portfolio = Portfolio::create([
@@ -133,12 +133,12 @@ class PortfolioController extends Controller
 
         if ($request->hasFile('media')) {
             if ($portfolio->media_url) {
-                $oldPath = str_replace('/storage/', '', parse_url($portfolio->media_url, PHP_URL_PATH));
-                Storage::disk('public')->delete($oldPath);
+                $oldPath = ltrim(parse_url($portfolio->media_url, PHP_URL_PATH), '/');
+                Storage::disk('r2')->delete($oldPath);
             }
 
-            $path = $request->file('media')->store('portfolio-media', 'public');
-            $portfolio->media_url = asset(Storage::url($path));
+            $path = $request->file('media')->store('portfolio-media', 'r2');
+            $portfolio->media_url = Storage::disk('r2')->url($path);
         }
 
         $portfolio->fill($request->only(['aspect', 'title', 'description', 'year']))->save();
@@ -155,8 +155,8 @@ class PortfolioController extends Controller
         $this->authorizePortfolioAccess();
 
         if ($portfolio->media_url) {
-            $path = str_replace('/storage/', '', parse_url($portfolio->media_url, PHP_URL_PATH));
-            Storage::disk('public')->delete($path);
+            $path = ltrim(parse_url($portfolio->media_url, PHP_URL_PATH), '/');
+            Storage::disk('r2')->delete($path);
         }
 
         $portfolio->delete();

@@ -37,13 +37,13 @@ public function store(Request $request)
     $group->description = $request->description;
 
     if ($request->hasFile('avatar')) {
-        $path = $request->file('avatar')->store('uploads/group-avatars', 'public');
-        $group->avatar_url = asset('storage/' . $path);
+        $path = $request->file('avatar')->store('uploads/group-avatars', 'r2');
+        $group->avatar_url = Storage::disk('r2')->url($path);
     }
 
     if ($request->hasFile('cover')) {
-        $path = $request->file('cover')->store('uploads/group-covers', 'public');
-        $group->cover_url = asset('storage/' . $path);
+        $path = $request->file('cover')->store('uploads/group-covers', 'r2');
+        $group->cover_url = Storage::disk('r2')->url($path);
     }
 
     $group->save();
@@ -188,13 +188,13 @@ public function show(Group $group)
         $group->description = $validatedData['description'] ?? $group->description;
 
         if ($request->hasFile('avatar')) {
-            $avatarPath = $request->file('avatar')->store('uploads/group-avatars', 'public');
-            $group->avatar_url = asset('storage/' . $avatarPath);
+            $avatarPath = $request->file('avatar')->store('uploads/group-avatars', 'r2');
+            $group->avatar_url = Storage::disk('r2')->url($avatarPath);
         }
 
         if ($request->hasFile('cover')) {
-            $coverPath = $request->file('cover')->store('uploads/group-covers', 'public');
-            $group->cover_url = asset('storage/' . $coverPath);
+            $coverPath = $request->file('cover')->store('uploads/group-covers', 'r2');
+            $group->cover_url = Storage::disk('r2')->url($coverPath);
         }
 
         $group->save();
@@ -231,12 +231,12 @@ public function show(Group $group)
     ]);
 }
 
-// Fungsi bantu hapus file dari public disk
+// Fungsi bantu hapus file dari R2
 private function hapusFileStorage($url)
 {
-    $path = str_replace(asset('storage') . '/', '', $url);
-    if (\Storage::disk('public')->exists($path)) {
-        \Storage::disk('public')->delete($path);
+    $path = ltrim(parse_url($url, PHP_URL_PATH), '/');
+    if (\Storage::disk('r2')->exists($path)) {
+        \Storage::disk('r2')->delete($path);
     }
 }
 

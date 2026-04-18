@@ -436,14 +436,14 @@ class PostController extends Controller
         ]);
 
         // Simpan file media
-        $mediaPath = $request->file('media')->store('uploads/posts', 'public');
-        $mediaUrl = asset('storage/' . $mediaPath);
+        $mediaPath = $request->file('media')->store('uploads/posts', 'r2');
+        $mediaUrl = Storage::disk('r2')->url($mediaPath);
 
         // Simpan thumbnail jika ada (frontend disarankan mengirim screenshot 1 detik pertama)
         $thumbnailUrl = null;
         if ($request->hasFile('thumbnail')) {
-            $thumbPath = $request->file('thumbnail')->store('uploads/posts/thumbnails', 'public');
-            $thumbnailUrl = asset('storage/' . $thumbPath);
+            $thumbPath = $request->file('thumbnail')->store('uploads/posts/thumbnails', 'r2');
+            $thumbnailUrl = Storage::disk('r2')->url($thumbPath);
         }
 
         $post = Post::create([
@@ -548,22 +548,21 @@ class PostController extends Controller
         // Replace media jika ada
         if ($request->hasFile('media')) {
             if ($post->media_url) {
-                // media_url disimpan sebagai full asset URL -> ekstrak path
-                $path = str_replace(asset('storage') . '/', '', $post->media_url);
-                Storage::disk('public')->delete($path);
+                $path = ltrim(parse_url($post->media_url, PHP_URL_PATH), '/');
+                Storage::disk('r2')->delete($path);
             }
-            $mediaPath = $request->file('media')->store('uploads/posts', 'public');
-            $post->media_url = asset('storage/' . $mediaPath);
+            $mediaPath = $request->file('media')->store('uploads/posts', 'r2');
+            $post->media_url = Storage::disk('r2')->url($mediaPath);
         }
 
         // Replace thumbnail jika ada
         if ($request->hasFile('thumbnail')) {
             if ($post->thumbnail_url) {
-                $thumbPath = str_replace(asset('storage') . '/', '', $post->thumbnail_url);
-                Storage::disk('public')->delete($thumbPath);
+                $thumbPath = ltrim(parse_url($post->thumbnail_url, PHP_URL_PATH), '/');
+                Storage::disk('r2')->delete($thumbPath);
             }
-            $thumbPathNew = $request->file('thumbnail')->store('uploads/posts/thumbnails', 'public');
-            $post->thumbnail_url = asset('storage/' . $thumbPathNew);
+            $thumbPathNew = $request->file('thumbnail')->store('uploads/posts/thumbnails', 'r2');
+            $post->thumbnail_url = Storage::disk('r2')->url($thumbPathNew);
         }
 
         // Update fields
@@ -599,14 +598,14 @@ class PostController extends Controller
 
         // Hapus media
         if ($post->media_url) {
-            $path = str_replace(asset('storage') . '/', '', $post->media_url);
-            Storage::disk('public')->delete($path);
+            $path = ltrim(parse_url($post->media_url, PHP_URL_PATH), '/');
+            Storage::disk('r2')->delete($path);
         }
 
         // Hapus thumbnail jika ada
         if ($post->thumbnail_url) {
-            $thumbPath = str_replace(asset('storage') . '/', '', $post->thumbnail_url);
-            Storage::disk('public')->delete($thumbPath);
+            $thumbPath = ltrim(parse_url($post->thumbnail_url, PHP_URL_PATH), '/');
+            Storage::disk('r2')->delete($thumbPath);
         }
 
         $post->delete();

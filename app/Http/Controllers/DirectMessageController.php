@@ -40,8 +40,8 @@ public function send(Request $request)
     $mediaUrl = null;
 
     if ($request->hasFile('media')) {
-        $mediaPath = $request->file('media')->store('uploads/direct_messages', 'public');
-        $mediaUrl  = asset('storage/' . $mediaPath);
+        $mediaPath = $request->file('media')->store('uploads/direct_messages', 'r2');
+        $mediaUrl  = Storage::disk('r2')->url($mediaPath);
     }
 
     $message = DirectMessage::create([
@@ -210,8 +210,8 @@ public function conversation($user_id)
 
         // Hapus file media jika ada
         if ($message->media_url) {
-            $path = str_replace(asset('storage') . '/', '', $message->media_url);
-            Storage::disk('public')->delete($path);
+            $path = ltrim(parse_url($message->media_url, PHP_URL_PATH), '/');
+            Storage::disk('r2')->delete($path);
         }
 
         // ✨ [OPSIONAL] SIARKAN EVENT PENGHAPUSAN PESAN

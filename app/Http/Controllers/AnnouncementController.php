@@ -52,8 +52,8 @@ public function pinned()
         $data['created_by'] = Auth::user()->user_id;
 
         if ($request->hasFile('image')) {
-            $path = $request->file('image')->store('uploads/announcements', 'public');
-            $data['image_url'] = asset('storage/' . $path);
+            $path = $request->file('image')->store('uploads/announcements', 'r2');
+            $data['image_url'] = Storage::disk('r2')->url($path);
         }
 
         if ($request->filled('poll_data')) {
@@ -92,12 +92,12 @@ public function pinned()
         if ($request->hasFile('image')) {
             // Hapus file lama jika ada
             if ($announcement->image_url) {
-                $oldPath = str_replace(asset('storage/') . '/', '', $announcement->image_url);
-                Storage::disk('public')->delete($oldPath);
+                $oldPath = ltrim(parse_url($announcement->image_url, PHP_URL_PATH), '/');
+                Storage::disk('r2')->delete($oldPath);
             }
 
-            $path = $request->file('image')->store('uploads/announcements', 'public');
-            $data['image_url'] = asset('storage/' . $path);
+            $path = $request->file('image')->store('uploads/announcements', 'r2');
+            $data['image_url'] = Storage::disk('r2')->url($path);
         }
 
         if ($request->filled('poll_data')) {
@@ -117,8 +117,8 @@ public function pinned()
 
         // Hapus gambar dari storage jika ada
         if ($announcement->image_url) {
-            $oldPath = str_replace(asset('storage/') . '/', '', $announcement->image_url);
-            Storage::disk('public')->delete($oldPath);
+            $oldPath = ltrim(parse_url($announcement->image_url, PHP_URL_PATH), '/');
+            Storage::disk('r2')->delete($oldPath);
         }
 
         $announcement->delete();

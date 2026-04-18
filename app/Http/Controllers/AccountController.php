@@ -35,24 +35,24 @@ class AccountController extends Controller
     
         // ✅ Upload profile picture
         if ($request->hasFile('profile_picture')) {
-            if ($user->profile_picture_url && str_contains($user->profile_picture_url, '/storage/profile_pictures/')) {
-                $oldPath = str_replace(asset('storage') . '/', '', $user->profile_picture_url);
-                Storage::disk('public')->delete($oldPath);
+            if ($user->profile_picture_url) {
+                $oldPath = ltrim(parse_url($user->profile_picture_url, PHP_URL_PATH), '/');
+                Storage::disk('r2')->delete($oldPath);
             }
-    
-            $path = $request->file('profile_picture')->store('profile_pictures', 'public');
-            $user->profile_picture_url = asset('storage/' . $path);
+
+            $path = $request->file('profile_picture')->store('profile_pictures', 'r2');
+            $user->profile_picture_url = Storage::disk('r2')->url($path);
         }
 
         // ✅ Upload banner
         if ($request->hasFile('banner')) {
-            if ($user->banner_url && str_contains($user->banner_url, '/storage/banners/')) {
-                $oldPath = str_replace(asset('storage') . '/', '', $user->banner_url);
-                Storage::disk('public')->delete($oldPath);
+            if ($user->banner_url) {
+                $oldPath = ltrim(parse_url($user->banner_url, PHP_URL_PATH), '/');
+                Storage::disk('r2')->delete($oldPath);
             }
 
-            $path = $request->file('banner')->store('banners', 'public');
-            $user->banner_url = asset('storage/' . $path);
+            $path = $request->file('banner')->store('banners', 'r2');
+            $user->banner_url = Storage::disk('r2')->url($path);
         }
     
         // ✅ Update field lain
@@ -101,15 +101,15 @@ class AccountController extends Controller
         $user = Auth::user();
 
         // Hapus profile picture jika ada
-        if ($user->profile_picture_url && str_contains($user->profile_picture_url, '/storage/profile_pictures/')) {
-            $oldPath = str_replace(asset('storage') . '/', '', $user->profile_picture_url);
-            Storage::disk('public')->delete($oldPath);
+        if ($user->profile_picture_url) {
+            $oldPath = ltrim(parse_url($user->profile_picture_url, PHP_URL_PATH), '/');
+            Storage::disk('r2')->delete($oldPath);
         }
 
         // Hapus banner jika ada
-        if ($user->banner_url && str_contains($user->banner_url, '/storage/banners/')) {
-            $oldPath = str_replace(asset('storage') . '/', '', $user->banner_url);
-            Storage::disk('public')->delete($oldPath);
+        if ($user->banner_url) {
+            $oldPath = ltrim(parse_url($user->banner_url, PHP_URL_PATH), '/');
+            Storage::disk('r2')->delete($oldPath);
         }
 
         $user->delete();
