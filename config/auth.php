@@ -112,4 +112,16 @@ return [
 
     'password_timeout' => 10800,
 
+    /*
+    |--------------------------------------------------------------------------
+    | Email Verification Resend Cooldown
+    |--------------------------------------------------------------------------
+    |
+    | Used when an unverified user attempts to login. The backend can resend the
+    | verification email, but only after this cooldown has passed.
+    |
+    */
+
+    'verification_resend_cooldown' => env('EMAIL_VERIFICATION_RESEND_COOLDOWN', 60),
+
 ];

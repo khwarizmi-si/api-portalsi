@@ -8,7 +8,9 @@ use Illuminate\Support\Facades\Hash;
 use Illuminate\Support\Facades\Password;
 use Illuminate\Support\Facades\Broadcast;
 use Illuminate\Support\Facades\Auth;
+use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Validator;
 use Illuminate\Validation\ValidationException;
 use Illuminate\Auth\Events\PasswordReset;
@@ -248,9 +250,10 @@ Route::post('/login', function (Request $request) {
     ]);
 
     // 2️⃣ Cari user by email atau username (lowercase)
-    $user = User::where(function ($query) use ($request) {
-        $query->where('email', strtolower($request->login))
-              ->orWhere('username', strtolower($request->login));
+    $login = strtolower(trim($request->login));
+    $user = User::where(function ($query) use ($login) {
+        $query->whereRaw('LOWER(TRIM(email)) = ?', [$login])
+              ->orWhere('username', $login);
     })->first();
 
     // 3️⃣ Validasi kredensial
@@ -263,9 +266,53 @@ Route::post('/login', function (Request $request) {
 
     // 4️⃣ Validasi email verification
     if (!$user->hasVerifiedEmail()) {
+        $cooldownSeconds = (int) config('auth.verification_resend_cooldown', 60);
+        $cacheKey = 'email_verification_login_resend:' . $user->getKey();
+        $nowTimestamp = now()->timestamp;
+        $nextAvailableAt = (int) Cache::get($cacheKey, 0);
+
+        if (empty($user->email)) {
+            return response()->json([
+                'code'    => 2002,
+                'message' => 'Akun Anda belum memiliki email terikat. Silakan hubungi admin untuk verifikasi akun.',
+                'verification_email_status' => 'missing_email',
+                'resend_cooldown_seconds' => 0,
+            ], 403);
+        }
+
+        if ($nextAvailableAt > $nowTimestamp) {
+            $remainingSeconds = $nextAvailableAt - $nowTimestamp;
+
+            return response()->json([
+                'code'    => 2002,
+                'message' => "Akun Anda belum diverifikasi. Silakan cek email Anda atau login lagi dalam {$remainingSeconds} detik untuk mengirim ulang email verifikasi.",
+                'verification_email_status' => 'cooldown',
+                'resend_cooldown_seconds' => $remainingSeconds,
+            ], 403);
+        }
+
+        try {
+            $user->sendEmailVerificationNotification();
+            Cache::put($cacheKey, $nowTimestamp + $cooldownSeconds, $cooldownSeconds);
+        } catch (\Throwable $e) {
+            Log::error('Failed to resend verification email during login: ' . $e->getMessage(), [
+                'user_id' => $user->user_id,
+                'email' => $user->email,
+            ]);
+
+            return response()->json([
+                'code'    => 2002,
+                'message' => 'Akun Anda belum diverifikasi. Email verifikasi belum berhasil dikirim ulang, silakan coba beberapa saat lagi.',
+                'verification_email_status' => 'failed',
+                'resend_cooldown_seconds' => $cooldownSeconds,
+            ], 403);
+        }
+
         return response()->json([
             'code'    => 2002,
-            'message' => 'Akun Anda belum diverifikasi. Silakan cek email Anda untuk melakukan verifikasi.'
+            'message' => "Akun Anda belum diverifikasi. Link verifikasi baru telah dikirim ke email Anda. Silakan cek email atau login lagi dalam {$cooldownSeconds} detik untuk mengirim ulang.",
+            'verification_email_status' => 'sent',
+            'resend_cooldown_seconds' => $cooldownSeconds,
         ], 403);
     }
 

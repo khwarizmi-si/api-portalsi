@@ -123,7 +123,7 @@ return [
     */
 
     'queue' => [
-        'connection' => env('MAIL_QUEUE_CONNECTION', 'database'),
+        'connection' => env('MAIL_QUEUE_CONNECTION', env('QUEUE_CONNECTION', 'sync')),
         'name' => env('MAIL_QUEUE_NAME', 'mail'),
     ],
 

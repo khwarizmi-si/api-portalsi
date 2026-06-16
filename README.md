@@ -67,4 +67,10 @@ MAIL_QUEUE_CONNECTION=database
 MAIL_QUEUE_NAME=mail
 ```
 
+Jika worker belum disiapkan, gunakan mode langsung agar email tidak tertahan di tabel `jobs`:
+
+```env
+MAIL_QUEUE_CONNECTION=sync
+```
+
 Jika memakai Supervisor/systemd di server, pastikan command worker di atas berjalan terus menerus dan restart otomatis saat gagal.
