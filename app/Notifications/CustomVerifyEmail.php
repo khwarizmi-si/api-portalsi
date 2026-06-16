@@ -13,11 +13,14 @@ class CustomVerifyEmail extends BaseVerifyEmail implements ShouldQueue
 {
     use Queueable;
 
-    public $afterCommit = true;
-
     public $tries = 3;
 
     public $timeout = 30;
+
+    public function __construct()
+    {
+        $this->afterCommit();
+    }
 
     public function backoff(): array
     {

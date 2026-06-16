@@ -11,11 +11,16 @@ class CustomResetPassword extends BaseResetPassword implements ShouldQueue
 {
     use Queueable;
 
-    public $afterCommit = true;
-
     public $tries = 3;
 
     public $timeout = 30;
+
+    public function __construct($token)
+    {
+        parent::__construct($token);
+
+        $this->afterCommit();
+    }
 
     public function backoff(): array
     {
