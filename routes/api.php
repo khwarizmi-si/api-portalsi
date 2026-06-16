@@ -338,12 +338,28 @@ Route::post('/email/verification-notification', function (Request $request) {
 // 🔑 Forgot Password
 Route::post('/forgot-password', function (Request $request) {
     $request->validate(['email' => 'required|email']);
-    $status = Password::sendResetLink($request->only('email'));
-    return response()->json([
-        'message' => $status === Password::RESET_LINK_SENT
-            ? 'Link reset dikirim ke email.'
-            : 'Gagal mengirim reset link.'
-    ]);
+
+    $email = strtolower(trim($request->input('email')));
+    $status = Password::sendResetLink(['email' => $email]);
+
+    return match ($status) {
+        Password::RESET_LINK_SENT => response()->json([
+            'message' => 'Link reset dikirim ke email.',
+            'status' => 'sent',
+        ]),
+        Password::RESET_THROTTLED => response()->json([
+            'message' => 'Link reset sudah dikirim. Tunggu sekitar 60 detik sebelum meminta ulang.',
+            'status' => 'throttled',
+        ], 429),
+        Password::INVALID_USER => response()->json([
+            'message' => 'Email tidak ditemukan.',
+            'status' => 'invalid_user',
+        ], 404),
+        default => response()->json([
+            'message' => 'Gagal mengirim reset link.',
+            'status' => 'failed',
+        ], 500),
+    };
 });
 
 Route::post('/reset-password', function (Request $request) {
@@ -351,6 +367,10 @@ Route::post('/reset-password', function (Request $request) {
         'token' => 'required',
         'email' => 'required|email',
         'password' => 'required|confirmed',
+    ]);
+
+    $request->merge([
+        'email' => strtolower(trim($request->input('email'))),
     ]);
 
     $status = Password::reset(
