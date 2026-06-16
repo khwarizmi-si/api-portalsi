@@ -48,3 +48,23 @@ Bersatulah wahai tunas bangsa
 > *Canda wkwkwk :v Nih dibawah endpointnya⬇️*
 
 ## `https://s.id/psiapidocs`
+
+---
+
+## Email Queue
+
+Email verifikasi dan reset password dikirim lewat queue `mail` supaya request API tidak menunggu koneksi SMTP. Setelah deploy, jalankan migration dan worker berikut:
+
+```bash
+php artisan migrate
+php artisan queue:work database --queue=mail,default --tries=3 --timeout=60
+```
+
+Environment yang bisa diatur:
+
+```env
+MAIL_QUEUE_CONNECTION=database
+MAIL_QUEUE_NAME=mail
+```
+
+Jika memakai Supervisor/systemd di server, pastikan command worker di atas berjalan terus menerus dan restart otomatis saat gagal.

@@ -114,6 +114,21 @@ return [
 
     /*
     |--------------------------------------------------------------------------
+    | Mail Queue
+    |--------------------------------------------------------------------------
+    |
+    | Email notifications are pushed to this queue so transient SMTP issues do
+    | not block API responses. Run a worker for this queue in production.
+    |
+    */
+
+    'queue' => [
+        'connection' => env('MAIL_QUEUE_CONNECTION', 'database'),
+        'name' => env('MAIL_QUEUE_NAME', 'mail'),
+    ],
+
+    /*
+    |--------------------------------------------------------------------------
     | Markdown Mail Settings
     |--------------------------------------------------------------------------
     |

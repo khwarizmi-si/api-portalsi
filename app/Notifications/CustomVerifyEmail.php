@@ -3,12 +3,41 @@
 namespace App\Notifications;
 
 use Illuminate\Auth\Notifications\VerifyEmail as BaseVerifyEmail;
+use Illuminate\Bus\Queueable;
+use Illuminate\Contracts\Queue\ShouldQueue;
 use Illuminate\Notifications\Messages\MailMessage;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\URL;
 
-class CustomVerifyEmail extends BaseVerifyEmail
+class CustomVerifyEmail extends BaseVerifyEmail implements ShouldQueue
 {
+    use Queueable;
+
+    public $afterCommit = true;
+
+    public $tries = 3;
+
+    public $timeout = 30;
+
+    public function backoff(): array
+    {
+        return [60, 180, 600];
+    }
+
+    public function viaConnections(): array
+    {
+        return [
+            'mail' => config('mail.queue.connection', 'database'),
+        ];
+    }
+
+    public function viaQueues(): array
+    {
+        return [
+            'mail' => config('mail.queue.name', 'mail'),
+        ];
+    }
+
     public function toMail($notifiable)
     {
         $verificationUrl = $this->verificationUrl($notifiable);
@@ -18,6 +47,7 @@ class CustomVerifyEmail extends BaseVerifyEmail
             ->view('emails.verify-email', [
                 'url' => $verificationUrl,
                 'user' => $notifiable,
+                'preheader' => 'Satu langkah lagi untuk mengaktifkan akun Portal SI Anda.',
             ]);
     }
 
