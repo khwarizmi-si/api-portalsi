@@ -340,7 +340,26 @@ Route::post('/forgot-password', function (Request $request) {
     $request->validate(['email' => 'required|email']);
 
     $email = strtolower(trim($request->input('email')));
-    $status = Password::sendResetLink(['email' => $email]);
+
+    $matchedUsers = User::whereRaw('LOWER(TRIM(email)) = ?', [$email])
+        ->limit(2)
+        ->get(['user_id', 'email']);
+
+    if ($matchedUsers->isEmpty()) {
+        return response()->json([
+            'message' => 'Email tidak ditemukan.',
+            'status' => 'invalid_user',
+        ], 404);
+    }
+
+    if ($matchedUsers->count() > 1) {
+        return response()->json([
+            'message' => 'Ada lebih dari satu akun dengan email yang sama. Hubungi admin untuk merapikan data akun.',
+            'status' => 'duplicate_email',
+        ], 409);
+    }
+
+    $status = Password::sendResetLink(['email' => $matchedUsers->first()->email]);
 
     return match ($status) {
         Password::RESET_LINK_SENT => response()->json([
@@ -373,9 +392,19 @@ Route::post('/reset-password', function (Request $request) {
         'email' => strtolower(trim($request->input('email'))),
     ]);
 
+    $email = $request->input('email');
+
     $status = Password::reset(
-        $request->only('email', 'password', 'password_confirmation', 'token'),
+        [
+            'email' => function ($query) use ($email) {
+                $query->whereRaw('LOWER(TRIM(email)) = ?', [$email]);
+            },
+            'password' => $request->input('password'),
+            'password_confirmation' => $request->input('password_confirmation'),
+            'token' => $request->input('token'),
+        ],
         function ($user, $password) {
+            $user->email = strtolower(trim($user->email));
             $user->password_hash = Hash::make($password);
             $user->save();
 
