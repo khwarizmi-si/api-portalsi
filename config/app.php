@@ -185,6 +185,6 @@ return [
         // 'Example' => App\Facades\Example::class,
     ])->toArray(),
 
-    'api_url' => env('APP_API_URL', 'https://api-new.portalsi.com')
+    'api_url' => env('APP_API_URL', 'https://api.portalsi.com')
 
 ];

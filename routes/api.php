@@ -91,8 +91,8 @@ Route::post('/register', function (Request $request) {
         'email'               => strtolower($request->email),
         'password_hash'       => bcrypt($request->password),
         'role'                => $request->role ?? 'student',
-        'profile_picture_url' => 'https://api-new.portalsi.com/storage/default-profile.png',
-        'banner_url'          => 'https://api-new.portalsi.com/storage/default-banner.png',
+        'profile_picture_url' => 'https://api.portalsi.com/storage/default-profile.png',
+        'banner_url'          => 'https://api.portalsi.com/storage/default-banner.png',
     ]);
 
     // 🔹 Kirim verifikasi email
@@ -174,8 +174,8 @@ Route::post('/register-teachers', function (Request $request) {
             'role' => 'teacher',
             'full_name' => $teacherData['full_name'] ?? null,
             'email' => $teacherData['email'] ?? null,
-            'profile_picture_url' => 'https://api-new.portalsi.com/storage/default-profile.png',
-            'banner_url' => 'https://api-new.portalsi.com/storage/default-banner.png'
+            'profile_picture_url' => 'https://api.portalsi.com/storage/default-profile.png',
+            'banner_url' => 'https://api.portalsi.com/storage/default-banner.png'
         ]);
 
         // 2️⃣ Auto verify
@@ -221,8 +221,8 @@ Route::post('/register-parent', function (Request $request) {
         'role' => 'parent',
         'full_name' => null,
         'email' => null,
-        'profile_picture_url' => 'https://api-new.portalsi.com/storage/default-profile.png',
-        'banner_url' => 'https://api-new.portalsi.com/storage/default-banner.png'
+        'profile_picture_url' => 'https://api.portalsi.com/storage/default-profile.png',
+        'banner_url' => 'https://api.portalsi.com/storage/default-banner.png'
     ]);
 
     // 🔥 langsung verifikasi email meskipun null

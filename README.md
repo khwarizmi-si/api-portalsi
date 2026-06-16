@@ -1,7 +1,7 @@
 # 📘 API Documentation - Portal SI (PSI)
 
 RESTful API untuk aplikasi sosial media **Portal SI** 😵‍💫🧠🌀👁️👄👁️😱🙃😈👹  
-**Base URL:** `https://api-new.portalsi.com/api/(endpoint)`
+**Base URL:** `https://api.portalsi.com/api/(endpoint)`
 
 ---
 
