@@ -11,20 +11,23 @@ return new class extends Migration
      */
     public function up(): void
     {
-Schema::create('user_fcm_tokens', function (Blueprint $table) {
-    $table->id();
+        if (Schema::hasTable('user_fcm_tokens')) {
+            return;
+        }
 
-    $table->unsignedBigInteger('user_id');
+        Schema::create('user_fcm_tokens', function (Blueprint $table) {
+            $table->id();
 
-    $table->foreign('user_id')
-          ->references('user_id')
-          ->on('users')
-          ->onDelete('cascade');
+            $table->unsignedBigInteger('user_id');
 
-    $table->text('fcm_token');
-    $table->timestamps();
-});
+            $table->foreign('user_id')
+                ->references('user_id')
+                ->on('users')
+                ->onDelete('cascade');
 
+            $table->text('fcm_token');
+            $table->timestamps();
+        });
     }
 
     /**
