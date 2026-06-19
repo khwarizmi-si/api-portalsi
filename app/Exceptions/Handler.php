@@ -6,6 +6,7 @@ use Illuminate\Foundation\Exceptions\Handler as ExceptionHandler;
 use Throwable;
 use Illuminate\Http\Request;
 use Illuminate\Validation\ValidationException;
+use Illuminate\Auth\AuthenticationException;
 use Symfony\Component\HttpKernel\Exception\NotFoundHttpException;
 use Symfony\Component\HttpKernel\Exception\MethodNotAllowedHttpException;
 use Symfony\Component\HttpKernel\Exception\HttpException;
@@ -59,6 +60,13 @@ class Handler extends ExceptionHandler
                 return response()->json([
                     'error' => 'HTTP method not allowed',
                 ], 405);
+            }
+
+            // Handle unauthenticated / invalid token (401, not 500)
+            if ($exception instanceof AuthenticationException) {
+                return response()->json([
+                    'error' => 'Unauthenticated',
+                ], 401);
             }
 
             // Generic HTTP exception (e.g., 403, 401, etc)

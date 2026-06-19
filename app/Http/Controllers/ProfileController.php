@@ -162,6 +162,8 @@ class ProfileController extends Controller
                 if ($username) $q->where('username', 'like', "%{$username}%");
                 if ($fullName) $q->orWhere('full_name', 'like', "%{$fullName}%");
             })
+            // Exclude the current user from their own search results.
+            ->when($request->user(), fn($q) => $q->where('user_id', '!=', $request->user()->user_id))
             ->select('user_id', 'username', 'full_name', 'is_verified', 'profile_picture_url')
             ->paginate($perPage)
             ->appends([
