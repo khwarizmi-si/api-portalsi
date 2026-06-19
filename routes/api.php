@@ -43,147 +43,94 @@ use App\Http\Controllers\{
     BulkRegisterController,
 };
 
-// 🚀 PUBLIC ROUTES
+// ═══════════════════════════════════════════
+// PUBLIC ROUTES
+// ═══════════════════════════════════════════
+
 Route::post('/register', function (Request $request) {
-    // 🔹 Validasi input
     $validator = Validator::make($request->all(), [
-        'username' => [
-            'required',
-            'string',
-            'unique:users,username',
-            'regex:/^[a-zA-Z0-9._]+$/'
-        ],
+        'username' => ['required', 'string', 'unique:users,username', 'regex:/^[a-zA-Z0-9._]+$/'],
         'full_name' => 'required|string',
         'email' => 'required|email|unique:users,email',
         'password' => 'required|min:6',
         'role' => 'in:teacher,parent,student,other'
     ], [
-        // 🔹 Custom error messages
         'username.required' => 'Username wajib diisi.',
-        'username.unique'   => 'Username sudah digunakan, silakan gunakan yang lain.',
-        'username.regex'    => 'Username hanya boleh berisi huruf, angka, titik, dan underscore.',
-        'full_name.required'=> 'Nama lengkap wajib diisi.',
-        'email.required'    => 'Email wajib diisi.',
-        'email.email'       => 'Format email tidak valid.',
-        'email.unique'      => 'Email sudah terdaftar, silahkan gunakan email lainnya.',
+        'username.unique' => 'Username sudah digunakan.',
+        'username.regex' => 'Username hanya boleh berisi huruf, angka, titik, underscore.',
+        'full_name.required' => 'Nama lengkap wajib diisi.',
+        'email.required' => 'Email wajib diisi.',
+        'email.email' => 'Format email tidak valid.',
+        'email.unique' => 'Email sudah terdaftar.',
         'password.required' => 'Password wajib diisi.',
-        'password.min'      => 'Password minimal 6 karakter.',
-        'role.in'           => 'Role tidak valid.'
+        'password.min' => 'Password minimal 6 karakter.',
+        'role.in' => 'Role tidak valid.'
     ]);
 
-    // 🔹 Kalau validasi gagal -> return JSON rapi
     if ($validator->fails()) {
-        return response()->json([
-            'message' => 'Validation failed',
-            'errors'  => $validator->errors()
-        ], 422);
+        return response()->json(['message' => 'Validation failed', 'errors' => $validator->errors()], 422);
     }
 
-    // 🔹 Cek role dev (tidak boleh daftar publik)
     if ($request->role === 'dev') {
-        return response()->json([
-            'message' => 'Role "dev" tidak diizinkan untuk registrasi publik.'
-        ], 403);
+        return response()->json(['message' => 'Role "dev" tidak diizinkan untuk registrasi publik.'], 403);
     }
 
-    // 🔹 Simpan user baru
     $user = User::create([
-        'username'            => strtolower($request->username),
-        'full_name'           => $request->full_name,
-        'email'               => strtolower($request->email),
-        'password_hash'       => bcrypt($request->password),
-        'role'                => $request->role ?? 'student',
+        'username' => strtolower($request->username),
+        'full_name' => $request->full_name,
+        'email' => strtolower($request->email),
+        'password_hash' => bcrypt($request->password),
+        'role' => $request->role ?? 'student',
         'profile_picture_url' => 'https://api.portalsi.com/storage/default-profile.png',
-        'banner_url'          => 'https://api.portalsi.com/storage/default-banner.png',
+        'banner_url' => 'https://api.portalsi.com/storage/default-banner.png',
     ]);
 
-    // 🔹 Kirim verifikasi email
     $user->sendEmailVerificationNotification();
-
-    // 🔹 Buat token API
     $token = $user->createToken('api-token')->plainTextToken;
 
     return response()->json([
         'message' => 'User registered successfully. Please verify your email.',
-        'token'   => $token,
-        'user'    => $user
+        'token' => $token,
+        'user' => $user
     ], 201);
 });
 
-// 🚀 Login + Cek Membership (tanpa Sanctum)
 Route::post('/login-check', function (Request $request) {
-    // 1️⃣ Validasi input
-    $request->validate([
-        'username' => 'required|string',
-        'password' => 'required|string',
-    ]);
-
-    // 2️⃣ Cari user berdasarkan username (lowercase biar konsisten)
+    $request->validate(['username' => 'required|string', 'password' => 'required|string']);
     $user = User::where('username', strtolower($request->username))->first();
 
-    // 3️⃣ Cek apakah user ada & password cocok
     if (!$user || !Hash::check($request->password, $user->password_hash)) {
-        return response()->json([
-            'success' => false,
-            'message' => 'Username atau password salah',
-        ], 401);
+        return response()->json(['success' => false, 'message' => 'Username atau password salah'], 401);
     }
 
-    // 4️⃣ Ambil grup user (relasi ke tabel groups)
-    $groups = $user->groups()
-        ->select('groups.id as group_id', 'groups.name')
-        ->get();
+    $groups = $user->groups()->select('groups.id as group_id', 'groups.name')->get();
 
-    // 5️⃣ Return JSON
     return response()->json([
         'success' => true,
-        'user'    => [
-            'id'        => $user->user_id,
-            'username'  => $user->username,
-            'full_name' => $user->full_name,
-            'role'      => $user->role,
-        ],
-        'groups'  => $groups,
+        'user' => ['id' => $user->user_id, 'username' => $user->username, 'full_name' => $user->full_name, 'role' => $user->role],
+        'groups' => $groups,
     ]);
 });
 
-// 🚀 Bulk Register Teacher + auto join ke grup 1–6
 Route::post('/register-teachers', function (Request $request) {
     $teachers = $request->input('teachers');
-
     if (!$teachers || !is_array($teachers)) {
-        return response()->json([
-            'message' => 'Parameter teachers harus berupa array.'
-        ], 400);
+        return response()->json(['message' => 'Parameter teachers harus berupa array.'], 400);
     }
-
     $createdUsers = [];
-
-    foreach ($teachers as $teacherData) {
-        if (empty($teacherData['username']) || empty($teacherData['password'])) {
-            continue;
-        }
-
-        // skip kalau username sudah ada
-        if (User::where('username', strtolower($teacherData['username']))->exists()) {
-            continue;
-        }
-
-        // 1️⃣ Buat user teacher
+    foreach ($teachers as $data) {
+        if (empty($data['username']) || empty($data['password'])) continue;
+        if (User::where('username', strtolower($data['username']))->exists()) continue;
         $user = User::create([
-            'username' => strtolower($teacherData['username']),
-            'password_hash' => bcrypt($teacherData['password']),
+            'username' => strtolower($data['username']),
+            'password_hash' => bcrypt($data['password']),
             'role' => 'teacher',
-            'full_name' => $teacherData['full_name'] ?? null,
-            'email' => $teacherData['email'] ?? null,
+            'full_name' => $data['full_name'] ?? null,
+            'email' => $data['email'] ?? null,
             'profile_picture_url' => 'https://api.portalsi.com/storage/default-profile.png',
             'banner_url' => 'https://api.portalsi.com/storage/default-banner.png'
         ]);
-
-        // 2️⃣ Auto verify
         $user->markEmailAsVerified();
-
-        // 3️⃣ Auto join grup 1–6 sebagai member
         $user->groups()->syncWithoutDetaching([
             1 => ['role' => 'member', 'is_muted' => 0],
             2 => ['role' => 'member', 'is_muted' => 0],
@@ -192,30 +139,16 @@ Route::post('/register-teachers', function (Request $request) {
             5 => ['role' => 'member', 'is_muted' => 0],
             6 => ['role' => 'member', 'is_muted' => 0],
         ]);
-
         $createdUsers[] = $user;
     }
-
-    return response()->json([
-        'message' => 'Teachers registered & auto joined to groups 1–6 successfully.',
-        'count' => count($createdUsers),
-        'users' => $createdUsers
-    ], 201);
+    return response()->json(['message' => 'Teachers registered & auto joined to groups 1–6 successfully.', 'count' => count($createdUsers), 'users' => $createdUsers], 201);
 });
 
-// 🚀 Register khusus Parent tanpa email & full_name, auto verified
 Route::post('/register-parent', function (Request $request) {
     $request->validate([
-        'username' => [
-            'required',
-            'string',
-            'unique:users',
-            'regex:/^[a-zA-Z0-9._]+$/'
-        ],
+        'username' => ['required', 'string', 'unique:users', 'regex:/^[a-zA-Z0-9._]+$/'],
         'password' => 'required|min:1',
-    ], [
-        'username.regex' => 'Username hanya boleh berisi huruf, angka, titik, dan underscore tanpa spasi atau simbol lain.'
-    ]);
+    ], ['username.regex' => 'Username hanya boleh berisi huruf, angka, titik, underscore.']);
 
     $user = User::create([
         'username' => strtolower($request->username),
@@ -226,154 +159,80 @@ Route::post('/register-parent', function (Request $request) {
         'profile_picture_url' => 'https://api.portalsi.com/storage/default-profile.png',
         'banner_url' => 'https://api.portalsi.com/storage/default-banner.png'
     ]);
-
-    // 🔥 langsung verifikasi email meskipun null
     $user->markEmailAsVerified();
-
     $token = $user->createToken('api-token')->plainTextToken;
 
-    return response()->json([
-        'message' => 'Parent registered successfully (auto verified).',
-        'token' => $token,
-        'user' => $user
-    ], 201);
+    return response()->json(['message' => 'Parent registered successfully (auto verified).', 'token' => $token, 'user' => $user], 201);
 });
 
-
-
-// ✅ Login API aman
 Route::post('/login', function (Request $request) {
-    // 1️⃣ Validasi input
-    $request->validate([
-        'login'    => 'required|string',
-        'password' => 'required|string',
-    ]);
-
-    // 2️⃣ Cari user by email atau username (lowercase)
+    $request->validate(['login' => 'required|string', 'password' => 'required|string']);
     $login = strtolower(trim($request->login));
     $user = User::where(function ($query) use ($login) {
-        $query->whereRaw('LOWER(TRIM(email)) = ?', [$login])
-              ->orWhere('username', $login);
+        $query->whereRaw('LOWER(TRIM(email)) = ?', [$login])->orWhere('username', $login);
     })->first();
 
-    // 3️⃣ Validasi kredensial
     if (!$user || !Hash::check($request->password, $user->password_hash)) {
-        return response()->json([
-            'code'    => 2001,
-            'message' => 'Username/email atau password salah!'
-        ], 401);
+        return response()->json(['code' => 2001, 'message' => 'Username/email atau password salah!'], 401);
     }
 
-    // 4️⃣ Validasi email verification
     if (!$user->hasVerifiedEmail()) {
-        $cooldownSeconds = (int) config('auth.verification_resend_cooldown', 60);
+        $cooldown = (int) config('auth.verification_resend_cooldown', 60);
         $cacheKey = 'email_verification_login_resend:' . $user->getKey();
-        $nowTimestamp = now()->timestamp;
-        $nextAvailableAt = (int) Cache::get($cacheKey, 0);
+        $now = now()->timestamp;
+        $nextAt = (int) Cache::get($cacheKey, 0);
 
         if (empty($user->email)) {
-            return response()->json([
-                'code'    => 2002,
-                'message' => 'Akun Anda belum memiliki email terikat. Silakan hubungi admin untuk verifikasi akun.',
-                'verification_email_status' => 'missing_email',
-                'resend_cooldown_seconds' => 0,
-            ], 403);
+            return response()->json(['code' => 2002, 'message' => 'Akun Anda belum memiliki email terikat.', 'verification_email_status' => 'missing_email'], 403);
         }
-
-        if ($nextAvailableAt > $nowTimestamp) {
-            $remainingSeconds = $nextAvailableAt - $nowTimestamp;
-
-            return response()->json([
-                'code'    => 2002,
-                'message' => "Akun Anda belum diverifikasi. Silakan cek email Anda atau login lagi dalam {$remainingSeconds} detik untuk mengirim ulang email verifikasi.",
-                'verification_email_status' => 'cooldown',
-                'resend_cooldown_seconds' => $remainingSeconds,
-            ], 403);
+        if ($nextAt > $now) {
+            $remaining = $nextAt - $now;
+            return response()->json(['code' => 2002, 'message' => "Akun belum diverifikasi. Login lagi dalam {$remaining} detik untuk kirim ulang.", 'verification_email_status' => 'cooldown', 'resend_cooldown_seconds' => $remaining], 403);
         }
-
         try {
             $user->sendEmailVerificationNotification();
-            Cache::put($cacheKey, $nowTimestamp + $cooldownSeconds, $cooldownSeconds);
+            Cache::put($cacheKey, $now + $cooldown, $cooldown);
         } catch (\Throwable $e) {
-            Log::error('Failed to resend verification email during login: ' . $e->getMessage(), [
-                'user_id' => $user->user_id,
-                'email' => $user->email,
-            ]);
-
-            return response()->json([
-                'code'    => 2002,
-                'message' => 'Akun Anda belum diverifikasi. Email verifikasi belum berhasil dikirim ulang, silakan coba beberapa saat lagi.',
-                'verification_email_status' => 'failed',
-                'resend_cooldown_seconds' => $cooldownSeconds,
-            ], 403);
+            Log::error('Failed to resend verification: ' . $e->getMessage(), ['user_id' => $user->user_id]);
+            return response()->json(['code' => 2002, 'message' => 'Gagal kirim ulang email verifikasi.', 'verification_email_status' => 'failed'], 403);
         }
-
-        return response()->json([
-            'code'    => 2002,
-            'message' => "Akun Anda belum diverifikasi. Link verifikasi baru telah dikirim ke email Anda. Silakan cek email atau login lagi dalam {$cooldownSeconds} detik untuk mengirim ulang.",
-            'verification_email_status' => 'sent',
-            'resend_cooldown_seconds' => $cooldownSeconds,
-        ], 403);
+        return response()->json(['code' => 2002, 'message' => "Link verifikasi baru dikirim. Cek email atau login lagi dalam {$cooldown} detik.", 'verification_email_status' => 'sent', 'resend_cooldown_seconds' => $cooldown], 403);
     }
 
-    // 5️⃣ Generate token Sanctum
     $tokenResult = $user->createToken('api-token');
     $plainTextToken = $tokenResult->plainTextToken;
+    $tokenId = PersonalAccessToken::where('token', hash('sha256', explode('|', $plainTextToken)[1]))->first()?->id;
 
-    // 6️⃣ Ambil token ID dari database
-    $tokenId = \Laravel\Sanctum\PersonalAccessToken::where('token', hash('sha256', explode('|', $plainTextToken)[1]))
-                ->first()?->id;
-
-    // 7️⃣ Catat login history dengan aman
     try {
-        $agent = new Jenssegers\Agent\Agent();
-
+        $agent = new Agent();
         LoginHistory::create([
-            'user_id'    => $user->user_id, // pastikan user_id
-            'token_id'   => $tokenId,
+            'user_id' => $user->user_id,
+            'token_id' => $tokenId,
             'ip_address' => $request->ip() ?? 'unknown',
             'user_agent' => $request->header('User-Agent') ?? 'unknown',
-            'device'     => $agent->device() ?? 'unknown',
-            'browser'    => $agent->browser() ?? 'unknown',
-            'platform'   => $agent->platform() ?? 'unknown',
-            'login_at'   => now(),
+            'device' => $agent->device() ?? 'unknown',
+            'browser' => $agent->browser() ?? 'unknown',
+            'platform' => $agent->platform() ?? 'unknown',
+            'login_at' => now(),
         ]);
-
-        Log::info('Login history recorded for user_id: ' . $user->user_id);
-
     } catch (\Exception $e) {
-        Log::error('Skipping LoginHistory insert: '.$e->getMessage(), [
-            'user' => $user,
-            'token_id' => $tokenId
-        ]);
+        Log::error('LoginHistory insert failed: ' . $e->getMessage());
     }
 
-    // 8️⃣ Return response
-    return response()->json([
-        'code'    => 1001,
-        'message' => 'Login successful',
-        'token'   => $plainTextToken,
-        'user'    => $user,
-    ], 200);
+    return response()->json(['code' => 1001, 'message' => 'Login successful', 'token' => $plainTextToken, 'user' => $user], 200);
 });
 
-//
 Route::post('/fcm/register', [App\Http\Controllers\FcmController::class, 'register']);
 
-
-
-// 📩 Email Verification
 Route::get('/email/verify/{id}/{hash}', function (Request $request, $id, $hash) {
-    $user = \App\Models\User::findOrFail($id);
+    $user = User::findOrFail($id);
     if (!hash_equals((string) $hash, sha1($user->getEmailForVerification()))) {
         return response()->json(['message' => 'Invalid verification link.'], 403);
     }
-
     if (!$user->hasVerifiedEmail()) {
         $user->markEmailAsVerified();
         event(new Verified($user));
     }
-
     return redirect('https://portalsi.com/verified-success');
 })->middleware('signed')->name('verification.verify');
 
@@ -382,341 +241,209 @@ Route::post('/email/verification-notification', function (Request $request) {
     return response()->json(['message' => 'Link verifikasi dikirim ke email.']);
 })->middleware(['auth:sanctum'])->name('verification.send');
 
-// 🔑 Forgot Password
 Route::post('/forgot-password', function (Request $request) {
     $request->validate(['email' => 'required|email']);
-
     $email = strtolower(trim($request->input('email')));
-
-    $matchedUsers = User::whereRaw('LOWER(TRIM(email)) = ?', [$email])
-        ->limit(2)
-        ->get(['user_id', 'email']);
-
-    if ($matchedUsers->isEmpty()) {
-        return response()->json([
-            'message' => 'Email tidak ditemukan.',
-            'status' => 'invalid_user',
-        ], 404);
-    }
-
-    if ($matchedUsers->count() > 1) {
-        return response()->json([
-            'message' => 'Ada lebih dari satu akun dengan email yang sama. Hubungi admin untuk merapikan data akun.',
-            'status' => 'duplicate_email',
-        ], 409);
-    }
-
-    $status = Password::sendResetLink(['email' => $matchedUsers->first()->email]);
-
+    $matched = User::whereRaw('LOWER(TRIM(email)) = ?', [$email])->limit(2)->get(['user_id', 'email']);
+    if ($matched->isEmpty()) return response()->json(['message' => 'Email tidak ditemukan.', 'status' => 'invalid_user'], 404);
+    if ($matched->count() > 1) return response()->json(['message' => 'Duplikat email. Hubungi admin.', 'status' => 'duplicate_email'], 409);
+    $status = Password::sendResetLink(['email' => $matched->first()->email]);
     return match ($status) {
-        Password::RESET_LINK_SENT => response()->json([
-            'message' => 'Link reset dikirim ke email.',
-            'status' => 'sent',
-        ]),
-        Password::RESET_THROTTLED => response()->json([
-            'message' => 'Link reset sudah dikirim. Tunggu sekitar 60 detik sebelum meminta ulang.',
-            'status' => 'throttled',
-        ], 429),
-        Password::INVALID_USER => response()->json([
-            'message' => 'Email tidak ditemukan.',
-            'status' => 'invalid_user',
-        ], 404),
-        default => response()->json([
-            'message' => 'Gagal mengirim reset link.',
-            'status' => 'failed',
-        ], 500),
+        Password::RESET_LINK_SENT => response()->json(['message' => 'Link reset dikirim.', 'status' => 'sent']),
+        Password::RESET_THROTTLED => response()->json(['message' => 'Tunggu 60 detik.', 'status' => 'throttled'], 429),
+        default => response()->json(['message' => 'Gagal kirim reset link.', 'status' => 'failed'], 500),
     };
 });
 
 Route::post('/reset-password', function (Request $request) {
-    $request->validate([
-        'token' => 'required',
-        'email' => 'required|email',
-        'password' => 'required|confirmed',
-    ]);
-
-    $request->merge([
-        'email' => strtolower(trim($request->input('email'))),
-    ]);
-
-    $email = $request->input('email');
-
+    $request->validate(['token' => 'required', 'email' => 'required|email', 'password' => 'required|confirmed']);
+    $email = strtolower(trim($request->input('email')));
     $status = Password::reset(
-        [
-            'email' => function ($query) use ($email) {
-                $query->whereRaw('LOWER(TRIM(email)) = ?', [$email]);
-            },
-            'password' => $request->input('password'),
-            'password_confirmation' => $request->input('password_confirmation'),
-            'token' => $request->input('token'),
-        ],
+        ['email' => fn($q) => $q->whereRaw('LOWER(TRIM(email)) = ?', [$email]), 'password' => $request->password, 'password_confirmation' => $request->password_confirmation, 'token' => $request->token],
         function ($user, $password) {
-            $user->email = strtolower(trim($user->email));
             $user->password_hash = Hash::make($password);
             $user->save();
-
             event(new PasswordReset($user));
         }
     );
-
-    return response()->json([
-        'message' => match ($status) {
-            Password::PASSWORD_RESET => 'Password berhasil direset.',
-            Password::INVALID_TOKEN => 'Token tidak valid atau sudah kadaluarsa.',
-            Password::INVALID_USER => 'Email tidak ditemukan.',
-            Password::RESET_THROTTLED => 'Terlalu sering mencoba. Coba beberapa saat lagi.',
-            default => 'Reset password gagal.'
-        }
-    ], $status === Password::PASSWORD_RESET ? 200 : 400);
+    return response()->json(['message' => match ($status) {
+        Password::PASSWORD_RESET => 'Password berhasil direset.',
+        Password::INVALID_TOKEN => 'Token tidak valid.',
+        Password::INVALID_USER => 'Email tidak ditemukan.',
+        Password::RESET_THROTTLED => 'Terlalu sering. Coba lagi nanti.',
+        default => 'Reset gagal.'
+    }], $status === Password::PASSWORD_RESET ? 200 : 400);
 });
 
-// 📌 Bind Email Pertama Kali
 Route::post('/bind-email', function (Request $request) {
-    $request->validate([
-        'email' => 'required|email|unique:users,email',
-    ]);
-
-    $user = $request->user(); // user login pakai token Sanctum
-
-    // pastikan user belum punya email
-    if (!empty($user->email)) {
-        return response()->json([
-            'message' => 'Email sudah terikat dengan akun ini.'
-        ], 400);
-    }
-
-    // simpan email baru
-    $user->email = strtolower($request->email);
-    $user->email_verified_at = null; // reset dulu
-    $user->save();
-
-    // kirim verifikasi email
-    $user->sendEmailVerificationNotification();
-
-    return response()->json([
-        'message' => 'Email berhasil ditambahkan. Silakan verifikasi melalui link yang dikirim.'
-    ]);
-})->middleware(['auth:sanctum']);
-
-Route::middleware(['auth:sanctum'])->get('/special-groups', function (Request $request) {
+    $request->validate(['email' => 'required|email|unique:users,email']);
     $user = $request->user();
-
-    // ✅ Cek role user: hanya parent & teacher
-    if (!in_array($user->role, ['parent', 'teacher'])) {
-        return response()->json([
-            'error' => 'Hanya user dengan role parent atau teacher yang dapat mengakses endpoint ini.'
-        ], 403);
-    }
-
-    // 1️⃣ Ambil grup yang user ikuti, filter hanya id 1-6
-    $groups = $user->groups()
-        ->whereIn('groups.id', [1, 2, 3, 4, 5, 6])
-        ->select('groups.id', 'groups.name', 'groups.description', 'groups.avatar_url')
-        ->get();
-
-    // 2️⃣ Hitung unread_message_count per grup
-    $result = $groups->map(function ($group) use ($user) {
-        $unreadCount = DB::table('group_messages')
-            ->leftJoin('group_message_reads', function ($join) use ($user) {
-                $join->on('group_messages.id', '=', 'group_message_reads.group_message_id') // ✅ pakai kolom yg benar
-                     ->where('group_message_reads.user_id', '=', $user->user_id);
-            })
-            ->where('group_messages.group_id', $group->id)
-            ->whereNull('group_message_reads.id')
-            ->count();
-
-        return [
-            'id' => $group->id,
-            'name' => $group->name,
-            'description' => $group->description,
-            'avatar_url' => $group->avatar_url,
-            'unread_message_count' => (string) $unreadCount,
-        ];
-    });
-
-    // 3️⃣ Return hasil
-    return response()->json($result);
-});
-
+    if (!empty($user->email)) return response()->json(['message' => 'Email sudah terikat.'], 400);
+    $user->email = strtolower($request->email);
+    $user->email_verified_at = null;
+    $user->save();
+    $user->sendEmailVerificationNotification();
+    return response()->json(['message' => 'Email berhasil ditambahkan. Silakan verifikasi.']);
+})->middleware(['auth:sanctum']);
 
 Route::get('/profile/{username}', [ProfileController::class, 'show']);
 
-// 🔐 PROTECTED ROUTES
+// ═══════════════════════════════════════════
+// PROTECTED ROUTES (auth:sanctum)
+// ═══════════════════════════════════════════
+
 Route::middleware(['auth:sanctum'])->group(function () {
-     Broadcast::routes(['middleware' => ['auth:sanctum']]);
+    Broadcast::routes(['middleware' => ['auth:sanctum']]);
+
     Route::post('/logout', function (Request $request) {
         $request->user()->currentAccessToken()->delete();
         return response()->json(['message' => 'Logged out']);
     });
 
-    Route::middleware(['auth:sanctum'])->group(function () {
-        Route::get('/user', [ProfileController::class, 'me']);
-    });
+    Route::get('/user', [ProfileController::class, 'me']);
+    Route::get('/account/is-private', [AccountController::class, 'checkPrivateStatus']);
+    Route::get('/mutuals', [ProfileController::class, 'mutuals']);
 
-    // Public Feed
+    // Feed
     Route::get('/posts', [PostController::class, 'index']);
     Route::get('/posts/{id}', [PostController::class, 'show']);
     Route::get('/posts/{post_id}/likes', [LikeController::class, 'index']);
+    Route::get('/posts/{post_id}/comments', [CommentController::class, 'getCommentsByPost']);
+
     Route::get('/users/{id}/followers', [FollowController::class, 'followers']);
     Route::get('/users/{id}/following', [FollowController::class, 'following']);
+    Route::get('/users/search', [ProfileController::class, 'search']);
+
     Route::get('/stories/feed', [StoryController::class, 'feed']);
     Route::get('/stories/feed/user/{userId}', [StoryController::class, 'feedUser']);
+    Route::get('/stories/my', [StoryController::class, 'myStories']);
+
     Route::get('/notifications', [NotificationController::class, 'index']);
+    Route::patch('/notifications/{id}/read', [NotificationController::class, 'markAsRead']);
+    Route::patch('/notifications/read/all', [NotificationController::class, 'markAllAsRead']);
+
     Route::get('/explore', [PostController::class, 'explore']);
-    Route::get('/users/search', [ProfileController::class, 'search']);
     Route::get('/circle-avatar/{id}', [PostController::class, 'circleAvatar']);
     Route::get('/clips/{id}', [PostController::class, 'clips']);
-    Route::get('/mutuals', [ProfileController::class, 'mutuals']);
 
+    Route::get('/announcements', [AnnouncementController::class, 'index']);
+    Route::get('/announcements/pinned', [AnnouncementController::class, 'pinned']);
 
-    // 🔐 Only for verified users
+    // DMs
+    Route::get('/messages/conversation/{user_id}', [DirectMessageController::class, 'conversation']);
+    Route::post('/messages/send', [DirectMessageController::class, 'send']);
+    Route::patch('/messages/{id}/read', [DirectMessageController::class, 'markAsRead']);
+    Route::patch('/messages/user/{user_id}/read', [DirectMessageController::class, 'markAsReadByUser']);
+    Route::delete('/messages/{id}', [DirectMessageController::class, 'destroy']);
+    Route::get('/messages/chat-list', [DirectMessageController::class, 'chatList']);
+    Route::get('/messages/unread/{user_id}', [DirectMessageController::class, 'unreadConversation']);
+    Route::get('/messages/conversation-from/{user_id}', [DirectMessageController::class, 'conversationFromUser']);
+    Route::get('/messages/channels', [DirectMessageController::class, 'channels']);
+
+    // Login History
+    Route::get('/login-histories', [LoginHistoryController::class, 'index']);
+    Route::delete('/login-histories/{id}', [LoginHistoryController::class, 'destroy']);
+
+    // Bookmarks
+    Route::get('/bookmarks', [BookmarkController::class, 'index']);
+    Route::post('/bookmarks/{postId}', [BookmarkController::class, 'store']);
+    Route::delete('/bookmarks/{postId}', [BookmarkController::class, 'destroy']);
+
+    // Follow requests
+    Route::post('/followers/{follower_id}/accept', [FollowController::class, 'acceptFollowRequest']);
+    Route::post('/followers/{follower_id}/reject', [FollowController::class, 'rejectFollowRequest']);
+    Route::get('/followers/pending', [FollowController::class, 'pendingFollowRequests']);
+
+    // Special groups (parent/teacher only)
+    Route::get('/special-groups', function (Request $request) {
+        $user = $request->user();
+        if (!in_array($user->role, ['parent', 'teacher'])) {
+            return response()->json(['error' => 'Hanya parent & teacher.'], 403);
+        }
+        $groups = $user->groups()->whereIn('groups.id', [1,2,3,4,5,6])->select('groups.id','groups.name','groups.description','groups.avatar_url')->get();
+        return response()->json($groups->map(function ($g) use ($user) {
+            $unread = DB::table('group_messages')
+                ->leftJoin('group_message_reads', fn($j) => $j->on('group_messages.id','=','group_message_reads.group_message_id')->where('group_message_reads.user_id', $user->user_id))
+                ->where('group_messages.group_id', $g->id)->whereNull('group_message_reads.id')->count();
+            return ['id'=>$g->id,'name'=>$g->name,'description'=>$g->description,'avatar_url'=>$g->avatar_url,'unread_message_count'=>(string)$unread];
+        }));
+    });
+
+    // WebSocket
+    Route::post('/websocket/authenticate', [WebSocketController::class, 'authenticate']);
+    Route::post('/websocket/disconnect', [WebSocketController::class, 'disconnect']);
+    Route::get('/websocket/online-status/{userId}', [WebSocketController::class, 'getOnlineStatus']);
+    Route::get('/websocket/online-followers', [WebSocketController::class, 'getOnlineFollowersCount']);
+    Route::get('/websocket/online-count', [WebSocketController::class, 'getTotalOnlineCount']);
+    Route::post('/websocket/update-activity', [WebSocketController::class, 'updateActivity']);
+
+    // ── VERIFIED USERS ONLY ──
     Route::middleware('verified.api')->group(function () {
-        // Post CRUD
         Route::post('/posts', [PostController::class, 'store']);
         Route::post('/posts/{id}/update', [PostController::class, 'update']);
         Route::delete('/posts/{id}', [PostController::class, 'destroy']);
-
-        // User Suggestion
-        Route::get('/suggestions', [UserSuggestionController::class, 'index']);
-
-        // Comments
-        Route::get('/posts/{post_id}/comments', [CommentController::class, 'getCommentsByPost']);
+        Route::post('/posts/{post_id}/like', [LikeController::class, 'toggle']);
         Route::post('/posts/{post_id}/comments', [CommentController::class, 'store']);
+
         Route::put('/comments/{id}', [CommentController::class, 'update']);
         Route::delete('/comments/{id}', [CommentController::class, 'destroy']);
         Route::post('/comments/{comment_id}/like', [CommentController::class, 'like']);
         Route::delete('/comments/{comment_id}/like', [CommentController::class, 'unlike']);
 
-        // Likes & Follow
-        Route::post('/posts/{post_id}/like', [LikeController::class, 'toggle']);
         Route::post('/follow/{id}', [FollowController::class, 'follow']);
         Route::delete('/unfollow/{id}', [FollowController::class, 'unfollow']);
 
-        // Story
         Route::post('/stories', [StoryController::class, 'store']);
         Route::delete('/stories/{id}', [StoryController::class, 'destroy']);
         Route::post('/stories/{id}/view', [StoryController::class, 'view']);
-        Route::get('/stories/my', [StoryController::class, 'myStories']);
         Route::get('/stories/{id}/viewers', [StoryViewController::class, 'viewers']);
         Route::get('/stories/user/{userId}', [StoryController::class, 'getByUser']);
         Route::get('/stories/my/archived', [StoryController::class, 'myArchivedStories']);
 
-        // Notifications
-        Route::patch('/notifications/{id}/read', [NotificationController::class, 'markAsRead']);
-        Route::patch('/notifications/read/all', [NotificationController::class, 'markAllAsRead']);
+        Route::get('/suggestions', [UserSuggestionController::class, 'index']);
 
-        // DMs
-        Route::get('/messages/conversation/{user_id}', [DirectMessageController::class, 'conversation']);
-        Route::post('/messages/send', [DirectMessageController::class, 'send']);
-        Route::patch('/messages/{id}/read', [DirectMessageController::class, 'markAsRead']);
-        Route::patch('/messages/user/{user_id}/read', [DirectMessageController::class, 'markAsReadByUser']);
-        Route::delete('/messages/{id}', [DirectMessageController::class, 'destroy']);
-        Route::get('/messages/chat-list', [DirectMessageController::class, 'chatList']);
-        Route::get('/messages/unread/{user_id}', [DirectMessageController::class, 'unreadConversation']);
-        Route::get('/messages/conversation-from/{user_id}', [DirectMessageController::class, 'conversationFromUser']);
-        Route::get('/messages/channels', [DirectMessageController::class, 'channels']);
-
-        // Account
         Route::post('/account/settings', [AccountController::class, 'update']);
         Route::put('/account/password', [AccountController::class, 'updatePassword']);
         Route::delete('/account/delete', [AccountController::class, 'destroy']);
 
-        // Groups CRUD
-        Route::prefix('groups')->group(function () {
-            Route::post('/', [GroupController::class, 'store']);
-            Route::post('{group}/join', [GroupController::class, 'join']);
-            Route::post('{group}/leave', [GroupController::class, 'leave']);
-            Route::get('{group}', [GroupController::class, 'show']);
-            Route::match(['put', 'post'], '{group}', [GroupController::class, 'update']);
-            Route::delete('{group}', [GroupController::class, 'destroy']); 
-            Route::get('{group}/role', [GroupController::class, 'checkRole']);
-        });
+        Route::post('/announcements', [AnnouncementController::class, 'store']);
+        Route::post('/announcements/{announcement}', [AnnouncementController::class, 'update']);
+        Route::delete('/announcements/{announcement}', [AnnouncementController::class, 'destroy']);
 
+        Route::post('/groups', [GroupController::class, 'store']);
+        Route::post('groups/{group}/join', [GroupController::class, 'join']);
+        Route::post('groups/{group}/leave', [GroupController::class, 'leave']);
+        Route::get('groups/{group}', [GroupController::class, 'show']);
+        Route::match(['put','post'], 'groups/{group}', [GroupController::class, 'update']);
+        Route::delete('groups/{group}', [GroupController::class, 'destroy']);
+        Route::get('groups/{group}/role', [GroupController::class, 'checkRole']);
 
-        // Group Messages
-        Route::prefix('groups/{group}')->group(function () {
-            Route::post('/messages', [GroupMessageController::class, 'store']);
-            Route::get('/messages', [GroupMessageController::class, 'index']);
-            Route::delete('/messages/{message}', [GroupMessageController::class, 'destroy']);
-            Route::post('/messages/{message}/pin', [GroupMessageController::class, 'togglePin']);
-            Route::post('/messages/{message}/read', [GroupMessageController::class, 'markAsRead']);
-            Route::get('/messages/{message}/read-info', [GroupMessageController::class, 'readInfo']);
-            Route::get('/messages/unread', [GroupMessageController::class, 'unreadMessages']);
-        });
+        Route::post('groups/{group}/messages', [GroupMessageController::class, 'store']);
+        Route::get('groups/{group}/messages', [GroupMessageController::class, 'index']);
+        Route::delete('groups/{group}/messages/{message}', [GroupMessageController::class, 'destroy']);
+        Route::post('groups/{group}/messages/{message}/pin', [GroupMessageController::class, 'togglePin']);
+        Route::post('groups/{group}/messages/{message}/read', [GroupMessageController::class, 'markAsRead']);
+        Route::get('groups/{group}/messages/{message}/read-info', [GroupMessageController::class, 'readInfo']);
+        Route::get('groups/{group}/messages/unread', [GroupMessageController::class, 'unreadMessages']);
 
-        // Announcements
-        Route::middleware('auth:sanctum')->group(function () {
-            Route::get('/announcements', [AnnouncementController::class, 'index']);
-            Route::get('/announcements/pinned', [AnnouncementController::class, 'pinned']); // hanya pinned
+        Route::post('groups/{group}/members', [GroupController::class, 'addMember']);
+        Route::get('groups/{group}/members', [GroupController::class, 'listMembers']);
+        Route::post('groups/{group}/members/{user}/promote', [GroupController::class, 'promoteToAdmin']);
+        Route::post('groups/{group}/members/{user}/demote', [GroupController::class, 'demoteToMember']);
+        Route::delete('groups/{group}/members/{user}', [GroupController::class, 'removeMember']);
+        Route::post('groups/{group}/members/{user}/mute', [GroupController::class, 'muteMember']);
+        Route::post('groups/{group}/members/{user}/unmute', [GroupController::class, 'unmuteMember']);
 
-            // Khusus user centang biru
-            Route::middleware('onlyVerified')->group(function () {
-                Route::post('/announcements', [AnnouncementController::class, 'store']);
-                Route::post('/announcements/{announcement}', [AnnouncementController::class, 'update']);
-                Route::delete('/announcements/{announcement}', [AnnouncementController::class, 'destroy']);
-            });
-        });
-
-        // Group Members
-        Route::prefix('groups/{group}')->group(function () {
-            Route::post('/members', [GroupController::class, 'addMember']); // 🔹 Tambah anggota dari username/email
-            Route::get('/members', [GroupController::class, 'listMembers']); // 🔹 Lihat daftar anggota
-            Route::post('/members/{user}/promote', [GroupController::class, 'promoteToAdmin']); // 🔹 Jadikan admin
-            Route::post('/members/{user}/demote', [GroupController::class, 'demoteToMember']); // 🔹 Turunkan jadi member
-            Route::delete('/members/{user}', [GroupController::class, 'removeMember']); // 🔹 Kick anggota
-            Route::post('/members/{user}/mute', [GroupController::class, 'muteMember']); // 🔹 Mute
-            Route::post('/members/{user}/unmute', [GroupController::class, 'unmuteMember']); // 🔹 Unmute
-        });
-
-        // Portfolios
-        Route::middleware('auth:sanctum')->group(function () {
-            Route::get('/portfolios', [PortfolioController::class, 'index']);
-            Route::post('/portfolios', [PortfolioController::class, 'store']); // ⬅️ Buat baru
-            Route::post('/portfolios/{portfolio}', [PortfolioController::class, 'update']); // ⬅️ Edit (pakai POST karena multipart)
-            Route::delete('/portfolios/{portfolio}', [PortfolioController::class, 'destroy']);
-        });
-
-        // Acc atau tidak Followers ketika akun private
-        Route::middleware('auth:sanctum')->group(function () {
-            Route::post('/followers/{follower_id}/accept', [FollowController::class, 'acceptFollowRequest']);
-            Route::post('/followers/{follower_id}/reject', [FollowController::class, 'rejectFollowRequest']);
-            Route::get('/followers/pending', [FollowController::class, 'pendingFollowRequests']);
-        });
-
-        // GET Private atau tidak
-        Route::get('/account/is-private', [AccountController::class, 'checkPrivateStatus'])
-            ->middleware('auth:sanctum');
-
-        // Bookmarks
-        Route::middleware('auth:sanctum')->group(function () {
-        Route::get('/bookmarks', [BookmarkController::class, 'index']);
-        Route::post('/bookmarks/{postId}', [BookmarkController::class, 'store']);
-        Route::delete('/bookmarks/{postId}', [BookmarkController::class, 'destroy']);
-        });
-
-        // 📌 Login History
-        Route::prefix('login-histories')->group(function () {
-        Route::get('/', [LoginHistoryController::class, 'index']); // list riwayat login user
-        Route::delete('/{id}', [LoginHistoryController::class, 'destroy']); // hapus riwayat tertentu
-    });
-
-
-        // WebSocket Routes
-        Route::prefix('websocket')->group(function () {
-            Route::post('/authenticate', [WebSocketController::class, 'authenticate']);
-            Route::post('/disconnect', [WebSocketController::class, 'disconnect']);
-            Route::get('/online-status/{userId}', [WebSocketController::class, 'getOnlineStatus']);
-            Route::get('/online-followers', [WebSocketController::class, 'getOnlineFollowersCount']);
-            Route::get('/online-count', [WebSocketController::class, 'getTotalOnlineCount']);
-            Route::post('/update-activity', [WebSocketController::class, 'updateActivity']);
-        });
-
+        Route::get('/portfolios', [PortfolioController::class, 'index']);
+        Route::post('/portfolios', [PortfolioController::class, 'store']);
+        Route::post('/portfolios/{portfolio}', [PortfolioController::class, 'update']);
+        Route::delete('/portfolios/{portfolio}', [PortfolioController::class, 'destroy']);
     });
 });
 
+// WebSocket routes (inside auth:sanctum, moved below)
+
 // Fallback
 Route::fallback(function () {
-    return response()->json([
-        'error' => 'Endpoint not found (404)'
-    ], 404);
+    return response()->json(['error' => 'Endpoint not found (404)'], 404);
 });
