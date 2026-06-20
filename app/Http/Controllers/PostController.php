@@ -435,15 +435,17 @@ class PostController extends Controller
             'music_clip_duration_ms'  => 'nullable|string|max:255',
         ]);
 
-        // Simpan file media
-        $mediaPath = $request->file('media')->store('uploads/posts', 'r2');
-        $mediaUrl = Storage::disk('r2')->url($mediaPath);
+        // Simpan file media. Use the configured default disk (r2 in prod,
+        // 'public' locally) so it works without cloud credentials.
+        $disk = config('filesystems.default');
+        $mediaPath = $request->file('media')->store('uploads/posts', $disk);
+        $mediaUrl = Storage::disk($disk)->url($mediaPath);
 
         // Simpan thumbnail jika ada (frontend disarankan mengirim screenshot 1 detik pertama)
         $thumbnailUrl = null;
         if ($request->hasFile('thumbnail')) {
-            $thumbPath = $request->file('thumbnail')->store('uploads/posts/thumbnails', 'r2');
-            $thumbnailUrl = Storage::disk('r2')->url($thumbPath);
+            $thumbPath = $request->file('thumbnail')->store('uploads/posts/thumbnails', $disk);
+            $thumbnailUrl = Storage::disk($disk)->url($thumbPath);
         }
 
         $post = Post::create([
