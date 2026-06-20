@@ -40,8 +40,11 @@ public function send(Request $request)
     $mediaUrl = null;
 
     if ($request->hasFile('media')) {
-        $mediaPath = $request->file('media')->store('uploads/direct_messages', 'r2');
-        $mediaUrl  = Storage::disk('r2')->url($mediaPath);
+        // Configured default disk (r2 in prod, public locally) so it works
+        // without cloud credentials.
+        $disk = config('filesystems.default');
+        $mediaPath = $request->file('media')->store('uploads/direct_messages', $disk);
+        $mediaUrl  = Storage::disk($disk)->url($mediaPath);
     }
 
     $message = DirectMessage::create([
@@ -211,7 +214,7 @@ public function conversation($user_id)
         // Hapus file media jika ada
         if ($message->media_url) {
             $path = ltrim(parse_url($message->media_url, PHP_URL_PATH), '/');
-            Storage::disk('r2')->delete($path);
+            Storage::disk(config('filesystems.default'))->delete($path);
         }
 
         // ✨ [OPSIONAL] SIARKAN EVENT PENGHAPUSAN PESAN
