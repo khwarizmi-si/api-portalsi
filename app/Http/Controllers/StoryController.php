@@ -40,16 +40,18 @@ class StoryController extends Controller
 
         $user = Auth::user();
         $mediaPath = null;
+        // Configured default disk (r2 in prod, public locally).
+        $disk = config('filesystems.default');
 
         // Kalau ada file media diupload
         if ($request->hasFile('media')) {
-            $mediaPath = $request->file('media')->store('uploads/stories', 'r2');
+            $mediaPath = $request->file('media')->store('uploads/stories', $disk);
         }
 
         // Insert ke DB
         $story = Story::create([
             'user_id' => $user->user_id,
-            'media_url' => $mediaPath ? Storage::disk('r2')->url($mediaPath) : null,
+            'media_url' => $mediaPath ? Storage::disk($disk)->url($mediaPath) : null,
             'type' => $request->type,
             'music_track_name' => $request->music_track_name,
             'music_artist_name' => $request->music_artist_name,
