@@ -10,6 +10,16 @@ use Illuminate\Support\Facades\Validator;
 
 class PortfolioController extends Controller
 {
+    private function mediaDisk(): string
+    {
+        return config('filesystems.default', 'public');
+    }
+
+    private function storagePathFromUrl(string $url): string
+    {
+        $path = ltrim(parse_url($url, PHP_URL_PATH) ?? $url, '/');
+        return preg_replace('#^storage/#', '', $path);
+    }
     // 🔹 Tampilkan semua portfolio dengan filter & search
     public function index(Request $request)
     {
@@ -95,8 +105,9 @@ class PortfolioController extends Controller
 
         $mediaUrl = null;
         if ($request->hasFile('media')) {
-            $path = $request->file('media')->store('portfolio-media', 'r2');
-            $mediaUrl = Storage::disk('r2')->url($path);
+            $disk = $this->mediaDisk();
+            $path = $request->file('media')->store('portfolio-media', $disk);
+            $mediaUrl = Storage::disk($disk)->url($path);
         }
 
         $portfolio = Portfolio::create([
@@ -133,12 +144,14 @@ class PortfolioController extends Controller
 
         if ($request->hasFile('media')) {
             if ($portfolio->media_url) {
-                $oldPath = ltrim(parse_url($portfolio->media_url, PHP_URL_PATH), '/');
-                Storage::disk('r2')->delete($oldPath);
+                Storage::disk($this->mediaDisk())->delete(
+                    $this->storagePathFromUrl($portfolio->media_url)
+                );
             }
 
-            $path = $request->file('media')->store('portfolio-media', 'r2');
-            $portfolio->media_url = Storage::disk('r2')->url($path);
+            $disk = $this->mediaDisk();
+            $path = $request->file('media')->store('portfolio-media', $disk);
+            $portfolio->media_url = Storage::disk($disk)->url($path);
         }
 
         $portfolio->fill($request->only(['aspect', 'title', 'description', 'year']))->save();
@@ -155,8 +168,9 @@ class PortfolioController extends Controller
         $this->authorizePortfolioAccess();
 
         if ($portfolio->media_url) {
-            $path = ltrim(parse_url($portfolio->media_url, PHP_URL_PATH), '/');
-            Storage::disk('r2')->delete($path);
+            Storage::disk($this->mediaDisk())->delete(
+                $this->storagePathFromUrl($portfolio->media_url)
+            );
         }
 
         $portfolio->delete();

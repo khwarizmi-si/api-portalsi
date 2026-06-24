@@ -81,8 +81,8 @@ Route::post('/register', function (Request $request) {
         'email' => strtolower($request->email),
         'password_hash' => bcrypt($request->password),
         'role' => $request->role ?? 'student',
-        'profile_picture_url' => 'https://api.portalsi.com/storage/default-profile.png',
-        'banner_url' => 'https://api.portalsi.com/storage/default-banner.png',
+        'profile_picture_url' => null,
+        'banner_url' => null,
     ]);
 
     $user->sendEmailVerificationNotification();
@@ -127,8 +127,8 @@ Route::post('/register-teachers', function (Request $request) {
             'role' => 'teacher',
             'full_name' => $data['full_name'] ?? null,
             'email' => $data['email'] ?? null,
-            'profile_picture_url' => 'https://api.portalsi.com/storage/default-profile.png',
-            'banner_url' => 'https://api.portalsi.com/storage/default-banner.png'
+            'profile_picture_url' => null,
+            'banner_url' => null
         ]);
         $user->markEmailAsVerified();
         $user->groups()->syncWithoutDetaching([
@@ -156,8 +156,8 @@ Route::post('/register-parent', function (Request $request) {
         'role' => 'parent',
         'full_name' => null,
         'email' => null,
-        'profile_picture_url' => 'https://api.portalsi.com/storage/default-profile.png',
-        'banner_url' => 'https://api.portalsi.com/storage/default-banner.png'
+        'profile_picture_url' => null,
+        'banner_url' => null
     ]);
     $user->markEmailAsVerified();
     $token = $user->createToken('api-token')->plainTextToken;

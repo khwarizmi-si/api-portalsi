@@ -10,6 +10,17 @@ use DB;
 
 class ProfileController extends Controller
 {
+    private function mediaDisk(): string
+    {
+        return config('filesystems.default', 'public');
+    }
+
+    private function storagePathFromUrl(string $url): string
+    {
+        $path = ltrim(parse_url($url, PHP_URL_PATH) ?? $url, '/');
+        return preg_replace('#^storage/#', '', $path);
+    }
+
     // ---------------- Public Profile ----------------
     public function show(Request $request, $username)
     {
@@ -229,12 +240,12 @@ class ProfileController extends Controller
 
         foreach ($candidates as $candidate) {
             $p = "uploads/posts/thumbnails/{$candidate}";
-            if (Storage::disk('r2')->exists($p)) {
-                return Storage::disk('r2')->url($p);
+            if (Storage::disk($this->mediaDisk())->exists($p)) {
+                return Storage::disk($this->mediaDisk())->url($p);
             }
         }
 
-        return Storage::disk('r2')->url("uploads/posts/thumbnails/{$nameOnly}.jpg");
+        return Storage::disk($this->mediaDisk())->url("uploads/posts/thumbnails/{$nameOnly}.jpg");
     }
 
     /**
@@ -251,13 +262,13 @@ class ProfileController extends Controller
         }
 
         if (strpos($mediaUrl, '/storage/') === 0) {
-            return $mediaUrl;
+            return url($mediaUrl);
         }
 
         if (strpos($mediaUrl, 'storage/app/public') !== false) {
             $parts = explode('storage/app/public', $mediaUrl);
             $rel = ltrim($parts[1], '/\\');
-            return Storage::disk('r2')->url($rel);
+            return Storage::disk($this->mediaDisk())->url($rel);
         }
 
         if (strpos($mediaUrl, '/home/') === 0 || strpos($mediaUrl, 'C:\\') === 0) {
@@ -268,18 +279,18 @@ class ProfileController extends Controller
                 $basename,
             ];
             foreach ($tryPaths as $p) {
-                if (Storage::disk('r2')->exists($p)) {
-                    return Storage::disk('r2')->url($p);
+                if (Storage::disk($this->mediaDisk())->exists($p)) {
+                    return Storage::disk($this->mediaDisk())->url($p);
                 }
             }
-            return Storage::disk('r2')->url("uploads/posts/{$basename}");
+            return Storage::disk($this->mediaDisk())->url("uploads/posts/{$basename}");
         }
 
-        $rel = ltrim($mediaUrl, '/');
-        if (Storage::disk('r2')->exists($rel)) {
-            return Storage::disk('r2')->url($rel);
+        $rel = $this->storagePathFromUrl($mediaUrl);
+        if (Storage::disk($this->mediaDisk())->exists($rel)) {
+            return Storage::disk($this->mediaDisk())->url($rel);
         }
 
-        return Storage::disk('r2')->url($rel);
+        return Storage::disk($this->mediaDisk())->url($rel);
     }
 }

@@ -15,6 +15,17 @@ use Carbon\Carbon;
 
 class StoryController extends Controller
 {
+    private function mediaDisk(): string
+    {
+        return config('filesystems.default', 'public');
+    }
+
+    private function storagePathFromUrl(string $url): string
+    {
+        $path = ltrim(parse_url($url, PHP_URL_PATH) ?? $url, '/');
+        return preg_replace('#^storage/#', '', $path);
+    }
+
     /**
      * Upload story baru (image, video, music)
      */
@@ -22,7 +33,7 @@ class StoryController extends Controller
     {
         $request->validate([
             'type' => 'required|in:image,video,music',
-            'media' => 'nullable|file|mimes:jpg,jpeg,png,mp4,mp3,wav',
+            'media' => 'nullable|file|mimes:jpg,jpeg,png,mp4,mov,webm,mp3,wav|max:512000',
             'caption' => 'nullable|string',
             'music_track_name' => 'nullable|string|max:255',
             'music_artist_name' => 'nullable|string|max:255',
@@ -41,7 +52,7 @@ class StoryController extends Controller
         $user = Auth::user();
         $mediaPath = null;
         // Configured default disk (r2 in prod, public locally).
-        $disk = config('filesystems.default');
+        $disk = $this->mediaDisk();
 
         // Kalau ada file media diupload
         if ($request->hasFile('media')) {
@@ -329,8 +340,9 @@ public function feedUser(Request $request, $userId)
             ->firstOrFail();
 
         if ($story->media_url) {
-            $relativePath = ltrim(parse_url($story->media_url, PHP_URL_PATH), '/');
-            Storage::disk('r2')->delete($relativePath);
+            Storage::disk($this->mediaDisk())->delete(
+                $this->storagePathFromUrl($story->media_url)
+            );
         }
 
         $story->delete();

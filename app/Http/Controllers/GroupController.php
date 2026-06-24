@@ -12,6 +12,16 @@ use Illuminate\Support\Facades\Storage;
 
 class GroupController extends Controller
 {
+private function mediaDisk(): string
+{
+    return config('filesystems.default', 'public');
+}
+
+private function storagePathFromUrl(string $url): string
+{
+    $path = ltrim(parse_url($url, PHP_URL_PATH) ?? $url, '/');
+    return preg_replace('#^storage/#', '', $path);
+}
 // 🔹 1. Buat grup + tambah member langsung
 public function store(Request $request)
 {
@@ -37,13 +47,15 @@ public function store(Request $request)
     $group->description = $request->description;
 
     if ($request->hasFile('avatar')) {
-        $path = $request->file('avatar')->store('uploads/group-avatars', 'r2');
-        $group->avatar_url = Storage::disk('r2')->url($path);
+        $disk = $this->mediaDisk();
+        $path = $request->file('avatar')->store('uploads/group-avatars', $disk);
+        $group->avatar_url = Storage::disk($disk)->url($path);
     }
 
     if ($request->hasFile('cover')) {
-        $path = $request->file('cover')->store('uploads/group-covers', 'r2');
-        $group->cover_url = Storage::disk('r2')->url($path);
+        $disk = $this->mediaDisk();
+        $path = $request->file('cover')->store('uploads/group-covers', $disk);
+        $group->cover_url = Storage::disk($disk)->url($path);
     }
 
     $group->save();
@@ -62,6 +74,7 @@ public function store(Request $request)
         foreach ($request->members as $identifier) {
             $target = User::where('username', $identifier)
                 ->orWhere('email', $identifier)
+                ->when(is_numeric($identifier), fn($query) => $query->orWhere('user_id', (int) $identifier))
                 ->first();
 
             if (!$target) {
@@ -188,13 +201,15 @@ public function show(Group $group)
         $group->description = $validatedData['description'] ?? $group->description;
 
         if ($request->hasFile('avatar')) {
-            $avatarPath = $request->file('avatar')->store('uploads/group-avatars', 'r2');
-            $group->avatar_url = Storage::disk('r2')->url($avatarPath);
+            $disk = $this->mediaDisk();
+            $avatarPath = $request->file('avatar')->store('uploads/group-avatars', $disk);
+            $group->avatar_url = Storage::disk($disk)->url($avatarPath);
         }
 
         if ($request->hasFile('cover')) {
-            $coverPath = $request->file('cover')->store('uploads/group-covers', 'r2');
-            $group->cover_url = Storage::disk('r2')->url($coverPath);
+            $disk = $this->mediaDisk();
+            $coverPath = $request->file('cover')->store('uploads/group-covers', $disk);
+            $group->cover_url = Storage::disk($disk)->url($coverPath);
         }
 
         $group->save();
@@ -234,9 +249,10 @@ public function show(Group $group)
 // Fungsi bantu hapus file dari R2
 private function hapusFileStorage($url)
 {
-    $path = ltrim(parse_url($url, PHP_URL_PATH), '/');
-    if (\Storage::disk('r2')->exists($path)) {
-        \Storage::disk('r2')->delete($path);
+    $disk = $this->mediaDisk();
+    $path = $this->storagePathFromUrl($url);
+    if (Storage::disk($disk)->exists($path)) {
+        Storage::disk($disk)->delete($path);
     }
 }
 

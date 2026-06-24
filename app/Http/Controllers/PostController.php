@@ -16,6 +16,17 @@ use Carbon\Carbon;
 
 class PostController extends Controller
 {
+    private function mediaDisk(): string
+    {
+        return config('filesystems.default', 'public');
+    }
+
+    private function storagePathFromUrl(string $url): string
+    {
+        $path = ltrim(parse_url($url, PHP_URL_PATH) ?? $url, '/');
+        return preg_replace('#^storage/#', '', $path);
+    }
+
     /**
      * Tambahkan info story (has_story & story_viewed) ke user
      */
@@ -437,7 +448,7 @@ class PostController extends Controller
 
         // Simpan file media. Use the configured default disk (r2 in prod,
         // 'public' locally) so it works without cloud credentials.
-        $disk = config('filesystems.default');
+        $disk = $this->mediaDisk();
         $mediaPath = $request->file('media')->store('uploads/posts', $disk);
         $mediaUrl = Storage::disk($disk)->url($mediaPath);
 
@@ -516,6 +527,12 @@ class PostController extends Controller
             }
         }
 
+        $post->load(['user', 'tags', 'mentions']);
+        $post->loadCount(['likes', 'comments']);
+        $post->is_liked = false;
+        $post->is_bookmarked = false;
+        $post->type = 'post';
+
         return response()->json([
             'message' => 'Post created',
             'post' => $post
@@ -550,21 +567,25 @@ class PostController extends Controller
         // Replace media jika ada
         if ($request->hasFile('media')) {
             if ($post->media_url) {
-                $path = ltrim(parse_url($post->media_url, PHP_URL_PATH), '/');
-                Storage::disk('r2')->delete($path);
+                Storage::disk($this->mediaDisk())->delete(
+                    $this->storagePathFromUrl($post->media_url)
+                );
             }
-            $mediaPath = $request->file('media')->store('uploads/posts', 'r2');
-            $post->media_url = Storage::disk('r2')->url($mediaPath);
+            $disk = $this->mediaDisk();
+            $mediaPath = $request->file('media')->store('uploads/posts', $disk);
+            $post->media_url = Storage::disk($disk)->url($mediaPath);
         }
 
         // Replace thumbnail jika ada
         if ($request->hasFile('thumbnail')) {
             if ($post->thumbnail_url) {
-                $thumbPath = ltrim(parse_url($post->thumbnail_url, PHP_URL_PATH), '/');
-                Storage::disk('r2')->delete($thumbPath);
+                Storage::disk($this->mediaDisk())->delete(
+                    $this->storagePathFromUrl($post->thumbnail_url)
+                );
             }
-            $thumbPathNew = $request->file('thumbnail')->store('uploads/posts/thumbnails', 'r2');
-            $post->thumbnail_url = Storage::disk('r2')->url($thumbPathNew);
+            $disk = $this->mediaDisk();
+            $thumbPathNew = $request->file('thumbnail')->store('uploads/posts/thumbnails', $disk);
+            $post->thumbnail_url = Storage::disk($disk)->url($thumbPathNew);
         }
 
         // Update fields
@@ -600,14 +621,16 @@ class PostController extends Controller
 
         // Hapus media
         if ($post->media_url) {
-            $path = ltrim(parse_url($post->media_url, PHP_URL_PATH), '/');
-            Storage::disk('r2')->delete($path);
+            Storage::disk($this->mediaDisk())->delete(
+                $this->storagePathFromUrl($post->media_url)
+            );
         }
 
         // Hapus thumbnail jika ada
         if ($post->thumbnail_url) {
-            $thumbPath = ltrim(parse_url($post->thumbnail_url, PHP_URL_PATH), '/');
-            Storage::disk('r2')->delete($thumbPath);
+            Storage::disk($this->mediaDisk())->delete(
+                $this->storagePathFromUrl($post->thumbnail_url)
+            );
         }
 
         $post->delete();

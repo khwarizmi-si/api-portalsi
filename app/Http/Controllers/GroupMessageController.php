@@ -7,6 +7,7 @@ use App\Events\GroupMessageUpdated;
 use App\Events\ChatListUpdated;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
+use Illuminate\Support\Facades\Storage;
 use App\Models\Group;
 use App\Models\GroupMessage;
 use App\Models\GroupMessageMention;
@@ -15,6 +16,11 @@ use App\Models\User;
 
 class GroupMessageController extends Controller
 {
+    private function mediaDisk(): string
+    {
+        return config('filesystems.default', 'public');
+    }
+
     /**
      * Simpan pesan baru ke dalam grup
      */
@@ -30,7 +36,7 @@ class GroupMessageController extends Controller
         // Validasi request
         $request->validate([
             'content'   => 'nullable|string',
-            'media'     => 'nullable|file|mimes:jpg,jpeg,png,pdf|max:51200',
+            'media'     => 'nullable|file|mimes:jpg,jpeg,png,mp4,mov,webm,pdf|max:51200',
             'reply_to'  => 'nullable|exists:group_messages,id',
         ]);
 
@@ -38,8 +44,9 @@ class GroupMessageController extends Controller
         $mediaUrl = null;
         if ($request->hasFile('media')) {
             $media = $request->file('media');
-            $path = $media->store('group-media', 'r2');
-            $mediaUrl = \Illuminate\Support\Facades\Storage::disk('r2')->url($path);
+            $disk = $this->mediaDisk();
+            $path = $media->store('group-media', $disk);
+            $mediaUrl = Storage::disk($disk)->url($path);
         }
 
         // Simpan pesan

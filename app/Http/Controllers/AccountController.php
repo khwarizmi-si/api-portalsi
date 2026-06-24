@@ -11,6 +11,17 @@ use App\Models\User;
 
 class AccountController extends Controller
 {
+    private function mediaDisk(): string
+    {
+        return config('filesystems.default', 'public');
+    }
+
+    private function storagePathFromUrl(string $url): string
+    {
+        $path = ltrim(parse_url($url, PHP_URL_PATH) ?? $url, '/');
+        return preg_replace('#^storage/#', '', $path);
+    }
+
     // 🔧 UPDATE AKUN
     public function update(Request $request)
     {
@@ -35,24 +46,26 @@ class AccountController extends Controller
     
         // ✅ Upload profile picture
         if ($request->hasFile('profile_picture')) {
+            $disk = $this->mediaDisk();
             if ($user->profile_picture_url) {
-                $oldPath = ltrim(parse_url($user->profile_picture_url, PHP_URL_PATH), '/');
-                Storage::disk('r2')->delete($oldPath);
+                $oldPath = $this->storagePathFromUrl($user->profile_picture_url);
+                Storage::disk($disk)->delete($oldPath);
             }
 
-            $path = $request->file('profile_picture')->store('profile_pictures', 'r2');
-            $user->profile_picture_url = Storage::disk('r2')->url($path);
+            $path = $request->file('profile_picture')->store('profile_pictures', $disk);
+            $user->profile_picture_url = Storage::disk($disk)->url($path);
         }
 
         // ✅ Upload banner
         if ($request->hasFile('banner')) {
+            $disk = $this->mediaDisk();
             if ($user->banner_url) {
-                $oldPath = ltrim(parse_url($user->banner_url, PHP_URL_PATH), '/');
-                Storage::disk('r2')->delete($oldPath);
+                $oldPath = $this->storagePathFromUrl($user->banner_url);
+                Storage::disk($disk)->delete($oldPath);
             }
 
-            $path = $request->file('banner')->store('banners', 'r2');
-            $user->banner_url = Storage::disk('r2')->url($path);
+            $path = $request->file('banner')->store('banners', $disk);
+            $user->banner_url = Storage::disk($disk)->url($path);
         }
     
         // ✅ Update field lain
@@ -102,14 +115,14 @@ class AccountController extends Controller
 
         // Hapus profile picture jika ada
         if ($user->profile_picture_url) {
-            $oldPath = ltrim(parse_url($user->profile_picture_url, PHP_URL_PATH), '/');
-            Storage::disk('r2')->delete($oldPath);
+            $oldPath = $this->storagePathFromUrl($user->profile_picture_url);
+            Storage::disk($this->mediaDisk())->delete($oldPath);
         }
 
         // Hapus banner jika ada
         if ($user->banner_url) {
-            $oldPath = ltrim(parse_url($user->banner_url, PHP_URL_PATH), '/');
-            Storage::disk('r2')->delete($oldPath);
+            $oldPath = $this->storagePathFromUrl($user->banner_url);
+            Storage::disk($this->mediaDisk())->delete($oldPath);
         }
 
         $user->delete();

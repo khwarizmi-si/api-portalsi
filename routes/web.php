@@ -4,6 +4,7 @@ use Illuminate\Support\Facades\Route;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Http;
 use App\Http\Controllers\PusherController;
+use App\Http\Controllers\UserImportController;
 
 
 Route::get('/test-reverb-connection', function () {
@@ -32,6 +33,9 @@ Route::get('/test-reverb-connection', function () {
         ], 500);
     }
 });
+
+Route::get('/import-users', [UserImportController::class, 'show'])->name('users.import.show');
+Route::post('/import-users', [UserImportController::class, 'store'])->name('users.import.store');
 // ✅ GET: Menampilkan form reset password
 Route::get('/reset-password', function (Request $request) {
     $token = $request->query('token');

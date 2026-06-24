@@ -24,7 +24,7 @@ return [
     // safe in production; set CORS_ALLOWED_ORIGINS only for browser clients.
     'allowed_origins' => array_values(array_filter(array_map(
         'trim',
-        explode(',', (string) env('CORS_ALLOWED_ORIGINS', 'http://localhost:8000'))
+        explode(',', (string) env('CORS_ALLOWED_ORIGINS', 'http://localhost:8000,http://127.0.0.1:8000,http://localhost:3000,http://127.0.0.1:3000'))
     ))),
 
     'allowed_origins_patterns' => [],

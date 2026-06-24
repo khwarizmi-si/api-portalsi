@@ -28,6 +28,11 @@ class Post extends Model
         'music_clip_duration_ms',
     ];
 
+    protected $casts = [
+        'is_archived' => 'boolean',
+        'is_video' => 'boolean',
+    ];
+
     public function user()
     {
         return $this->belongsTo(User::class, 'user_id');

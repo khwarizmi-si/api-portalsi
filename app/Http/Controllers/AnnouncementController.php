@@ -9,6 +9,16 @@ use Illuminate\Support\Facades\Storage;
 
 class AnnouncementController extends Controller
 {
+    private function mediaDisk(): string
+    {
+        return config('filesystems.default', 'public');
+    }
+
+    private function storagePathFromUrl(string $url): string
+    {
+        $path = ltrim(parse_url($url, PHP_URL_PATH) ?? $url, '/');
+        return preg_replace('#^storage/#', '', $path);
+    }
 
 // 🔹 List semua pengumuman (terbaru dulu)
 public function index()
@@ -52,8 +62,9 @@ public function pinned()
         $data['created_by'] = Auth::user()->user_id;
 
         if ($request->hasFile('image')) {
-            $path = $request->file('image')->store('uploads/announcements', 'r2');
-            $data['image_url'] = Storage::disk('r2')->url($path);
+            $disk = $this->mediaDisk();
+            $path = $request->file('image')->store('uploads/announcements', $disk);
+            $data['image_url'] = Storage::disk($disk)->url($path);
         }
 
         if ($request->filled('poll_data')) {
@@ -92,12 +103,14 @@ public function pinned()
         if ($request->hasFile('image')) {
             // Hapus file lama jika ada
             if ($announcement->image_url) {
-                $oldPath = ltrim(parse_url($announcement->image_url, PHP_URL_PATH), '/');
-                Storage::disk('r2')->delete($oldPath);
+                Storage::disk($this->mediaDisk())->delete(
+                    $this->storagePathFromUrl($announcement->image_url)
+                );
             }
 
-            $path = $request->file('image')->store('uploads/announcements', 'r2');
-            $data['image_url'] = Storage::disk('r2')->url($path);
+            $disk = $this->mediaDisk();
+            $path = $request->file('image')->store('uploads/announcements', $disk);
+            $data['image_url'] = Storage::disk($disk)->url($path);
         }
 
         if ($request->filled('poll_data')) {
@@ -117,8 +130,9 @@ public function pinned()
 
         // Hapus gambar dari storage jika ada
         if ($announcement->image_url) {
-            $oldPath = ltrim(parse_url($announcement->image_url, PHP_URL_PATH), '/');
-            Storage::disk('r2')->delete($oldPath);
+            Storage::disk($this->mediaDisk())->delete(
+                $this->storagePathFromUrl($announcement->image_url)
+            );
         }
 
         $announcement->delete();

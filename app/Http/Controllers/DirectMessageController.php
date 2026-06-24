@@ -23,6 +23,17 @@ use App\Services\FirebaseService;
 
 class DirectMessageController extends Controller
 {
+    private function mediaDisk(): string
+    {
+        return config('filesystems.default', 'public');
+    }
+
+    private function storagePathFromUrl(string $url): string
+    {
+        $path = ltrim(parse_url($url, PHP_URL_PATH) ?? $url, '/');
+        return preg_replace('#^storage/#', '', $path);
+    }
+
     /**
      * Kirim pesan dengan teks / media
      */
@@ -31,7 +42,7 @@ public function send(Request $request)
     $request->validate([
         'receiver_id'         => 'required|exists:users,user_id',
         'content'             => 'nullable|string',
-        'media'               => 'nullable|file|mimes:jpg,jpeg,png,mp4,pdf|max:51200',
+        'media'               => 'nullable|file|mimes:jpg,jpeg,png,mp4,mov,webm,pdf|max:51200',
         'is_story_response'   => 'nullable|boolean',
         'story_id'            => 'nullable|integer|exists:stories,story_id',
         'responded_media_url' => 'nullable|string|max:255',
@@ -42,7 +53,7 @@ public function send(Request $request)
     if ($request->hasFile('media')) {
         // Configured default disk (r2 in prod, public locally) so it works
         // without cloud credentials.
-        $disk = config('filesystems.default');
+        $disk = $this->mediaDisk();
         $mediaPath = $request->file('media')->store('uploads/direct_messages', $disk);
         $mediaUrl  = Storage::disk($disk)->url($mediaPath);
     }
@@ -213,8 +224,9 @@ public function conversation($user_id)
 
         // Hapus file media jika ada
         if ($message->media_url) {
-            $path = ltrim(parse_url($message->media_url, PHP_URL_PATH), '/');
-            Storage::disk(config('filesystems.default'))->delete($path);
+            Storage::disk($this->mediaDisk())->delete(
+                $this->storagePathFromUrl($message->media_url)
+            );
         }
 
         // ✨ [OPSIONAL] SIARKAN EVENT PENGHAPUSAN PESAN
@@ -377,4 +389,3 @@ public function chatList()
 
 
 }
-

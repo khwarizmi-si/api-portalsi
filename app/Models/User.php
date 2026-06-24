@@ -75,6 +75,27 @@ class User extends Authenticatable implements MustVerifyEmail
         return $this->password_hash;
     }
 
+    public function getProfilePictureUrlAttribute($value): ?string
+    {
+        return $this->normalizeDefaultMediaUrl($value, 'default-profile.png');
+    }
+
+    public function getBannerUrlAttribute($value): ?string
+    {
+        return $this->normalizeDefaultMediaUrl($value, 'default-banner.png');
+    }
+
+    private function normalizeDefaultMediaUrl($value, string $defaultFile): ?string
+    {
+        if (!$value) {
+            return null;
+        }
+
+        $path = parse_url((string) $value, PHP_URL_PATH) ?: (string) $value;
+
+        return str_ends_with($path, "/{$defaultFile}") ? null : (string) $value;
+    }
+
     /* ================================
      | 💡 RELASI ELOQUENT
      ================================= */
