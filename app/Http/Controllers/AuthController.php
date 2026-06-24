@@ -23,7 +23,7 @@ class AuthController extends Controller
         // Catat login history
         LoginHistory::create([
             'user_id'   => $user->user_id,
-            'token_id'  => $user->tokens()->latest('id')->first()->id ?? null,
+            'token_id'  => $user->tokens()->latest('id')->first()?->id,
             'ip_address'=> $request->ip(),
             'user_agent'=> $request->header('User-Agent'),
             'device'    => substr($request->header('User-Agent'), 0, 255),

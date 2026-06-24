@@ -186,7 +186,7 @@ public function acceptFollowRequest($followerId)
     $authUser->followers()->updateExistingPivot($followerId, ['status' => 'accepted']);
 
     // Kirim notifikasi ke follower bahwa follow sudah diterima
-    Notification::create([
+    $notification = Notification::create([
         'recipient_id'     => $followerId,
         'type'             => 'follow_accepted',
         'related_user_id'  => $authUser->user_id,
@@ -194,15 +194,7 @@ public function acceptFollowRequest($followerId)
         'created_at'       => now(),
         'is_read'          => false,
     ]);
-        $notification = Notification::create([
-        'recipient_id'      => $followerId,
-        'type'              => 'follow_accepted',
-        'related_user_id'   => $authUser->user_id,
-        'related_post_id'   => null,
-        'created_at'        => now(),
-        'is_read'           => false,
-    ]);
-    broadcast(new NotificationCreated($notification)); // Menggunakan event notifikasi umum
+    broadcast(new NotificationCreated($notification));
     
     // ✨ Pemicu event real-time untuk memberitahu user yang menerima
     $follower = User::find($followerId);

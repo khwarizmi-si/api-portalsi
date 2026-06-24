@@ -30,6 +30,10 @@ class LikeController extends Controller
             return response()->json(['error' => 'Post not found'], 404);
         }
 
+        if (!$post->user) {
+            return response()->json(['error' => 'Post owner not found'], 404);
+        }
+
         $like = Like::where('user_id', $user_id)
             ->where('post_id', $post_id)
             ->first();

@@ -144,7 +144,7 @@ public function feed()
         $userStories = $stories->where('user_id', $userWithStory->user_id);
         if ($userStories->isEmpty()) return null;
 
-        $storyOwner = $userStories->first()->user;
+        $storyOwner = $userStories->first()?->user;
 
         $storyIds = $userStories->pluck('story_id')->toArray();
         $viewedCount = \DB::table('story_views')
