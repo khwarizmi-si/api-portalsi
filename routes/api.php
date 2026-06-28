@@ -47,7 +47,29 @@ use App\Http\Controllers\{
 // PUBLIC ROUTES
 // ═══════════════════════════════════════════
 
-Route::post('/register', function (Request $request) {
+$sendVerificationEmail = function (User $user, string $context): array {
+    try {
+        $user->sendEmailVerificationNotification();
+
+        return [
+            'status' => 'sent',
+            'message' => 'Link verifikasi dikirim ke email.',
+        ];
+    } catch (\Throwable $e) {
+        Log::error('Failed to send verification email: ' . $e->getMessage(), [
+            'context' => $context,
+            'user_id' => $user->user_id,
+            'email' => $user->email,
+        ]);
+
+        return [
+            'status' => 'failed',
+            'message' => 'Email verifikasi gagal dikirim. Coba kirim ulang nanti atau hubungi admin.',
+        ];
+    }
+};
+
+Route::post('/register', function (Request $request) use ($sendVerificationEmail) {
     $validator = Validator::make($request->all(), [
         'username' => ['required', 'string', 'unique:users,username', 'regex:/^[a-zA-Z0-9._]+$/'],
         'full_name' => 'required|string',
@@ -85,11 +107,14 @@ Route::post('/register', function (Request $request) {
         'banner_url' => null,
     ]);
 
-    $user->sendEmailVerificationNotification();
+    $verificationEmail = $sendVerificationEmail($user, 'register');
     $token = $user->createToken('api-token')->plainTextToken;
 
     return response()->json([
-        'message' => 'User registered successfully. Please verify your email.',
+        'message' => $verificationEmail['status'] === 'sent'
+            ? 'User registered successfully. Please verify your email.'
+            : 'Akun berhasil dibuat, tapi email verifikasi gagal dikirim. Coba kirim ulang nanti atau hubungi admin.',
+        'verification_email_status' => $verificationEmail['status'],
         'token' => $token,
         'user' => $user
     ], 201);
@@ -165,7 +190,7 @@ Route::post('/register-parent', function (Request $request) {
     return response()->json(['message' => 'Parent registered successfully (auto verified).', 'token' => $token, 'user' => $user], 201);
 });
 
-Route::post('/login', function (Request $request) {
+Route::post('/login', function (Request $request) use ($sendVerificationEmail) {
     $request->validate(['login' => 'required|string', 'password' => 'required|string']);
     $login = strtolower(trim($request->login));
     $user = User::where(function ($query) use ($login) {
@@ -189,13 +214,12 @@ Route::post('/login', function (Request $request) {
             $remaining = $nextAt - $now;
             return response()->json(['code' => 2002, 'message' => "Akun belum diverifikasi. Login lagi dalam {$remaining} detik untuk kirim ulang.", 'verification_email_status' => 'cooldown', 'resend_cooldown_seconds' => $remaining], 403);
         }
-        try {
-            $user->sendEmailVerificationNotification();
-            Cache::put($cacheKey, $now + $cooldown, $cooldown);
-        } catch (\Throwable $e) {
-            Log::error('Failed to resend verification: ' . $e->getMessage(), ['user_id' => $user->user_id]);
+        $verificationEmail = $sendVerificationEmail($user, 'login');
+        if ($verificationEmail['status'] !== 'sent') {
             return response()->json(['code' => 2002, 'message' => 'Gagal kirim ulang email verifikasi.', 'verification_email_status' => 'failed'], 403);
         }
+        Cache::put($cacheKey, $now + $cooldown, $cooldown);
+
         return response()->json(['code' => 2002, 'message' => "Link verifikasi baru dikirim. Cek email atau login lagi dalam {$cooldown} detik.", 'verification_email_status' => 'sent', 'resend_cooldown_seconds' => $cooldown], 403);
     }
 
@@ -236,10 +260,52 @@ Route::get('/email/verify/{id}/{hash}', function (Request $request, $id, $hash) 
     return redirect('https://portalsi.com/verified-success');
 })->middleware('signed')->name('verification.verify');
 
-Route::post('/email/verification-notification', function (Request $request) {
-    $request->user()->sendEmailVerificationNotification();
-    return response()->json(['message' => 'Link verifikasi dikirim ke email.']);
+Route::post('/email/verification-notification', function (Request $request) use ($sendVerificationEmail) {
+    $verificationEmail = $sendVerificationEmail($request->user(), 'authenticated_resend');
+
+    return response()->json([
+        'message' => $verificationEmail['message'],
+        'verification_email_status' => $verificationEmail['status'],
+    ], $verificationEmail['status'] === 'sent' ? 200 : 500);
 })->middleware(['auth:sanctum'])->name('verification.send');
+
+Route::post('/email/resend-verification', function (Request $request) use ($sendVerificationEmail) {
+    $request->validate([
+        'login' => 'required|string',
+        'password' => 'required|string',
+    ]);
+
+    $login = strtolower(trim($request->input('login')));
+    $user = User::where(function ($query) use ($login) {
+        $query->whereRaw('LOWER(TRIM(email)) = ?', [$login])
+            ->orWhere('username', $login);
+    })->first();
+
+    if (!$user || !Hash::check($request->input('password'), $user->password_hash)) {
+        return response()->json(['message' => 'Username/email atau password salah!'], 401);
+    }
+
+    if ($user->hasVerifiedEmail()) {
+        return response()->json([
+            'message' => 'Email akun ini sudah diverifikasi.',
+            'verification_email_status' => 'already_verified',
+        ]);
+    }
+
+    if (empty($user->email)) {
+        return response()->json([
+            'message' => 'Akun Anda belum memiliki email terikat.',
+            'verification_email_status' => 'missing_email',
+        ], 422);
+    }
+
+    $verificationEmail = $sendVerificationEmail($user, 'public_resend');
+
+    return response()->json([
+        'message' => $verificationEmail['message'],
+        'verification_email_status' => $verificationEmail['status'],
+    ], $verificationEmail['status'] === 'sent' ? 200 : 500);
+});
 
 Route::post('/forgot-password', function (Request $request) {
     $request->validate(['email' => 'required|email']);
@@ -247,7 +313,17 @@ Route::post('/forgot-password', function (Request $request) {
     $matched = User::whereRaw('LOWER(TRIM(email)) = ?', [$email])->limit(2)->get(['user_id', 'email']);
     if ($matched->isEmpty()) return response()->json(['message' => 'Email tidak ditemukan.', 'status' => 'invalid_user'], 404);
     if ($matched->count() > 1) return response()->json(['message' => 'Duplikat email. Hubungi admin.', 'status' => 'duplicate_email'], 409);
-    $status = Password::sendResetLink(['email' => $matched->first()->email]);
+
+    try {
+        $status = Password::sendResetLink(['email' => $matched->first()->email]);
+    } catch (\Throwable $e) {
+        Log::error('Failed to send password reset email: ' . $e->getMessage(), [
+            'email' => $matched->first()->email,
+        ]);
+
+        return response()->json(['message' => 'Gagal kirim reset link. Coba lagi nanti atau hubungi admin.', 'status' => 'failed'], 500);
+    }
+
     return match ($status) {
         Password::RESET_LINK_SENT => response()->json(['message' => 'Link reset dikirim.', 'status' => 'sent']),
         Password::RESET_THROTTLED => response()->json(['message' => 'Tunggu 60 detik.', 'status' => 'throttled'], 429),
@@ -275,15 +351,21 @@ Route::post('/reset-password', function (Request $request) {
     }], $status === Password::PASSWORD_RESET ? 200 : 400);
 });
 
-Route::post('/bind-email', function (Request $request) {
+Route::post('/bind-email', function (Request $request) use ($sendVerificationEmail) {
     $request->validate(['email' => 'required|email|unique:users,email']);
     $user = $request->user();
     if (!empty($user->email)) return response()->json(['message' => 'Email sudah terikat.'], 400);
     $user->email = strtolower($request->email);
     $user->email_verified_at = null;
     $user->save();
-    $user->sendEmailVerificationNotification();
-    return response()->json(['message' => 'Email berhasil ditambahkan. Silakan verifikasi.']);
+    $verificationEmail = $sendVerificationEmail($user, 'bind_email');
+
+    return response()->json([
+        'message' => $verificationEmail['status'] === 'sent'
+            ? 'Email berhasil ditambahkan. Silakan verifikasi.'
+            : $verificationEmail['message'],
+        'verification_email_status' => $verificationEmail['status'],
+    ], $verificationEmail['status'] === 'sent' ? 200 : 500);
 })->middleware(['auth:sanctum']);
 
 Route::get('/profile/{username}', [ProfileController::class, 'show']);

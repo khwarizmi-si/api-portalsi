@@ -51,26 +51,27 @@ Bersatulah wahai tunas bangsa
 
 ---
 
-## Email Queue
+## Email Auth
 
-Email verifikasi dan reset password dikirim lewat queue `mail` supaya request API tidak menunggu koneksi SMTP. Setelah deploy, jalankan migration dan worker berikut:
+Email verifikasi dan reset password dikirim langsung saat request berjalan. Ini sengaja dibuat synchronous agar endpoint tidak menjawab "terkirim" ketika email sebenarnya masih tertahan di queue tanpa worker.
 
-```bash
-php artisan migrate
-php artisan queue:work database --queue=mail,default --tries=3 --timeout=60
-```
-
-Environment yang bisa diatur:
+Pastikan SMTP production sudah aktif:
 
 ```env
-MAIL_QUEUE_CONNECTION=database
-MAIL_QUEUE_NAME=mail
+MAIL_MAILER=smtp
+MAIL_HOST=...
+MAIL_PORT=587
+MAIL_USERNAME=...
+MAIL_PASSWORD=...
+MAIL_ENCRYPTION=tls
+MAIL_FROM_ADDRESS=...
+MAIL_FROM_NAME="Portal SI"
 ```
 
-Jika worker belum disiapkan, gunakan mode langsung agar email tidak tertahan di tabel `jobs`:
+Untuk development lokal boleh memakai:
 
 ```env
-MAIL_QUEUE_CONNECTION=sync
+MAIL_MAILER=log
 ```
 
-Jika memakai Supervisor/systemd di server, pastikan command worker di atas berjalan terus menerus dan restart otomatis saat gagal.
+Dengan `MAIL_MAILER=log`, email tidak masuk inbox dan hanya ditulis ke `storage/logs/laravel.log`.
