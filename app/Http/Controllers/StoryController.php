@@ -35,7 +35,7 @@ class StoryController extends Controller
     {
         $request->validate([
             'type' => 'required|in:image,video,music',
-            'media' => 'nullable|file|mimes:jpg,jpeg,png,mp4,mov,webm,mp3,wav|max:512000',
+            'media' => 'nullable|file|max:512000',
             'caption' => 'nullable|string',
             'music_track_name' => 'nullable|string|max:255',
             'music_artist_name' => 'nullable|string|max:255',
@@ -51,14 +51,51 @@ class StoryController extends Controller
             'color_pallete' => 'nullable|json',
         ]);
 
+        $media = $request->file('media');
+        if ($media) {
+            $extension = strtolower($media->getClientOriginalExtension());
+            $extensionsByType = [
+                'image' => ['jpg', 'jpeg', 'png', 'webp', 'gif'],
+                'video' => ['mp4', 'mov', 'webm', 'avi', '3gp', 'mkv', 'm4v'],
+                'music' => ['mp3', 'wav', 'm4a', 'aac', 'ogg'],
+            ];
+            if (! in_array($extension, $extensionsByType[$request->type] ?? [], true)) {
+                return response()->json([
+                    'message' => 'Format berkas tidak sesuai dengan jenis cerita yang dipilih.',
+                    'errors' => ['media' => ['Format media cerita tidak didukung.']],
+                ], 422);
+            }
+        } elseif (in_array($request->type, ['image', 'video'], true)) {
+            return response()->json([
+                'message' => 'Foto atau video cerita wajib dipilih.',
+                'errors' => ['media' => ['Media wajib dipilih.']],
+            ], 422);
+        }
+
         $user = Auth::user();
         $mediaPath = null;
         // Configured default disk (r2 in prod, public locally).
         $disk = $this->mediaDisk();
 
         // Kalau ada file media diupload
-        if ($request->hasFile('media')) {
-            $mediaPath = $request->file('media')->store('uploads/stories', $disk);
+        if ($media) {
+            try {
+                $mediaPath = $media->store('uploads/stories', $disk);
+            } catch (\Throwable $error) {
+                \Log::error('Story media upload failed', [
+                    'user_id' => $user->user_id,
+                    'type' => $request->type,
+                    'extension' => $extension,
+                    'mime' => $media->getMimeType(),
+                    'size' => $media->getSize(),
+                    'error' => $error->getMessage(),
+                ]);
+
+                return response()->json(['message' => 'Media cerita gagal disimpan. Silakan coba lagi.'], 503);
+            }
+            if (! $mediaPath) {
+                return response()->json(['message' => 'Media cerita gagal disimpan. Silakan coba lagi.'], 503);
+            }
         }
 
         // Insert ke DB

@@ -438,7 +438,7 @@ class PostController extends Controller
     {
         $request->validate([
             'caption' => 'nullable|string',
-            'media' => 'required|file|mimes:jpg,jpeg,png,mp4,mov,webm,avi,3gp,mkv|max:512000',
+            'media' => 'required|file|max:512000',
             'thumbnail' => 'nullable|file|mimes:jpg,jpeg,png|max:51200', // up to 50MB thumb jika perlu (ubah sesuai kebijakan)
             'location' => 'nullable|string',
             'is_archived' => 'nullable|boolean',
@@ -452,17 +452,60 @@ class PostController extends Controller
             'music_clip_duration_ms' => 'nullable|string|max:255',
         ]);
 
+        $media = $request->file('media');
+        $extension = strtolower($media->getClientOriginalExtension());
+        $imageExtensions = ['jpg', 'jpeg', 'png', 'webp', 'gif'];
+        $videoExtensions = ['mp4', 'mov', 'webm', 'avi', '3gp', 'mkv', 'm4v'];
+        $allowedExtensions = [...$imageExtensions, ...$videoExtensions];
+        if (! in_array($extension, $allowedExtensions, true)) {
+            return response()->json([
+                'message' => 'Format media tidak didukung. Gunakan JPG, PNG, WebP, GIF, MP4, MOV, WebM, AVI, 3GP, MKV, atau M4V.',
+                'errors' => ['media' => ['Format media tidak didukung.']],
+            ], 422);
+        }
+        if ($request->boolean('is_video') !== in_array($extension, $videoExtensions, true)) {
+            return response()->json([
+                'message' => 'Jenis media tidak sesuai dengan berkas yang dipilih.',
+                'errors' => ['media' => ['Jenis media tidak sesuai.']],
+            ], 422);
+        }
+
         // Simpan file media. Use the configured default disk (r2 in prod,
         // 'public' locally) so it works without cloud credentials.
         $disk = $this->mediaDisk();
-        $mediaPath = $request->file('media')->store('uploads/posts', $disk);
+        try {
+            $mediaPath = $media->store('uploads/posts', $disk);
+        } catch (\Throwable $error) {
+            \Log::error('Post media upload failed', [
+                'user_id' => Auth::id(),
+                'extension' => $extension,
+                'mime' => $media->getMimeType(),
+                'size' => $media->getSize(),
+                'error' => $error->getMessage(),
+            ]);
+
+            return response()->json(['message' => 'Video gagal disimpan ke penyimpanan. Silakan coba lagi.'], 503);
+        }
+        if (! $mediaPath) {
+            return response()->json(['message' => 'Media gagal disimpan ke penyimpanan. Silakan coba lagi.'], 503);
+        }
         $mediaUrl = Storage::disk($disk)->url($mediaPath);
 
         // Simpan thumbnail jika ada (frontend disarankan mengirim screenshot 1 detik pertama)
         $thumbnailUrl = null;
         if ($request->hasFile('thumbnail')) {
-            $thumbPath = $request->file('thumbnail')->store('uploads/posts/thumbnails', $disk);
-            $thumbnailUrl = Storage::disk($disk)->url($thumbPath);
+            try {
+                $thumbPath = $request->file('thumbnail')->store('uploads/posts/thumbnails', $disk);
+                if ($thumbPath) {
+                    $thumbnailUrl = Storage::disk($disk)->url($thumbPath);
+                }
+            } catch (\Throwable $error) {
+                // Thumbnail is an optimization only; never reject an otherwise valid video.
+                \Log::warning('Video thumbnail upload failed', [
+                    'user_id' => Auth::id(),
+                    'error' => $error->getMessage(),
+                ]);
+            }
         }
 
         $post = Post::create([
