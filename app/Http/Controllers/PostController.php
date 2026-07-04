@@ -2,17 +2,18 @@
 
 namespace App\Http\Controllers;
 
-use App\Models\Post;
-use App\Models\Tag;
-use App\Models\PostMention;
+use App\Events\NotificationCreated;
 use App\Models\Notification;
+use App\Models\Post;
+use App\Models\PostMention;
+use App\Models\Tag;
 use App\Models\User;
+use Carbon\Carbon;
+use DB;
 use Illuminate\Http\Request;
+use Illuminate\Pagination\LengthAwarePaginator;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\Storage;
-use Illuminate\Pagination\LengthAwarePaginator;
-use DB;
-use Carbon\Carbon;
 
 class PostController extends Controller
 {
@@ -24,6 +25,7 @@ class PostController extends Controller
     private function storagePathFromUrl(string $url): string
     {
         $path = ltrim(parse_url($url, PHP_URL_PATH) ?? $url, '/');
+
         return preg_replace('#^storage/#', '', $path);
     }
 
@@ -60,8 +62,8 @@ class PostController extends Controller
         $perPage = 2; // pagination per 2
 
         $followingIds = $authUser->following()
-            ->where('status', 'accepted')
-            ->pluck('followed_id');
+            ->wherePivot('status', 'accepted')
+            ->pluck('users.user_id');
 
         // ========== MAIN POSTS ==========
         $mainPosts = collect();
@@ -70,7 +72,7 @@ class PostController extends Controller
             // random feed untuk user yang belum follow siapapun
             $mainPosts = Post::with(['user', 'tags', 'mentions'])
                 ->withCount(['likes', 'comments'])
-                ->whereHas('user', fn($q) => $q->where('is_private', 0))
+                ->whereHas('user', fn ($q) => $q->where('is_private', 0))
                 ->orderByDesc('created_at')
                 ->get()
                 ->map(function ($post) use ($authUser) {
@@ -81,12 +83,12 @@ class PostController extends Controller
                     $post->user->is_verified = (bool) $post->user->is_verified;
 
                     // musik fields (safe)
-                    $post->music_track_name        = $post->music_track_name ?? null;
-                    $post->music_artist_name       = $post->music_artist_name ?? null;
-                    $post->music_preview_url       = $post->music_preview_url ?? null;
-                    $post->music_album_art_url     = $post->music_album_art_url ?? null;
+                    $post->music_track_name = $post->music_track_name ?? null;
+                    $post->music_artist_name = $post->music_artist_name ?? null;
+                    $post->music_preview_url = $post->music_preview_url ?? null;
+                    $post->music_album_art_url = $post->music_album_art_url ?? null;
                     $post->music_start_position_ms = $post->music_start_position_ms ?? null;
-                    $post->music_clip_duration_ms  = $post->music_clip_duration_ms ?? null;
+                    $post->music_clip_duration_ms = $post->music_clip_duration_ms ?? null;
 
                     // thumbnail safe field
                     $post->thumbnail_url = $post->thumbnail_url ?? null;
@@ -99,15 +101,14 @@ class PostController extends Controller
             // Distribusi feed
             $total = 100;
             $countTimeline = (int) round($total * 0.50);
-            $countRelasi   = (int) round($total * 0.10);
-            $countRandom   = (int) round($total * 0.25);
-            $countLiked    = (int) round($total * 0.15);
+            $countRelasi = (int) round($total * 0.10);
+            $countRandom = (int) round($total * 0.25);
+            $countLiked = (int) round($total * 0.15);
 
             // Timeline posts (dari following + diri sendiri)
             $timelinePosts = Post::with(['user', 'tags', 'mentions'])
                 ->withCount(['likes', 'comments'])
                 ->whereIn('user_id', $followingIds->push($authUser->user_id))
-                ->whereHas('user', fn($q) => $q->where('is_private', 0))
                 ->orderByDesc('created_at')
                 ->take($countTimeline)
                 ->get();
@@ -122,7 +123,7 @@ class PostController extends Controller
             $relasiPosts = Post::with(['user', 'tags', 'mentions'])
                 ->withCount(['likes', 'comments'])
                 ->whereIn('user_id', $secondDegreeIds)
-                ->whereHas('user', fn($q) => $q->where('is_private', 0))
+                ->whereHas('user', fn ($q) => $q->where('is_private', 0))
                 ->orderByDesc('created_at')
                 ->take($countRelasi)
                 ->get();
@@ -132,7 +133,7 @@ class PostController extends Controller
                 ->withCount(['likes', 'comments'])
                 ->whereNotIn('user_id', $followingIds)
                 ->where('user_id', '!=', $authUser->user_id)
-                ->whereHas('user', fn($q) => $q->where('is_private', 0))
+                ->whereHas('user', fn ($q) => $q->where('is_private', 0))
                 ->inRandomOrder()
                 ->take($countRandom)
                 ->get();
@@ -145,16 +146,16 @@ class PostController extends Controller
             $likedPosts = Post::with(['user', 'tags', 'mentions'])
                 ->withCount(['likes', 'comments'])
                 ->whereIn('post_id', $likedByFollowingIds)
-                ->whereHas('user', fn($q) => $q->where('is_private', 0))
+                ->whereHas('user', fn ($q) => $q->where('is_private', 0))
                 ->orderByDesc('created_at')
                 ->take($countLiked)
                 ->get();
 
             // Shuffle tiap kategori
             $timelinePosts = $timelinePosts->shuffle();
-            $relasiPosts   = $relasiPosts->shuffle();
-            $randomPosts   = $randomPosts->shuffle();
-            $likedPosts    = $likedPosts->shuffle();
+            $relasiPosts = $relasiPosts->shuffle();
+            $randomPosts = $randomPosts->shuffle();
+            $likedPosts = $likedPosts->shuffle();
 
             // Gabungkan dan tambahkan fields tambahan
             $mainPosts = $timelinePosts
@@ -168,12 +169,12 @@ class PostController extends Controller
                     $post->user = $this->attachStoryInfo($post->user, $authUser);
                     $post->user->is_verified = (bool) $post->user->is_verified;
 
-                    $post->music_track_name        = $post->music_track_name ?? null;
-                    $post->music_artist_name       = $post->music_artist_name ?? null;
-                    $post->music_preview_url       = $post->music_preview_url ?? null;
-                    $post->music_album_art_url     = $post->music_album_art_url ?? null;
+                    $post->music_track_name = $post->music_track_name ?? null;
+                    $post->music_artist_name = $post->music_artist_name ?? null;
+                    $post->music_preview_url = $post->music_preview_url ?? null;
+                    $post->music_album_art_url = $post->music_album_art_url ?? null;
                     $post->music_start_position_ms = $post->music_start_position_ms ?? null;
-                    $post->music_clip_duration_ms  = $post->music_clip_duration_ms ?? null;
+                    $post->music_clip_duration_ms = $post->music_clip_duration_ms ?? null;
 
                     // thumbnail safe field
                     $post->thumbnail_url = $post->thumbnail_url ?? null;
@@ -203,7 +204,7 @@ class PostController extends Controller
             if ($userIds->isNotEmpty()) {
                 $users = User::whereIn('user_id', $userIds)
                     ->where('is_private', 0)
-                    ->orderByRaw("FIELD(user_id, " . implode(',', $userIds->toArray()) . ")")
+                    ->orderByRaw('FIELD(user_id, '.implode(',', $userIds->toArray()).')')
                     ->get();
 
                 $suggestions = $suggestions->merge($users);
@@ -234,11 +235,12 @@ class PostController extends Controller
             $user->is_follow_back = (bool) $isFollowBack;
             $user = $this->attachStoryInfo($user, $authUser);
             $user->is_verified = (bool) $user->is_verified;
+
             return $user;
         })
-        ->shuffle()
-        ->sortByDesc('is_follow_back')
-        ->values();
+            ->shuffle()
+            ->sortByDesc('is_follow_back')
+            ->values();
 
         // ========== MERGE POSTS + SUGGESTIONS (FULL FEED DULU) ==========
         $feedWithSuggestions = collect();
@@ -247,22 +249,22 @@ class PostController extends Controller
             $feedWithSuggestions->push($item);
             $postCount++;
             if ($postCount === 2 || ($postCount > 2 && $postCount % 8 === 0)) {
-                $feedWithSuggestions->push((object)[
+                $feedWithSuggestions->push((object) [
                     'type' => 'suggestion',
                     'users' => $suggestions->shuffle()
                         ->take(15)
                         ->map(function ($user) {
                             return [
-                                'user_id'            => $user->user_id,
-                                'username'           => $user->username,
-                                'profile_picture_url'=> $user->profile_picture_url,
-                                'is_follow_back'     => (bool) $user->is_follow_back,
-                                'is_verified'        => (bool) $user->is_verified,
-                                'has_story'          => (bool) $user->has_story,
-                                'story_viewed'       => (bool) $user->story_viewed,
+                                'user_id' => $user->user_id,
+                                'username' => $user->username,
+                                'profile_picture_url' => $user->profile_picture_url,
+                                'is_follow_back' => (bool) $user->is_follow_back,
+                                'is_verified' => (bool) $user->is_verified,
+                                'has_story' => (bool) $user->has_story,
+                                'story_viewed' => (bool) $user->story_viewed,
                             ];
                         })
-                        ->values()
+                        ->values(),
                 ]);
             }
         }
@@ -285,14 +287,14 @@ class PostController extends Controller
         );
 
         $nextPage = $paginator->currentPage() < $paginator->lastPage()
-            ? $request->url() . '?' . http_build_query(array_merge($request->query(), ['page' => $paginator->currentPage() + 1]))
+            ? $request->url().'?'.http_build_query(array_merge($request->query(), ['page' => $paginator->currentPage() + 1]))
             : null;
 
         $prevPage = $paginator->currentPage() > 1
-            ? $request->url() . '?' . http_build_query(array_merge($request->query(), ['page' => $paginator->currentPage() - 1]))
+            ? $request->url().'?'.http_build_query(array_merge($request->query(), ['page' => $paginator->currentPage() - 1]))
             : null;
 
-        $lastPage = $request->url() . '?' . http_build_query(array_merge($request->query(), ['page' => $paginator->lastPage()]));
+        $lastPage = $request->url().'?'.http_build_query(array_merge($request->query(), ['page' => $paginator->lastPage()]));
 
         return response()->json([
             'current_page' => $paginator->currentPage(),
@@ -301,7 +303,7 @@ class PostController extends Controller
             'next_page_url' => $nextPage,
             'prev_page_url' => $prevPage,
             'last_page_url' => $lastPage,
-            'feed' => $feedSlice
+            'feed' => $feedSlice,
         ]);
     }
 
@@ -317,40 +319,44 @@ class PostController extends Controller
 
         if ($request->filled('tag')) {
             $tagName = $request->tag;
-            $query->whereHas('tags', fn($q) => $q->where('tag_name', $tagName));
+            $query->whereHas('tags', fn ($q) => $q->where('tag_name', $tagName));
         }
 
         $sort = $request->input('sort', 'random');
-        if ($sort === 'popular') $query->orderByDesc('likes_count');
-        elseif ($sort === 'newest') $query->orderByDesc('created_at');
-        else $query->inRandomOrder();
+        if ($sort === 'popular') {
+            $query->orderByDesc('likes_count');
+        } elseif ($sort === 'newest') {
+            $query->orderByDesc('created_at');
+        } else {
+            $query->inRandomOrder();
+        }
 
         $total = $query->count();
 
         $posts = $query->skip(($page - 1) * $perPage)
-                   ->take($perPage)
-                   ->get()
-                   ->map(function ($post) use ($authUser) {
-                        // tambahkan is_liked / is_bookmarked jika ada auth
-                        $post->is_liked = $authUser ? $post->likes()->where('user_id', $authUser->user_id)->exists() : false;
-                        $post->is_bookmarked = $authUser ? $post->bookmarks()->where('user_id', $authUser->user_id)->exists() : false;
-                        $post->type = 'post';
-                        $post->user = $this->attachStoryInfo($post->user, $authUser);
-                        $post->user->is_verified = (bool) $post->user->is_verified;
+            ->take($perPage)
+            ->get()
+            ->map(function ($post) use ($authUser) {
+                // tambahkan is_liked / is_bookmarked jika ada auth
+                $post->is_liked = $authUser ? $post->likes()->where('user_id', $authUser->user_id)->exists() : false;
+                $post->is_bookmarked = $authUser ? $post->bookmarks()->where('user_id', $authUser->user_id)->exists() : false;
+                $post->type = 'post';
+                $post->user = $this->attachStoryInfo($post->user, $authUser);
+                $post->user->is_verified = (bool) $post->user->is_verified;
 
-                        // musik
-                        $post->music_track_name        = $post->music_track_name ?? null;
-                        $post->music_artist_name       = $post->music_artist_name ?? null;
-                        $post->music_preview_url       = $post->music_preview_url ?? null;
-                        $post->music_album_art_url     = $post->music_album_art_url ?? null;
-                        $post->music_start_position_ms = $post->music_start_position_ms ?? null;
-                        $post->music_clip_duration_ms  = $post->music_clip_duration_ms ?? null;
+                // musik
+                $post->music_track_name = $post->music_track_name ?? null;
+                $post->music_artist_name = $post->music_artist_name ?? null;
+                $post->music_preview_url = $post->music_preview_url ?? null;
+                $post->music_album_art_url = $post->music_album_art_url ?? null;
+                $post->music_start_position_ms = $post->music_start_position_ms ?? null;
+                $post->music_clip_duration_ms = $post->music_clip_duration_ms ?? null;
 
-                        // thumbnail
-                        $post->thumbnail_url = $post->thumbnail_url ?? null;
+                // thumbnail
+                $post->thumbnail_url = $post->thumbnail_url ?? null;
 
-                        return $post;
-                   });
+                return $post;
+            });
 
         $paginator = new LengthAwarePaginator(
             $posts,
@@ -374,7 +380,7 @@ class PostController extends Controller
         $owner = $post->user;
 
         // Cek akses view
-        $canView = !$owner->is_private ||
+        $canView = ! $owner->is_private ||
             ($authUser && (
                 $authUser->user_id === $owner->user_id ||
                 $owner->followers()
@@ -383,9 +389,9 @@ class PostController extends Controller
                     ->exists()
             ));
 
-        if (!$canView) {
+        if (! $canView) {
             return response()->json([
-                'message' => 'Post ini hanya bisa dilihat oleh followers yang telah diterima.'
+                'message' => 'Post ini hanya bisa dilihat oleh followers yang telah diterima.',
             ], 403);
         }
 
@@ -414,12 +420,12 @@ class PostController extends Controller
         $post->user->is_verified = (bool) $post->user->is_verified;
 
         // musik
-        $post->music_track_name        = $post->music_track_name ?? null;
-        $post->music_artist_name       = $post->music_artist_name ?? null;
-        $post->music_preview_url       = $post->music_preview_url ?? null;
-        $post->music_album_art_url     = $post->music_album_art_url ?? null;
+        $post->music_track_name = $post->music_track_name ?? null;
+        $post->music_artist_name = $post->music_artist_name ?? null;
+        $post->music_preview_url = $post->music_preview_url ?? null;
+        $post->music_album_art_url = $post->music_album_art_url ?? null;
         $post->music_start_position_ms = $post->music_start_position_ms ?? null;
-        $post->music_clip_duration_ms  = $post->music_clip_duration_ms ?? null;
+        $post->music_clip_duration_ms = $post->music_clip_duration_ms ?? null;
 
         // thumbnail
         $post->thumbnail_url = $post->thumbnail_url ?? null;
@@ -431,19 +437,19 @@ class PostController extends Controller
     public function store(Request $request)
     {
         $request->validate([
-            'caption'                 => 'nullable|string',
-            'media'                   => 'required|file|mimes:jpg,jpeg,png,mp4,mov,webm,avi,3gp,mkv|max:512000',
-            'thumbnail'               => 'nullable|file|mimes:jpg,jpeg,png|max:51200', // up to 50MB thumb jika perlu (ubah sesuai kebijakan)
-            'location'                => 'nullable|string',
-            'is_archived'             => 'nullable|boolean',
-            'is_video'                => 'nullable|boolean',
+            'caption' => 'nullable|string',
+            'media' => 'required|file|mimes:jpg,jpeg,png,mp4,mov,webm,avi,3gp,mkv|max:512000',
+            'thumbnail' => 'nullable|file|mimes:jpg,jpeg,png|max:51200', // up to 50MB thumb jika perlu (ubah sesuai kebijakan)
+            'location' => 'nullable|string',
+            'is_archived' => 'nullable|boolean',
+            'is_video' => 'nullable|boolean',
             // musik fields
-            'music_track_name'        => 'nullable|string|max:255',
-            'music_artist_name'       => 'nullable|string|max:255',
-            'music_preview_url'       => 'nullable|string',
-            'music_album_art_url'     => 'nullable|string|max:255',
+            'music_track_name' => 'nullable|string|max:255',
+            'music_artist_name' => 'nullable|string|max:255',
+            'music_preview_url' => 'nullable|string',
+            'music_album_art_url' => 'nullable|string|max:255',
             'music_start_position_ms' => 'nullable|integer',
-            'music_clip_duration_ms'  => 'nullable|string|max:255',
+            'music_clip_duration_ms' => 'nullable|string|max:255',
         ]);
 
         // Simpan file media. Use the configured default disk (r2 in prod,
@@ -460,20 +466,20 @@ class PostController extends Controller
         }
 
         $post = Post::create([
-            'user_id'                 => Auth::id(),
-            'caption'                 => $request->caption,
-            'media_url'               => $mediaUrl,
-            'thumbnail_url'           => $thumbnailUrl,
-            'location'                => $request->location,
-            'is_archived'             => $request->is_archived ?? false,
-            'is_video'                => $request->is_video ?? false,
+            'user_id' => Auth::id(),
+            'caption' => $request->caption,
+            'media_url' => $mediaUrl,
+            'thumbnail_url' => $thumbnailUrl,
+            'location' => $request->location,
+            'is_archived' => $request->is_archived ?? false,
+            'is_video' => $request->is_video ?? false,
             // musik
-            'music_track_name'        => $request->music_track_name,
-            'music_artist_name'       => $request->music_artist_name,
-            'music_preview_url'       => $request->music_preview_url,
-            'music_album_art_url'     => $request->music_album_art_url,
+            'music_track_name' => $request->music_track_name,
+            'music_artist_name' => $request->music_artist_name,
+            'music_preview_url' => $request->music_preview_url,
+            'music_album_art_url' => $request->music_album_art_url,
             'music_start_position_ms' => $request->music_start_position_ms,
-            'music_clip_duration_ms'  => $request->music_clip_duration_ms,
+            'music_clip_duration_ms' => $request->music_clip_duration_ms,
         ]);
 
         // Tangani hashtag
@@ -487,29 +493,30 @@ class PostController extends Controller
 
         // Tangani mention
         if ($request->filled('caption')) {
-            preg_match_all('/@(\w+)/', $request->caption, $mentions);
+            preg_match_all('/@([A-Za-z0-9._]+)/', $request->caption, $mentions);
             foreach ($mentions[1] as $username) {
                 $mentionedUser = User::where('username', $username)->first();
                 if ($mentionedUser && $mentionedUser->user_id !== Auth::id()) {
                     PostMention::create([
                         'post_id' => $post->post_id,
-                        'mentioned_user_id' => $mentionedUser->user_id
+                        'mentioned_user_id' => $mentionedUser->user_id,
                     ]);
-                    Notification::create([
-                        'recipient_id'     => $mentionedUser->user_id,
-                        'type'             => 'mention',
-                        'related_user_id'  => Auth::id(),
-                        'related_post_id'  => $post->post_id,
-                        'created_at'       => now(),
-                        'is_read'          => false,
+                    $notification = Notification::create([
+                        'recipient_id' => $mentionedUser->user_id,
+                        'type' => 'mention',
+                        'related_user_id' => Auth::id(),
+                        'related_post_id' => $post->post_id,
+                        'created_at' => now(),
+                        'is_read' => false,
                     ]);
+                    broadcast(new NotificationCreated($notification));
                 }
             }
         }
 
         // Notifikasi ke followers (logika original dipertahankan; gunakan post_id konsisten)
         $author = $post->user;
-        $followers = $author->followers()->withPivot('followed_at')->get();
+        $followers = $author->followers()->wherePivot('status', 'accepted')->withPivot('followed_at')->get();
 
         foreach ($followers as $follower) {
             $postCountSinceFollow = Post::where('user_id', $author->user_id)
@@ -518,12 +525,12 @@ class PostController extends Controller
 
             if ($postCountSinceFollow <= 2) {
                 $notification = Notification::create([
-                    'recipient_id'    => $follower->user_id,
-                    'type'            => 'new_post',
+                    'recipient_id' => $follower->user_id,
+                    'type' => 'new_post',
                     'related_user_id' => $author->user_id,
                     'related_post_id' => $post->post_id,
                 ]);
-                broadcast(new \App\Events\NotificationCreated($notification));
+                broadcast(new NotificationCreated($notification));
             }
         }
 
@@ -535,7 +542,7 @@ class PostController extends Controller
 
         return response()->json([
             'message' => 'Post created',
-            'post' => $post
+            'post' => $post,
         ], 201);
     }
 
@@ -549,19 +556,19 @@ class PostController extends Controller
         }
 
         $request->validate([
-            'caption'                 => 'nullable|string',
-            'media'                   => 'nullable|file|mimes:jpg,jpeg,png,mp4,mov,webm,avi,3gp,mkv|max:512000',
-            'thumbnail'               => 'nullable|file|mimes:jpg,jpeg,png|max:51200',
-            'location'                => 'nullable|string',
-            'is_archived'             => 'nullable|boolean',
-            'is_video'                => 'nullable|boolean',
+            'caption' => 'nullable|string',
+            'media' => 'nullable|file|mimes:jpg,jpeg,png,mp4,mov,webm,avi,3gp,mkv|max:512000',
+            'thumbnail' => 'nullable|file|mimes:jpg,jpeg,png|max:51200',
+            'location' => 'nullable|string',
+            'is_archived' => 'nullable|boolean',
+            'is_video' => 'nullable|boolean',
             // musik
-            'music_track_name'        => 'nullable|string|max:255',
-            'music_artist_name'       => 'nullable|string|max:255',
-            'music_preview_url'       => 'nullable|string',
-            'music_album_art_url'     => 'nullable|string|max:255',
+            'music_track_name' => 'nullable|string|max:255',
+            'music_artist_name' => 'nullable|string|max:255',
+            'music_preview_url' => 'nullable|string',
+            'music_album_art_url' => 'nullable|string|max:255',
             'music_start_position_ms' => 'nullable|integer',
-            'music_clip_duration_ms'  => 'nullable|string|max:255',
+            'music_clip_duration_ms' => 'nullable|string|max:255',
         ]);
 
         // Replace media jika ada
@@ -589,24 +596,24 @@ class PostController extends Controller
         }
 
         // Update fields
-        $post->caption     = $request->caption ?? $post->caption;
-        $post->location    = $request->location ?? $post->location;
+        $post->caption = $request->caption ?? $post->caption;
+        $post->location = $request->location ?? $post->location;
         $post->is_archived = $request->is_archived ?? $post->is_archived;
-        $post->is_video    = $request->is_video ?? $post->is_video;
+        $post->is_video = $request->is_video ?? $post->is_video;
 
         // musik
-        $post->music_track_name        = $request->music_track_name ?? $post->music_track_name;
-        $post->music_artist_name       = $request->music_artist_name ?? $post->music_artist_name;
-        $post->music_preview_url       = $request->music_preview_url ?? $post->music_preview_url;
-        $post->music_album_art_url     = $request->music_album_art_url ?? $post->music_album_art_url;
+        $post->music_track_name = $request->music_track_name ?? $post->music_track_name;
+        $post->music_artist_name = $request->music_artist_name ?? $post->music_artist_name;
+        $post->music_preview_url = $request->music_preview_url ?? $post->music_preview_url;
+        $post->music_album_art_url = $request->music_album_art_url ?? $post->music_album_art_url;
         $post->music_start_position_ms = $request->music_start_position_ms ?? $post->music_start_position_ms;
-        $post->music_clip_duration_ms  = $request->music_clip_duration_ms ?? $post->music_clip_duration_ms;
+        $post->music_clip_duration_ms = $request->music_clip_duration_ms ?? $post->music_clip_duration_ms;
 
         $post->save();
 
         return response()->json([
             'message' => 'Post updated',
-            'post' => $post
+            'post' => $post,
         ]);
     }
 
@@ -647,7 +654,7 @@ class PostController extends Controller
         $user = $this->attachStoryInfo($user, $authUser);
 
         return response()->json([
-            'circle_avatar' => $user
+            'circle_avatar' => $user,
         ]);
     }
 
@@ -657,7 +664,7 @@ class PostController extends Controller
 
         // Ambil daftar exclude dari query param (kalau ada)
         $excludeIds = $request->input('exclude', []);
-        if (!is_array($excludeIds)) {
+        if (! is_array($excludeIds)) {
             $excludeIds = [$excludeIds];
         }
 
@@ -684,13 +691,13 @@ class PostController extends Controller
         $mainClip->user->is_verified = (bool) $mainClip->user->is_verified;
 
         // musik + thumbnail untuk mainClip
-        $mainClip->music_track_name        = $mainClip->music_track_name ?? null;
-        $mainClip->music_artist_name       = $mainClip->music_artist_name ?? null;
-        $mainClip->music_preview_url       = $mainClip->music_preview_url ?? null;
-        $mainClip->music_album_art_url     = $mainClip->music_album_art_url ?? null;
+        $mainClip->music_track_name = $mainClip->music_track_name ?? null;
+        $mainClip->music_artist_name = $mainClip->music_artist_name ?? null;
+        $mainClip->music_preview_url = $mainClip->music_preview_url ?? null;
+        $mainClip->music_album_art_url = $mainClip->music_album_art_url ?? null;
         $mainClip->music_start_position_ms = $mainClip->music_start_position_ms ?? null;
-        $mainClip->music_clip_duration_ms  = $mainClip->music_clip_duration_ms ?? null;
-        $mainClip->thumbnail_url           = $mainClip->thumbnail_url ?? null;
+        $mainClip->music_clip_duration_ms = $mainClip->music_clip_duration_ms ?? null;
+        $mainClip->thumbnail_url = $mainClip->thumbnail_url ?? null;
 
         // Ambil 1 clip random, exclude id utama + exclude dari param
         $nextClips = Post::with(['user', 'tags'])
@@ -715,13 +722,13 @@ class PostController extends Controller
                 $post->user->is_verified = (bool) $post->user->is_verified;
 
                 // musik + thumbnail
-                $post->music_track_name        = $post->music_track_name ?? null;
-                $post->music_artist_name       = $post->music_artist_name ?? null;
-                $post->music_preview_url       = $post->music_preview_url ?? null;
-                $post->music_album_art_url     = $post->music_album_art_url ?? null;
+                $post->music_track_name = $post->music_track_name ?? null;
+                $post->music_artist_name = $post->music_artist_name ?? null;
+                $post->music_preview_url = $post->music_preview_url ?? null;
+                $post->music_album_art_url = $post->music_album_art_url ?? null;
                 $post->music_start_position_ms = $post->music_start_position_ms ?? null;
-                $post->music_clip_duration_ms  = $post->music_clip_duration_ms ?? null;
-                $post->thumbnail_url           = $post->thumbnail_url ?? null;
+                $post->music_clip_duration_ms = $post->music_clip_duration_ms ?? null;
+                $post->thumbnail_url = $post->thumbnail_url ?? null;
 
                 return $post;
             });
@@ -732,13 +739,13 @@ class PostController extends Controller
         // Buat next_page_url, bawa exclude list biar ga duplikat
         $lastId = $nextClips->last()?->post_id;
         $nextPageUrl = $lastId
-            ? url('/api/clips/' . $lastId . '?' . http_build_query(['exclude' => $newExcludeIds]))
+            ? url('/api/clips/'.$lastId.'?'.http_build_query(['exclude' => $newExcludeIds]))
             : null;
 
         return response()->json([
             'clip' => $mainClip,
             'next_clips' => $nextClips,
-            'next_page_url' => $nextPageUrl
+            'next_page_url' => $nextPageUrl,
         ]);
     }
 }

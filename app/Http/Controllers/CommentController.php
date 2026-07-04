@@ -3,19 +3,18 @@
 namespace App\Http\Controllers;
 
 // 🔽 Perbarui import
+use App\Events\CommentCreated;
+use App\Events\CommentDeleted;
+use App\Events\CommentUpdated;
+use App\Events\NotificationCreated;
+use App\Models\Comment;
+use App\Models\CommentLike;
+use App\Models\Notification;
+// ✅ Gunakan hanya satu event untuk setiap aksi
+use App\Models\Post;
+use App\Models\User;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
-use App\Models\Post;
-use App\Models\Comment;
-use App\Models\Notification;
-use App\Models\User;
-use App\Models\CommentLike;
-
-// ✅ Gunakan hanya satu event untuk setiap aksi
-use App\Events\CommentCreated;
-use App\Events\CommentUpdated;
-use App\Events\CommentDeleted;
-use App\Events\NotificationCreated;
 
 class CommentController extends Controller
 {
@@ -23,7 +22,7 @@ class CommentController extends Controller
     {
         $request->validate([
             'content' => 'required|string',
-            'parent_comment_id' => 'nullable|exists:comments,comment_id'
+            'parent_comment_id' => 'nullable|exists:comments,comment_id',
         ]);
 
         $user_id = Auth::id();
@@ -42,7 +41,7 @@ class CommentController extends Controller
 
         // 🔔 Notifikasi COMMENT ke pemilik POST
         // ❌ Hindari notifikasi diri sendiri
-        if (!$request->filled('parent_comment_id') && $post->user_id != $user_id) {
+        if (! $request->filled('parent_comment_id') && $post->user_id != $user_id) {
             $notification = Notification::create([
                 'recipient_id' => $post->user_id,
                 'type' => 'comment',
@@ -77,9 +76,8 @@ class CommentController extends Controller
         }
 
         // 📣 Notifikasi MENTION
-        $mentionedUsernames = collect(explode(' ', $request->content))
-            ->filter(fn($word) => str_starts_with($word, '@'))
-            ->map(fn($mention) => ltrim($mention, '@'));
+        preg_match_all('/@([A-Za-z0-9._]+)/', (string) $request->content, $mentionMatches);
+        $mentionedUsernames = collect($mentionMatches[1] ?? [])->unique();
 
         foreach ($mentionedUsernames as $username) {
             $mentionedUser = User::where('username', $username)->first();
@@ -101,44 +99,43 @@ class CommentController extends Controller
 
         return response()->json([
             'message' => 'Komentar berhasil dikirim.',
-            'data' => $comment->load('user')
+            'data' => $comment->load('user'),
         ], 201);
     }
 
-public function getCommentsByPost($post_id)
-{
-    $authId = Auth::id();
-    $post = Post::findOrFail($post_id);
+    public function getCommentsByPost($post_id)
+    {
+        $authId = Auth::id();
+        $post = Post::findOrFail($post_id);
 
-    $comments = $post->comments()
-        ->withCount('likes') // hitung jumlah likes
-        ->withExists([
-            'likes as is_liked' => fn($q) => $q->where('user_id', $authId)
-        ]) // cek apakah user login sudah like
-        ->with([
-            'user',
-            'replies.user',
-            'replies.likes',
-            'replies' => function ($q) use ($authId) {
-                $q->withCount('likes')
-                  ->withExists([
-                      'likes as is_liked' => fn($q2) => $q2->where('user_id', $authId)
-                  ])
-                  ->orderByDesc('likes_count')
-                  ->orderBy('created_at', 'desc');
-            }
-        ])
-        ->whereNull('parent_comment_id')
-        ->orderByDesc('likes_count') // komentar dengan like terbanyak dulu
-        ->orderBy('created_at', 'desc')
-        ->get();
+        $comments = $post->comments()
+            ->withCount('likes') // hitung jumlah likes
+            ->withExists([
+                'likes as is_liked' => fn ($q) => $q->where('user_id', $authId),
+            ]) // cek apakah user login sudah like
+            ->with([
+                'user',
+                'replies.user',
+                'replies.likes',
+                'replies' => function ($q) use ($authId) {
+                    $q->withCount('likes')
+                        ->withExists([
+                            'likes as is_liked' => fn ($q2) => $q2->where('user_id', $authId),
+                        ])
+                        ->orderByDesc('likes_count')
+                        ->orderBy('created_at', 'desc');
+                },
+            ])
+            ->whereNull('parent_comment_id')
+            ->orderByDesc('likes_count') // komentar dengan like terbanyak dulu
+            ->orderBy('created_at', 'desc')
+            ->get();
 
-    return response()->json([
-        'post_id' => $post_id,
-        'comments' => $comments
-    ]);
-}
-
+        return response()->json([
+            'post_id' => $post_id,
+            'comments' => $comments,
+        ]);
+    }
 
     public function like($comment_id)
     {
@@ -161,7 +158,7 @@ public function getCommentsByPost($post_id)
 
         return response()->json([
             'message' => 'Komentar berhasil disukai.',
-            'data' => $like
+            'data' => $like,
         ], 201);
     }
 
@@ -174,14 +171,12 @@ public function getCommentsByPost($post_id)
             ->where('user_id', $user_id)
             ->delete();
 
-        if (!$deleted) {
+        if (! $deleted) {
             return response()->json(['message' => 'Kamu belum pernah menyukai komentar ini.'], 400);
         }
 
         return response()->json(['message' => 'Like pada komentar berhasil dihapus.']);
     }
-
-
 
     public function update(Request $request, $comment_id)
     {
@@ -201,7 +196,7 @@ public function getCommentsByPost($post_id)
 
         return response()->json([
             'message' => 'Komentar berhasil diperbarui.',
-            'data' => $comment
+            'data' => $comment,
         ]);
     }
 

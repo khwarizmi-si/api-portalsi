@@ -4,11 +4,11 @@ namespace App\Events;
 
 use App\Models\GroupMessage;
 use Illuminate\Broadcasting\PrivateChannel;
-use Illuminate\Contracts\Broadcasting\ShouldBroadcast;
+use Illuminate\Contracts\Broadcasting\ShouldBroadcastNow;
 use Illuminate\Foundation\Events\Dispatchable;
 use Illuminate\Queue\SerializesModels;
 
-class GroupMessageUpdated implements ShouldBroadcast
+class GroupMessageUpdated implements ShouldBroadcastNow
 {
     use Dispatchable, SerializesModels;
 
@@ -21,7 +21,7 @@ class GroupMessageUpdated implements ShouldBroadcast
 
     public function broadcastOn(): array
     {
-        return [new PrivateChannel('group.' . $this->message->group_id)];
+        return [new PrivateChannel('group.'.$this->message->group_id)];
     }
 
     public function broadcastAs(): string

@@ -1,47 +1,40 @@
 <?php
-use Jenssegers\Agent\Agent;
+
+use App\Http\Controllers\AccountController;
+use App\Http\Controllers\AnnouncementController;
+use App\Http\Controllers\BookmarkController;
+use App\Http\Controllers\CommentController;
+use App\Http\Controllers\DirectMessageController;
+use App\Http\Controllers\FcmController;
+use App\Http\Controllers\FollowController;
+use App\Http\Controllers\GroupController;
+use App\Http\Controllers\GroupMessageController;
+use App\Http\Controllers\LikeController;
+use App\Http\Controllers\LoginHistoryController;
+use App\Http\Controllers\NotificationController;
+use App\Http\Controllers\PortfolioController;
+use App\Http\Controllers\PostController;
+use App\Http\Controllers\ProfileController;
+use App\Http\Controllers\StoryController;
+use App\Http\Controllers\StoryViewController;
+use App\Http\Controllers\UserSuggestionController;
+use App\Http\Controllers\WebSocketController;
 use App\Models\LoginHistory;
-use Laravel\Sanctum\PersonalAccessToken;
+use App\Models\User;
+use Illuminate\Auth\Events\PasswordReset;
+use Illuminate\Auth\Events\Verified;
 use Illuminate\Http\Request;
-use Illuminate\Support\Facades\Route;
-use Illuminate\Support\Facades\Hash;
-use Illuminate\Support\Facades\Password;
-use Illuminate\Support\Facades\Broadcast;
 use Illuminate\Support\Facades\Auth;
+use Illuminate\Support\Facades\Broadcast;
 use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Hash;
 use Illuminate\Support\Facades\Log;
+use Illuminate\Support\Facades\Password;
+use Illuminate\Support\Facades\Route;
 use Illuminate\Support\Facades\Validator;
-use Illuminate\Validation\ValidationException;
-use Illuminate\Auth\Events\PasswordReset;
-use App\Http\Controllers\UserSuggestionController;
-use Illuminate\Auth\Events\Verified;
-use Illuminate\Foundation\Auth\EmailVerificationRequest;
-use Illuminate\Support\Str;
-use App\Models\User;
-use App\Models\Group;
-use App\Http\Controllers\{
-    PostController,
-    CommentController,
-    LikeController,
-    FollowController,
-    ProfileController,
-    StoryController,
-    StoryViewController,
-    NotificationController,
-    DirectMessageController,
-    AccountController,
-    MediaController,
-    AuthController,
-    GroupController,
-    GroupMessageController,
-    AnnouncementController,
-    PortfolioController,
-    BookmarkController,
-    LoginHistoryController,
-    WebSocketController,
-    BulkRegisterController,
-};
+use Jenssegers\Agent\Agent;
+use Laravel\Sanctum\PersonalAccessToken;
 
 // ═══════════════════════════════════════════
 // PUBLIC ROUTES
@@ -55,8 +48,8 @@ $sendVerificationEmail = function (User $user, string $context): array {
             'status' => 'sent',
             'message' => 'Link verifikasi dikirim ke email.',
         ];
-    } catch (\Throwable $e) {
-        Log::error('Failed to send verification email: ' . $e->getMessage(), [
+    } catch (Throwable $e) {
+        Log::error('Failed to send verification email: '.$e->getMessage(), [
             'context' => $context,
             'user_id' => $user->user_id,
             'email' => $user->email,
@@ -75,7 +68,7 @@ Route::post('/register', function (Request $request) use ($sendVerificationEmail
         'full_name' => 'required|string',
         'email' => 'required|email|unique:users,email',
         'password' => 'required|min:6',
-        'role' => 'in:teacher,parent,student,other'
+        'role' => 'in:teacher,parent,student,other',
     ], [
         'username.required' => 'Username wajib diisi.',
         'username.unique' => 'Username sudah digunakan.',
@@ -86,7 +79,7 @@ Route::post('/register', function (Request $request) use ($sendVerificationEmail
         'email.unique' => 'Email sudah terdaftar.',
         'password.required' => 'Password wajib diisi.',
         'password.min' => 'Password minimal 6 karakter.',
-        'role.in' => 'Role tidak valid.'
+        'role.in' => 'Role tidak valid.',
     ]);
 
     if ($validator->fails()) {
@@ -116,7 +109,7 @@ Route::post('/register', function (Request $request) use ($sendVerificationEmail
             : 'Akun berhasil dibuat, tapi email verifikasi gagal dikirim. Coba kirim ulang nanti atau hubungi admin.',
         'verification_email_status' => $verificationEmail['status'],
         'token' => $token,
-        'user' => $user
+        'user' => $user,
     ], 201);
 });
 
@@ -124,7 +117,7 @@ Route::post('/login-check', function (Request $request) {
     $request->validate(['username' => 'required|string', 'password' => 'required|string']);
     $user = User::where('username', strtolower($request->username))->first();
 
-    if (!$user || !Hash::check($request->password, $user->password_hash)) {
+    if (! $user || ! Hash::check($request->password, $user->password_hash)) {
         return response()->json(['success' => false, 'message' => 'Username atau password salah'], 401);
     }
 
@@ -139,13 +132,17 @@ Route::post('/login-check', function (Request $request) {
 
 Route::post('/register-teachers', function (Request $request) {
     $teachers = $request->input('teachers');
-    if (!$teachers || !is_array($teachers)) {
+    if (! $teachers || ! is_array($teachers)) {
         return response()->json(['message' => 'Parameter teachers harus berupa array.'], 400);
     }
     $createdUsers = [];
     foreach ($teachers as $data) {
-        if (empty($data['username']) || empty($data['password'])) continue;
-        if (User::where('username', strtolower($data['username']))->exists()) continue;
+        if (empty($data['username']) || empty($data['password'])) {
+            continue;
+        }
+        if (User::where('username', strtolower($data['username']))->exists()) {
+            continue;
+        }
         $user = User::create([
             'username' => strtolower($data['username']),
             'password_hash' => bcrypt($data['password']),
@@ -153,7 +150,7 @@ Route::post('/register-teachers', function (Request $request) {
             'full_name' => $data['full_name'] ?? null,
             'email' => $data['email'] ?? null,
             'profile_picture_url' => null,
-            'banner_url' => null
+            'banner_url' => null,
         ]);
         $user->markEmailAsVerified();
         $user->groups()->syncWithoutDetaching([
@@ -166,6 +163,7 @@ Route::post('/register-teachers', function (Request $request) {
         ]);
         $createdUsers[] = $user;
     }
+
     return response()->json(['message' => 'Teachers registered & auto joined to groups 1–6 successfully.', 'count' => count($createdUsers), 'users' => $createdUsers], 201);
 });
 
@@ -182,7 +180,7 @@ Route::post('/register-parent', function (Request $request) {
         'full_name' => null,
         'email' => null,
         'profile_picture_url' => null,
-        'banner_url' => null
+        'banner_url' => null,
     ]);
     $user->markEmailAsVerified();
     $token = $user->createToken('api-token')->plainTextToken;
@@ -197,13 +195,13 @@ Route::post('/login', function (Request $request) use ($sendVerificationEmail) {
         $query->whereRaw('LOWER(TRIM(email)) = ?', [$login])->orWhere('username', $login);
     })->first();
 
-    if (!$user || !Hash::check($request->password, $user->password_hash)) {
+    if (! $user || ! Hash::check($request->password, $user->password_hash)) {
         return response()->json(['code' => 2001, 'message' => 'Username/email atau password salah!'], 401);
     }
 
-    if (!$user->hasVerifiedEmail()) {
+    if (! $user->hasVerifiedEmail()) {
         $cooldown = (int) config('auth.verification_resend_cooldown', 60);
-        $cacheKey = 'email_verification_login_resend:' . $user->getKey();
+        $cacheKey = 'email_verification_login_resend:'.$user->getKey();
         $now = now()->timestamp;
         $nextAt = (int) Cache::get($cacheKey, 0);
 
@@ -212,6 +210,7 @@ Route::post('/login', function (Request $request) use ($sendVerificationEmail) {
         }
         if ($nextAt > $now) {
             $remaining = $nextAt - $now;
+
             return response()->json(['code' => 2002, 'message' => "Akun belum diverifikasi. Login lagi dalam {$remaining} detik untuk kirim ulang.", 'verification_email_status' => 'cooldown', 'resend_cooldown_seconds' => $remaining], 403);
         }
         $verificationEmail = $sendVerificationEmail($user, 'login');
@@ -228,35 +227,37 @@ Route::post('/login', function (Request $request) use ($sendVerificationEmail) {
     $tokenId = PersonalAccessToken::where('token', hash('sha256', explode('|', $plainTextToken)[1]))->first()?->id;
 
     try {
-        $agent = new Agent();
+        $agent = new Agent;
+        $agent->setUserAgent($request->userAgent() ?: '');
         LoginHistory::create([
             'user_id' => $user->user_id,
             'token_id' => $tokenId,
             'ip_address' => $request->ip() ?? 'unknown',
             'user_agent' => $request->header('User-Agent') ?? 'unknown',
-            'device' => $agent->device() ?? 'unknown',
-            'browser' => $agent->browser() ?? 'unknown',
-            'platform' => $agent->platform() ?? 'unknown',
+            'device' => $agent->device() ?: ($agent->isDesktop() ? 'Komputer' : 'Perangkat tidak dikenal'),
+            'browser' => $agent->browser() ?: 'Browser tidak dikenal',
+            'platform' => $agent->platform() ?: 'Sistem tidak dikenal',
             'login_at' => now(),
         ]);
-    } catch (\Exception $e) {
-        Log::error('LoginHistory insert failed: ' . $e->getMessage());
+    } catch (Exception $e) {
+        Log::error('LoginHistory insert failed: '.$e->getMessage());
     }
 
     return response()->json(['code' => 1001, 'message' => 'Login successful', 'token' => $plainTextToken, 'user' => $user], 200);
 });
 
-Route::post('/fcm/register', [App\Http\Controllers\FcmController::class, 'register']);
+Route::post('/fcm/register', [FcmController::class, 'register']);
 
 Route::get('/email/verify/{id}/{hash}', function (Request $request, $id, $hash) {
     $user = User::findOrFail($id);
-    if (!hash_equals((string) $hash, sha1($user->getEmailForVerification()))) {
+    if (! hash_equals((string) $hash, sha1($user->getEmailForVerification()))) {
         return response()->json(['message' => 'Invalid verification link.'], 403);
     }
-    if (!$user->hasVerifiedEmail()) {
+    if (! $user->hasVerifiedEmail()) {
         $user->markEmailAsVerified();
         event(new Verified($user));
     }
+
     return redirect('https://portalsi.com/verified-success');
 })->middleware('signed')->name('verification.verify');
 
@@ -281,7 +282,7 @@ Route::post('/email/resend-verification', function (Request $request) use ($send
             ->orWhere('username', $login);
     })->first();
 
-    if (!$user || !Hash::check($request->input('password'), $user->password_hash)) {
+    if (! $user || ! Hash::check($request->input('password'), $user->password_hash)) {
         return response()->json(['message' => 'Username/email atau password salah!'], 401);
     }
 
@@ -311,13 +312,17 @@ Route::post('/forgot-password', function (Request $request) {
     $request->validate(['email' => 'required|email']);
     $email = strtolower(trim($request->input('email')));
     $matched = User::whereRaw('LOWER(TRIM(email)) = ?', [$email])->limit(2)->get(['user_id', 'email']);
-    if ($matched->isEmpty()) return response()->json(['message' => 'Email tidak ditemukan.', 'status' => 'invalid_user'], 404);
-    if ($matched->count() > 1) return response()->json(['message' => 'Duplikat email. Hubungi admin.', 'status' => 'duplicate_email'], 409);
+    if ($matched->isEmpty()) {
+        return response()->json(['message' => 'Email tidak ditemukan.', 'status' => 'invalid_user'], 404);
+    }
+    if ($matched->count() > 1) {
+        return response()->json(['message' => 'Duplikat email. Hubungi admin.', 'status' => 'duplicate_email'], 409);
+    }
 
     try {
         $status = Password::sendResetLink(['email' => $matched->first()->email]);
-    } catch (\Throwable $e) {
-        Log::error('Failed to send password reset email: ' . $e->getMessage(), [
+    } catch (Throwable $e) {
+        Log::error('Failed to send password reset email: '.$e->getMessage(), [
             'email' => $matched->first()->email,
         ]);
 
@@ -335,13 +340,14 @@ Route::post('/reset-password', function (Request $request) {
     $request->validate(['token' => 'required', 'email' => 'required|email', 'password' => 'required|confirmed']);
     $email = strtolower(trim($request->input('email')));
     $status = Password::reset(
-        ['email' => fn($q) => $q->whereRaw('LOWER(TRIM(email)) = ?', [$email]), 'password' => $request->password, 'password_confirmation' => $request->password_confirmation, 'token' => $request->token],
+        ['email' => fn ($q) => $q->whereRaw('LOWER(TRIM(email)) = ?', [$email]), 'password' => $request->password, 'password_confirmation' => $request->password_confirmation, 'token' => $request->token],
         function ($user, $password) {
             $user->password_hash = Hash::make($password);
             $user->save();
             event(new PasswordReset($user));
         }
     );
+
     return response()->json(['message' => match ($status) {
         Password::PASSWORD_RESET => 'Password berhasil direset.',
         Password::INVALID_TOKEN => 'Token tidak valid.',
@@ -354,7 +360,9 @@ Route::post('/reset-password', function (Request $request) {
 Route::post('/bind-email', function (Request $request) use ($sendVerificationEmail) {
     $request->validate(['email' => 'required|email|unique:users,email']);
     $user = $request->user();
-    if (!empty($user->email)) return response()->json(['message' => 'Email sudah terikat.'], 400);
+    if (! empty($user->email)) {
+        return response()->json(['message' => 'Email sudah terikat.'], 400);
+    }
     $user->email = strtolower($request->email);
     $user->email_verified_at = null;
     $user->save();
@@ -379,10 +387,12 @@ Route::middleware(['auth:sanctum'])->group(function () {
 
     Route::post('/logout', function (Request $request) {
         $request->user()->currentAccessToken()->delete();
+
         return response()->json(['message' => 'Logged out']);
     });
 
     Route::get('/user', [ProfileController::class, 'me']);
+    Route::get('/users/{id}', [ProfileController::class, 'showById']);
     Route::get('/account/is-private', [AccountController::class, 'checkPrivateStatus']);
     Route::get('/mutuals', [ProfileController::class, 'mutuals']);
 
@@ -401,6 +411,7 @@ Route::middleware(['auth:sanctum'])->group(function () {
     Route::get('/stories/my', [StoryController::class, 'myStories']);
 
     Route::get('/notifications', [NotificationController::class, 'index']);
+    Route::get('/notifications/unread-count', [NotificationController::class, 'unreadCount']);
     Route::patch('/notifications/{id}/read', [NotificationController::class, 'markAsRead']);
     Route::patch('/notifications/read/all', [NotificationController::class, 'markAllAsRead']);
 
@@ -418,12 +429,14 @@ Route::middleware(['auth:sanctum'])->group(function () {
     Route::patch('/messages/user/{user_id}/read', [DirectMessageController::class, 'markAsReadByUser']);
     Route::delete('/messages/{id}', [DirectMessageController::class, 'destroy']);
     Route::get('/messages/chat-list', [DirectMessageController::class, 'chatList']);
+    Route::get('/messages/unread-count', [DirectMessageController::class, 'unreadCount']);
     Route::get('/messages/unread/{user_id}', [DirectMessageController::class, 'unreadConversation']);
     Route::get('/messages/conversation-from/{user_id}', [DirectMessageController::class, 'conversationFromUser']);
     Route::get('/messages/channels', [DirectMessageController::class, 'channels']);
 
     // Login History
     Route::get('/login-histories', [LoginHistoryController::class, 'index']);
+    Route::delete('/login-histories', [LoginHistoryController::class, 'destroyAll']);
     Route::delete('/login-histories/{id}', [LoginHistoryController::class, 'destroy']);
 
     // Bookmarks
@@ -439,15 +452,17 @@ Route::middleware(['auth:sanctum'])->group(function () {
     // Special groups (parent/teacher only)
     Route::get('/special-groups', function (Request $request) {
         $user = $request->user();
-        if (!in_array($user->role, ['parent', 'teacher'])) {
+        if (! in_array($user->role, ['parent', 'teacher'])) {
             return response()->json(['error' => 'Hanya parent & teacher.'], 403);
         }
-        $groups = $user->groups()->whereIn('groups.id', [1,2,3,4,5,6])->select('groups.id','groups.name','groups.description','groups.avatar_url')->get();
+        $groups = $user->groups()->whereIn('groups.id', [1, 2, 3, 4, 5, 6])->select('groups.id', 'groups.name', 'groups.description', 'groups.avatar_url')->get();
+
         return response()->json($groups->map(function ($g) use ($user) {
             $unread = DB::table('group_messages')
-                ->leftJoin('group_message_reads', fn($j) => $j->on('group_messages.id','=','group_message_reads.group_message_id')->where('group_message_reads.user_id', $user->user_id))
+                ->leftJoin('group_message_reads', fn ($j) => $j->on('group_messages.id', '=', 'group_message_reads.group_message_id')->where('group_message_reads.user_id', $user->user_id))
                 ->where('group_messages.group_id', $g->id)->whereNull('group_message_reads.id')->count();
-            return ['id'=>$g->id,'name'=>$g->name,'description'=>$g->description,'avatar_url'=>$g->avatar_url,'unread_message_count'=>(string)$unread];
+
+            return ['id' => $g->id, 'name' => $g->name, 'description' => $g->description, 'avatar_url' => $g->avatar_url, 'unread_message_count' => (string) $unread];
         }));
     });
 
@@ -496,7 +511,7 @@ Route::middleware(['auth:sanctum'])->group(function () {
         Route::post('groups/{group}/join', [GroupController::class, 'join']);
         Route::post('groups/{group}/leave', [GroupController::class, 'leave']);
         Route::get('groups/{group}', [GroupController::class, 'show']);
-        Route::match(['put','post'], 'groups/{group}', [GroupController::class, 'update']);
+        Route::match(['put', 'post'], 'groups/{group}', [GroupController::class, 'update']);
         Route::delete('groups/{group}', [GroupController::class, 'destroy']);
         Route::get('groups/{group}/role', [GroupController::class, 'checkRole']);
 

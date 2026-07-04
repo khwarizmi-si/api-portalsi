@@ -19,7 +19,8 @@ class Notification extends Model
      * Primary key custom.
      */
     protected $primaryKey = 'notification_id';
-    protected $keyType    = 'int';
+
+    protected $keyType = 'int';
 
     /**
      * Kolom yang bisa diisi mass-assignment.
@@ -30,6 +31,7 @@ class Notification extends Model
         'related_user_id',
         'related_post_id',
         'related_comment_id',
+        'related_story_id',
         'comment_id',
         'reply_id',
         'created_at',
@@ -40,7 +42,7 @@ class Notification extends Model
      * Casting kolom otomatis.
      */
     protected $casts = [
-        'is_read'    => 'boolean',
+        'is_read' => 'boolean',
         'created_at' => 'datetime',
     ];
 

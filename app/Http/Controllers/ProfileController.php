@@ -6,7 +6,6 @@ use App\Models\User;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\Storage;
-use DB;
 
 class ProfileController extends Controller
 {
@@ -18,23 +17,33 @@ class ProfileController extends Controller
     private function storagePathFromUrl(string $url): string
     {
         $path = ltrim(parse_url($url, PHP_URL_PATH) ?? $url, '/');
+
         return preg_replace('#^storage/#', '', $path);
     }
 
     // ---------------- Public Profile ----------------
     public function show(Request $request, $username)
     {
-        $authUser = Auth::user();
-        $page     = (int) $request->input('page', 1);
-        $perPage  = (int) $request->input('per_page', 9);
+        // This route is publicly readable, so explicitly resolve an optional
+        // Sanctum bearer token when one is present. Without this, accepted
+        // followers were still treated as guests on private profiles.
+        $authUser = $request->user('sanctum') ?? Auth::user();
+        $page = (int) $request->input('page', 1);
+        $perPage = (int) $request->input('per_page', 9);
 
         $user = User::whereRaw('LOWER(username) = ?', [strtolower($username)])
-            ->withCount(['followers', 'following', 'posts'])
-            ->with('followers')
+            ->withCount([
+                'followers as followers_count' => fn ($query) => $query->wherePivot('status', 'accepted'),
+                'following as following_count' => fn ($query) => $query->wherePivot('status', 'accepted'),
+                'posts',
+            ])
             ->firstOrFail();
 
-        $canViewPosts = !$user->is_private ||
-            ($authUser && ($authUser->user_id === $user->user_id || $user->followers->contains($authUser->user_id)));
+        $canViewPosts = ! $user->is_private ||
+            ($authUser && ($authUser->user_id === $user->user_id || $user->followers()
+                ->where('users.user_id', $authUser->user_id)
+                ->wherePivot('status', 'accepted')
+                ->exists()));
 
         $recentPosts = [];
         $pagination = null;
@@ -53,57 +62,69 @@ class ProfileController extends Controller
                     : null;
 
                 return [
-                    'post_id'       => $post->post_id,
-                    'caption'       => $post->caption,
-                    'media_url'     => $this->normalizeMediaUrl($post->media_url),
-                    'is_video'      => $isVideo ? 1 : 0,
+                    'post_id' => $post->post_id,
+                    'caption' => $post->caption,
+                    'media_url' => $this->normalizeMediaUrl($post->media_url),
+                    'is_video' => $isVideo ? 1 : 0,
                     'thumbnail_url' => $thumbnail,
-                    'created_at'    => $post->created_at,
+                    'created_at' => $post->created_at,
                 ];
             });
 
             $pagination = [
-                'current_page'  => $paginatedPosts->currentPage(),
-                'last_page'     => $paginatedPosts->lastPage(),
-                'per_page'      => $paginatedPosts->perPage(),
-                'total'         => $paginatedPosts->total(),
+                'current_page' => $paginatedPosts->currentPage(),
+                'last_page' => $paginatedPosts->lastPage(),
+                'per_page' => $paginatedPosts->perPage(),
+                'total' => $paginatedPosts->total(),
                 'next_page_url' => $paginatedPosts->nextPageUrl(),
             ];
         }
 
         return response()->json([
-            'user_id'             => $user->user_id,
-            'username'            => $user->username,
-            'full_name'           => $user->full_name,
-            'bio'                 => $user->bio,
-            'email'               => $user->email,
+            'user_id' => $user->user_id,
+            'username' => $user->username,
+            'full_name' => $user->full_name,
+            'bio' => $user->bio,
+            'email' => $user->email,
             'profile_picture_url' => $user->profile_picture_url,
-            'banner_url'          => $user->banner_url,
-            'is_verified'         => $user->is_verified,
-            'role'                => $user->role,
-            'is_private'          => $user->is_private,
-            'followers_count'     => $user->followers_count,
-            'following_count'     => $user->following_count,
-            'posts_count'         => $user->posts_count,
-            'recent_posts'        => $recentPosts,
-            'pagination'          => $pagination,
-            'message'             => $canViewPosts ? null : 'Akun private, follow untuk melihat postingan.',
+            'banner_url' => $user->banner_url,
+            'is_verified' => $user->is_verified,
+            'role' => $user->role,
+            'is_private' => $user->is_private,
+            'followers_count' => $user->followers_count,
+            'following_count' => $user->following_count,
+            'posts_count' => $user->posts_count,
+            'recent_posts' => $recentPosts,
+            'pagination' => $pagination,
+            'message' => $canViewPosts ? null : 'Akun private, follow untuk melihat postingan.',
         ]);
+    }
+
+    public function showById(Request $request, $id)
+    {
+        return response()->json(
+            User::select('user_id', 'username', 'full_name', 'profile_picture_url', 'is_verified', 'role')
+                ->findOrFail($id)
+        );
     }
 
     // ---------------- Profile sendiri ----------------
     public function me(Request $request)
     {
         $authUser = Auth::user();
-        if (!$authUser) {
+        if (! $authUser) {
             return response()->json(['message' => 'Unauthorized'], 401);
         }
 
-        $page    = (int) $request->input('page', 1);
+        $page = (int) $request->input('page', 1);
         $perPage = (int) $request->input('per_page', 9);
 
         $user = User::where('user_id', $authUser->user_id)
-            ->withCount(['followers', 'following', 'posts'])
+            ->withCount([
+                'followers as followers_count' => fn ($query) => $query->wherePivot('status', 'accepted'),
+                'following as following_count' => fn ($query) => $query->wherePivot('status', 'accepted'),
+                'posts',
+            ])
             ->with('followers')
             ->firstOrFail();
 
@@ -120,40 +141,40 @@ class ProfileController extends Controller
                 : null;
 
             return [
-                'post_id'       => $post->post_id,
-                'caption'       => $post->caption,
-                'media_url'     => $this->normalizeMediaUrl($post->media_url),
-                'is_video'      => $isVideo ? 1 : 0,
+                'post_id' => $post->post_id,
+                'caption' => $post->caption,
+                'media_url' => $this->normalizeMediaUrl($post->media_url),
+                'is_video' => $isVideo ? 1 : 0,
                 'thumbnail_url' => $thumbnail,
-                'created_at'    => $post->created_at,
+                'created_at' => $post->created_at,
             ];
         });
 
         $pagination = [
-            'current_page'  => $paginatedPosts->currentPage(),
-            'last_page'     => $paginatedPosts->lastPage(),
-            'per_page'      => $paginatedPosts->perPage(),
-            'total'         => $paginatedPosts->total(),
+            'current_page' => $paginatedPosts->currentPage(),
+            'last_page' => $paginatedPosts->lastPage(),
+            'per_page' => $paginatedPosts->perPage(),
+            'total' => $paginatedPosts->total(),
             'next_page_url' => $paginatedPosts->nextPageUrl(),
         ];
 
         return response()->json([
-            'user_id'             => $user->user_id,
-            'username'            => $user->username,
-            'full_name'           => $user->full_name,
-            'bio'                 => $user->bio,
-            'email'               => $user->email,
-            'email_verified'      => $user->hasVerifiedEmail(),
+            'user_id' => $user->user_id,
+            'username' => $user->username,
+            'full_name' => $user->full_name,
+            'bio' => $user->bio,
+            'email' => $user->email,
+            'email_verified' => $user->hasVerifiedEmail(),
             'profile_picture_url' => $user->profile_picture_url,
-            'banner_url'          => $user->banner_url,
-            'is_verified'         => $user->is_verified,
-            'role'                => $user->role,
-            'is_private'          => $user->is_private,
-            'followers_count'     => $user->followers_count,
-            'following_count'     => $user->following_count,
-            'posts_count'         => $user->posts_count,
-            'recent_posts'        => $recentPosts,
-            'pagination'          => $pagination,
+            'banner_url' => $user->banner_url,
+            'is_verified' => $user->is_verified,
+            'role' => $user->role,
+            'is_private' => $user->is_private,
+            'followers_count' => $user->followers_count,
+            'following_count' => $user->following_count,
+            'posts_count' => $user->posts_count,
+            'recent_posts' => $recentPosts,
+            'pagination' => $pagination,
         ]);
     }
 
@@ -162,25 +183,29 @@ class ProfileController extends Controller
     {
         $username = $request->input('username');
         $fullName = $request->input('full_name');
-        $perPage  = (int) $request->input('per_page', 10);
+        $perPage = (int) $request->input('per_page', 10);
 
-        if (!$username && !$fullName) {
+        if (! $username && ! $fullName) {
             return response()->json(['message' => 'Parameter username atau full_name diperlukan.'], 400);
         }
 
         $users = User::query()
             ->where(function ($q) use ($username, $fullName) {
-                if ($username) $q->where('username', 'like', "%{$username}%");
-                if ($fullName) $q->orWhere('full_name', 'like', "%{$fullName}%");
+                if ($username) {
+                    $q->where('username', 'like', "%{$username}%");
+                }
+                if ($fullName) {
+                    $q->orWhere('full_name', 'like', "%{$fullName}%");
+                }
             })
             // Exclude the current user from their own search results.
-            ->when($request->user(), fn($q) => $q->where('user_id', '!=', $request->user()->user_id))
+            ->when($request->user(), fn ($q) => $q->where('user_id', '!=', $request->user()->user_id))
             ->select('user_id', 'username', 'full_name', 'is_verified', 'profile_picture_url')
             ->paginate($perPage)
             ->appends([
-                'username'  => $username,
+                'username' => $username,
                 'full_name' => $fullName,
-                'per_page'  => $perPage,
+                'per_page' => $perPage,
             ]);
 
         if ($users->isEmpty()) {
@@ -194,7 +219,7 @@ class ProfileController extends Controller
     public function mutuals(Request $request)
     {
         $authUser = Auth::user();
-        if (!$authUser) {
+        if (! $authUser) {
             return response()->json(['message' => 'Unauthorized'], 401);
         }
 
@@ -202,7 +227,7 @@ class ProfileController extends Controller
 
         // ambil id following & followers
         $followingIds = $authUser->following()->pluck('users.user_id')->toArray();
-        $followerIds  = $authUser->followers()->pluck('users.user_id')->toArray();
+        $followerIds = $authUser->followers()->pluck('users.user_id')->toArray();
 
         $mutualIds = array_values(array_intersect($followingIds, $followerIds));
 
@@ -224,7 +249,7 @@ class ProfileController extends Controller
      */
     private function generateThumbnailUrl($mediaUrl, $post = null)
     {
-        if ($post && !empty($post->thumbnail_url)) {
+        if ($post && ! empty($post->thumbnail_url)) {
             return $this->normalizeMediaUrl($post->thumbnail_url);
         }
 
@@ -233,9 +258,9 @@ class ProfileController extends Controller
 
         $candidates = [
             $basename,
-            $nameOnly . '.jpg',
-            $nameOnly . '.jpeg',
-            $nameOnly . '.png',
+            $nameOnly.'.jpg',
+            $nameOnly.'.jpeg',
+            $nameOnly.'.png',
         ];
 
         foreach ($candidates as $candidate) {
@@ -253,7 +278,7 @@ class ProfileController extends Controller
      */
     private function normalizeMediaUrl($mediaUrl)
     {
-        if (!$mediaUrl) {
+        if (! $mediaUrl) {
             return null;
         }
 
@@ -268,6 +293,7 @@ class ProfileController extends Controller
         if (strpos($mediaUrl, 'storage/app/public') !== false) {
             $parts = explode('storage/app/public', $mediaUrl);
             $rel = ltrim($parts[1], '/\\');
+
             return Storage::disk($this->mediaDisk())->url($rel);
         }
 
@@ -283,6 +309,7 @@ class ProfileController extends Controller
                     return Storage::disk($this->mediaDisk())->url($p);
                 }
             }
+
             return Storage::disk($this->mediaDisk())->url("uploads/posts/{$basename}");
         }
 

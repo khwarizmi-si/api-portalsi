@@ -4,8 +4,8 @@ namespace App\Http\Controllers;
 
 use App\Models\Portfolio;
 use Illuminate\Http\Request;
-use Illuminate\Support\Facades\Storage;
 use Illuminate\Support\Facades\Auth;
+use Illuminate\Support\Facades\Storage;
 use Illuminate\Support\Facades\Validator;
 
 class PortfolioController extends Controller
@@ -18,17 +18,19 @@ class PortfolioController extends Controller
     private function storagePathFromUrl(string $url): string
     {
         $path = ltrim(parse_url($url, PHP_URL_PATH) ?? $url, '/');
+
         return preg_replace('#^storage/#', '', $path);
     }
+
     // 🔹 Tampilkan semua portfolio dengan filter & search
     public function index(Request $request)
     {
-        $query = Portfolio::with('user');
+        $query = Portfolio::with(['user', 'creator']);
 
         // 🔹 Filter aspect → random jika filter digunakan
         if ($request->has('aspect')) {
             $query->where('aspect', $request->aspect)
-                  ->inRandomOrder();
+                ->inRandomOrder();
         }
 
         // 🔹 Filter user_id
@@ -46,7 +48,7 @@ class PortfolioController extends Controller
             $search = $request->search;
             $query->where(function ($q) use ($search) {
                 $q->where('title', 'like', "%$search%")
-                  ->orWhere('description', 'like', "%$search%");
+                    ->orWhere('description', 'like', "%$search%");
             });
         }
 
@@ -56,10 +58,10 @@ class PortfolioController extends Controller
 
         if ($sortBy === 'user_name') {
             $query->join('users', 'users.user_id', '=', 'portfolios.user_id')
-                  ->orderBy('users.name', $sortDir)
-                  ->select('portfolios.*');
+                ->orderBy('users.name', $sortDir)
+                ->select('portfolios.*');
         } else {
-            if (!$request->has('aspect')) {
+            if (! $request->has('aspect')) {
                 $query->orderBy($sortBy, $sortDir);
             }
         }
@@ -71,6 +73,13 @@ class PortfolioController extends Controller
                 'id' => $item->id,
                 'user_id' => $item->user_id,
                 'user_name' => $item->user->username ?? null,
+                'signed_by' => $item->creator ? [
+                    'user_id' => $item->creator->user_id,
+                    'username' => $item->creator->username,
+                    'full_name' => $item->creator->full_name,
+                    'role' => $item->creator->role,
+                    'is_verified' => (bool) $item->creator->is_verified,
+                ] : null,
                 'aspect' => $item->aspect,
                 'title' => $item->title,
                 'description' => $item->description,
@@ -81,7 +90,7 @@ class PortfolioController extends Controller
         });
 
         return response()->json([
-            'portfolios' => $result
+            'portfolios' => $result,
         ]);
     }
 
@@ -96,7 +105,7 @@ class PortfolioController extends Controller
             'title' => 'required|string|max:255',
             'description' => 'nullable|string',
             'media' => 'nullable|file|mimes:jpg,jpeg,png,pdf|max:51200',
-            'year' => 'nullable|integer|min:2000|max:' . date('Y'),
+            'year' => 'nullable|integer|min:2000|max:'.date('Y'),
         ]);
 
         if ($validator->fails()) {
@@ -112,6 +121,7 @@ class PortfolioController extends Controller
 
         $portfolio = Portfolio::create([
             'user_id' => $request->user_id,
+            'created_by_user_id' => Auth::id(),
             'aspect' => $request->aspect,
             'title' => $request->title,
             'description' => $request->description,
@@ -121,7 +131,7 @@ class PortfolioController extends Controller
 
         return response()->json([
             'message' => 'Portfolio berhasil ditambahkan.',
-            'portfolio' => $portfolio
+            'portfolio' => $portfolio,
         ]);
     }
 
@@ -135,7 +145,7 @@ class PortfolioController extends Controller
             'title' => 'nullable|string|max:255',
             'description' => 'nullable|string',
             'media' => 'nullable|file|mimes:jpg,jpeg,png,pdf|max:51200',
-            'year' => 'nullable|integer|min:2000|max:' . date('Y'),
+            'year' => 'nullable|integer|min:2000|max:'.date('Y'),
         ]);
 
         if ($validator->fails()) {
@@ -158,7 +168,7 @@ class PortfolioController extends Controller
 
         return response()->json([
             'message' => 'Portfolio berhasil diperbarui.',
-            'portfolio' => $portfolio
+            'portfolio' => $portfolio,
         ]);
     }
 
@@ -176,15 +186,15 @@ class PortfolioController extends Controller
         $portfolio->delete();
 
         return response()->json([
-            'message' => 'Portfolio berhasil dihapus.'
+            'message' => 'Portfolio berhasil dihapus.',
         ]);
     }
 
     // 🔐 Validasi role teacher/dev atau user is_verified
     protected function authorizePortfolioAccess()
     {
-        if (!Auth::check() || 
-            !(in_array(Auth::user()->role, ['teacher', 'dev']) || Auth::user()->is_verified == 1)
+        if (! Auth::check() ||
+            ! (in_array(Auth::user()->role, ['teacher', 'dev']) || Auth::user()->is_verified == 1)
         ) {
             abort(403, 'Hanya teacher, dev, atau user terverifikasi yang diizinkan.');
         }

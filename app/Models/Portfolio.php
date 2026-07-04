@@ -11,6 +11,7 @@ class Portfolio extends Model
 
     protected $fillable = [
         'user_id',
+        'created_by_user_id',
         'aspect',
         'title',
         'description',
@@ -22,5 +23,10 @@ class Portfolio extends Model
     public function user()
     {
         return $this->belongsTo(User::class, 'user_id', 'user_id');
+    }
+
+    public function creator()
+    {
+        return $this->belongsTo(User::class, 'created_by_user_id', 'user_id');
     }
 }
