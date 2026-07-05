@@ -33,8 +33,8 @@ class ProfileController extends Controller
 
         $user = User::whereRaw('LOWER(username) = ?', [strtolower($username)])
             ->withCount([
-                'followers as followers_count' => fn ($query) => $query->wherePivot('status', 'accepted'),
-                'following as following_count' => fn ($query) => $query->wherePivot('status', 'accepted'),
+                'followers as followers_count' => fn ($query) => $query->where('follows.status', 'accepted'),
+                'following as following_count' => fn ($query) => $query->where('follows.status', 'accepted'),
                 'posts',
             ])
             ->firstOrFail();
@@ -121,8 +121,8 @@ class ProfileController extends Controller
 
         $user = User::where('user_id', $authUser->user_id)
             ->withCount([
-                'followers as followers_count' => fn ($query) => $query->wherePivot('status', 'accepted'),
-                'following as following_count' => fn ($query) => $query->wherePivot('status', 'accepted'),
+                'followers as followers_count' => fn ($query) => $query->where('follows.status', 'accepted'),
+                'following as following_count' => fn ($query) => $query->where('follows.status', 'accepted'),
                 'posts',
             ])
             ->with('followers')
