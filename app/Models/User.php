@@ -45,6 +45,7 @@ class User extends Authenticatable implements MustVerifyEmail
         'is_online',         // online status
         'last_seen',         // last seen timestamp
         'last_activity',     // last activity timestamp
+        'notification_preferences', // preferensi notifikasi in-app
     ];
 
     /**
@@ -65,7 +66,70 @@ class User extends Authenticatable implements MustVerifyEmail
         'is_online' => 'boolean',
         'last_seen' => 'datetime',
         'last_activity' => 'datetime',
+        'notification_preferences' => 'array',
     ];
+
+    /**
+     * Default preferensi notifikasi in-app.
+     *   new_post_reminders: all | mutual | off
+     *   likes, comments, mentions, follows: bool
+     */
+    public static function defaultNotificationPreferences(): array
+    {
+        return [
+            'new_post_reminders' => 'all',
+            'likes' => true,
+            'comments' => true,
+            'mentions' => true,
+            'follows' => true,
+        ];
+    }
+
+    /** Preferensi lengkap (default digabung dengan yang tersimpan). */
+    public function notificationPreferences(): array
+    {
+        return array_merge(self::defaultNotificationPreferences(), $this->notification_preferences ?? []);
+    }
+
+    /**
+     * Apakah user ini ingin menerima notifikasi in-app untuk tipe tertentu.
+     * $context boleh berisi 'related_user_id' (pelaku) untuk aturan "mutual".
+     */
+    public function wantsNotificationType(?string $type, array $context = []): bool
+    {
+        $prefs = $this->notificationPreferences();
+
+        switch ($type) {
+            case 'new_post':
+                $mode = $prefs['new_post_reminders'] ?? 'all';
+                if ($mode === 'off') {
+                    return false;
+                }
+                if ($mode === 'mutual') {
+                    $authorId = $context['related_user_id'] ?? null;
+                    // "mutual" = si pembuat postingan juga mengikuti saya (accepted).
+                    return $authorId
+                        ? $this->followers()->where('users.user_id', $authorId)
+                            ->wherePivot('status', 'accepted')->exists()
+                        : true;
+                }
+                return true;
+            case 'like':
+                return (bool) ($prefs['likes'] ?? true);
+            case 'comment':
+            case 'reply':
+                return (bool) ($prefs['comments'] ?? true);
+            case 'mention':
+            case 'bio_mention':
+            case 'story_mention':
+                return (bool) ($prefs['mentions'] ?? true);
+            case 'follow':
+                return (bool) ($prefs['follows'] ?? true);
+            // follow_request & follow_accepted selalu tampil (penting/aktvariabel), tak digate.
+            default:
+                return true;
+        }
+    }
 
     /**
      * Agar Laravel pakai "password_hash" untuk login

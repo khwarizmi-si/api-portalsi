@@ -412,6 +412,8 @@ Route::middleware(['auth:sanctum'])->group(function () {
     Route::get('/stories/my', [StoryController::class, 'myStories']);
 
     Route::get('/notifications', [NotificationController::class, 'index']);
+    Route::get('/notifications/preferences', [NotificationController::class, 'preferences']);
+    Route::put('/notifications/preferences', [NotificationController::class, 'updatePreferences']);
     Route::get('/notifications/unread-count', [NotificationController::class, 'unreadCount']);
     Route::patch('/notifications/{id}/read', [NotificationController::class, 'markAsRead']);
     Route::patch('/notifications/read/all', [NotificationController::class, 'markAllAsRead']);

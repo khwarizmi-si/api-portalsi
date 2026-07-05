@@ -60,15 +60,16 @@ class FollowController extends Controller
             }
 
             if ($allowNotify) {
-                $notification = Notification::create([
-                    'recipient_id' => $userToFollow->user_id,
+                $notification = Notification::createFor($userToFollow->user_id, [
                     'type' => 'follow',
                     'related_user_id' => $authUser->user_id,
                     'related_post_id' => null,
-                    'created_at' => now(),
                     'is_read' => false,
                 ]);
-                broadcast(new NotificationCreated($notification));
+                if ($notification) {
+                    broadcast(new NotificationCreated($notification));
+                }
+                // Event Followed (update UI realtime) tetap dikirim, tidak tergantung preferensi.
                 broadcast(new Followed($authUser, $userToFollow))->toOthers();
             }
 

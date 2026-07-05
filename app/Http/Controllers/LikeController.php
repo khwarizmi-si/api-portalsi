@@ -72,18 +72,17 @@ class LikeController extends Controller
                 }
 
                 if ($allowNotify) {
-                    $notification = Notification::create([
-                        'recipient_id' => $post->user_id,
+                    $notification = Notification::createFor($post->user_id, [
                         'type' => 'like',
                         'related_user_id' => $user_id,
                         'related_post_id' => $post_id,
-                        'created_at' => now(),
                         'is_read' => false,
                     ]);
 
-                    // Broadcast notification event
-                    // This is for real-time updates to the notification bell
-                    broadcast(new NotificationCreated($notification));
+                    // Broadcast (real-time bell) hanya bila tidak ditekan preferensi penerima.
+                    if ($notification) {
+                        broadcast(new NotificationCreated($notification));
+                    }
                 }
             }
 

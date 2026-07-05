@@ -548,15 +548,15 @@ class PostController extends Controller
                         'post_id' => $post->post_id,
                         'mentioned_user_id' => $mentionedUser->user_id,
                     ]);
-                    $notification = Notification::create([
-                        'recipient_id' => $mentionedUser->user_id,
+                    $notification = Notification::createFor($mentionedUser->user_id, [
                         'type' => 'mention',
                         'related_user_id' => Auth::id(),
                         'related_post_id' => $post->post_id,
-                        'created_at' => now(),
                         'is_read' => false,
                     ]);
-                    broadcast(new NotificationCreated($notification));
+                    if ($notification) {
+                        broadcast(new NotificationCreated($notification));
+                    }
                 }
             }
         }
@@ -571,13 +571,15 @@ class PostController extends Controller
                 ->count();
 
             if ($postCountSinceFollow <= 2) {
-                $notification = Notification::create([
-                    'recipient_id' => $follower->user_id,
+                // Hormati preferensi penerima: "pengingat postingan baru dari..." (all/mutual/off).
+                $notification = Notification::createFor($follower->user_id, [
                     'type' => 'new_post',
                     'related_user_id' => $author->user_id,
                     'related_post_id' => $post->post_id,
                 ]);
-                broadcast(new NotificationCreated($notification));
+                if ($notification) {
+                    broadcast(new NotificationCreated($notification));
+                }
             }
         }
 

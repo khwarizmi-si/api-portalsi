@@ -9,6 +9,36 @@ use Illuminate\Support\Facades\Auth;
 
 class NotificationController extends Controller
 {
+    // GET /notifications/preferences — preferensi notifikasi in-app user login.
+    public function preferences(Request $request)
+    {
+        return response()->json([
+            'preferences' => Auth::user()->notificationPreferences(),
+        ]);
+    }
+
+    // PUT /notifications/preferences — simpan preferensi notifikasi in-app.
+    public function updatePreferences(Request $request)
+    {
+        $user = Auth::user();
+        $validated = $request->validate([
+            'new_post_reminders' => ['sometimes', 'in:all,mutual,off'],
+            'likes' => ['sometimes', 'boolean'],
+            'comments' => ['sometimes', 'boolean'],
+            'mentions' => ['sometimes', 'boolean'],
+            'follows' => ['sometimes', 'boolean'],
+        ]);
+
+        $prefs = array_merge($user->notificationPreferences(), $validated);
+        $user->notification_preferences = $prefs;
+        $user->save();
+
+        return response()->json([
+            'message' => 'Preferensi notifikasi disimpan.',
+            'preferences' => $prefs,
+        ]);
+    }
+
     // 🔔 GET /notifications - Tampilkan semua notifikasi user login
     public function index(Request $request)
     {

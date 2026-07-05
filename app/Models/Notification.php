@@ -46,6 +46,28 @@ class Notification extends Model
         'created_at' => 'datetime',
     ];
 
+    /**
+     * Buat notifikasi HANYA bila penerima mengizinkan tipe tsb (preferensi in-app).
+     * Mengembalikan model, atau null bila ditekan oleh preferensi / penerima tak ada.
+     * Pemanggil harus cek null sebelum broadcast.
+     */
+    public static function createFor(int $recipientId, array $attributes): ?self
+    {
+        $recipient = User::find($recipientId);
+        if (! $recipient) {
+            return null;
+        }
+        if (! $recipient->wantsNotificationType($attributes['type'] ?? null, $attributes)) {
+            return null;
+        }
+        $attributes['recipient_id'] = $recipientId;
+        if (! array_key_exists('created_at', $attributes)) {
+            $attributes['created_at'] = now();
+        }
+
+        return static::create($attributes);
+    }
+
     /*
     |--------------------------------------------------------------------------
     | Relationships
