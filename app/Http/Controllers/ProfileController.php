@@ -3,6 +3,7 @@
 namespace App\Http\Controllers;
 
 use App\Models\User;
+use App\Models\Story;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\Storage;
@@ -80,6 +81,11 @@ class ProfileController extends Controller
             ];
         }
 
+        // Story ring: hanya bila punya story aktif DAN boleh dilihat (publik / diri / follower accepted).
+        $hasStory = $canViewPosts && Story::where('user_id', $user->user_id)
+            ->where('expires_at', '>', now())
+            ->exists();
+
         return response()->json([
             'user_id' => $user->user_id,
             'username' => $user->username,
@@ -91,6 +97,7 @@ class ProfileController extends Controller
             'is_verified' => $user->is_verified,
             'role' => $user->role,
             'is_private' => $user->is_private,
+            'has_story' => $hasStory,
             'followers_count' => $user->followers_count,
             'following_count' => $user->following_count,
             'posts_count' => $user->posts_count,

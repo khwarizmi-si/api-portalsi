@@ -289,12 +289,29 @@ class StoryController extends Controller
     {
         $authUser = Auth::user();
 
-        // 🔹 Ambil daftar user_id yang masuk feed (diri sendiri + yang diikuti)
+        // Target yang ingin dilihat storynya (boleh siapa saja, tidak harus diikuti).
+        $target = User::find($userId);
+        if (! $target) {
+            return response()->json(['message' => 'Pengguna tidak ditemukan.', 'data' => []], 404);
+        }
+
+        // Privasi: akun privat hanya boleh dilihat diri sendiri atau follower yang sudah diterima.
+        $isSelf = $authUser->user_id == $target->user_id;
+        $isAcceptedFollower = $authUser->following()
+            ->where('users.user_id', $target->user_id)
+            ->wherePivot('status', 'accepted')
+            ->exists();
+        if ($target->is_private && ! $isSelf && ! $isAcceptedFollower) {
+            return response()->json([
+                'message' => 'Akun ini privat. Ikuti dan tunggu persetujuan untuk melihat ceritanya.',
+                'data' => [],
+            ], 403);
+        }
+
+        // Konteks urutan feed (diri sendiri + yang diikuti accepted) untuk navigasi prev/next.
         $followedIds = $authUser->following()->wherePivot('status', 'accepted')->pluck('users.user_id')->toArray();
         $allIds = array_merge([$authUser->user_id], $followedIds);
-
-        // 🔹 Ambil daftar user yang punya story aktif (urutkan seperti feed)
-        $usersWithStories = Story::with('user:user_id,username,profile_picture_url')
+        $usersWithStories = Story::query()
             ->whereIn('user_id', $allIds)
             ->where('expires_at', '>', now())
             ->selectRaw('user_id, MAX(created_at) as latest_story_time')
@@ -303,30 +320,21 @@ class StoryController extends Controller
             ->get()
             ->values();
 
-        if ($usersWithStories->isEmpty()) {
+        // Posisi target dalam feed. Kalau tidak diikuti, view berdiri sendiri (tanpa prev/next).
+        $currentIndex = $usersWithStories->search(fn ($u) => $u->user_id == $target->user_id);
+
+        // Ambil story aktif milik target.
+        $stories = Story::where('user_id', $target->user_id)
+            ->where('expires_at', '>', now())
+            ->orderBy('created_at', 'asc')
+            ->get();
+
+        if ($stories->isEmpty()) {
             return response()->json([
                 'message' => 'Tidak ada story aktif.',
                 'data' => [],
             ], 404);
         }
-
-        // 🔹 Cari posisi user sekarang
-        $currentIndex = $usersWithStories->search(fn ($u) => $u->user_id == $userId);
-
-        if ($currentIndex === false) {
-            return response()->json([
-                'message' => 'User tidak ditemukan di feed.',
-                'data' => [],
-            ], 404);
-        }
-
-        $currentUser = $usersWithStories->get($currentIndex);
-
-        // 🔹 Ambil story milik user saat ini
-        $stories = Story::where('user_id', $currentUser->user_id)
-            ->where('expires_at', '>', now())
-            ->orderBy('created_at', 'asc')
-            ->get();
 
         $formattedStories = $stories->map(function ($story) use ($authUser) {
             $alreadyViewed = \DB::table('story_views')
@@ -355,19 +363,36 @@ class StoryController extends Controller
             ];
         });
 
-        // 🔹 Perbaiki urutan navigasi
-        $nextUser = $currentIndex > 0 ? $usersWithStories->get($currentIndex - 1) : null; // ✅ dibalik
-        $prevUser = $usersWithStories->get($currentIndex + 1); // ✅ dibalik
+        // Urutan navigasi prev/next: pakai urutan rail (?order=) bila ada agar linear dan
+        // BERHENTI di ujung (tidak loop kembali ke awal). Kalau tidak ada, pakai urutan feed.
+        $orderedIds = collect(explode(',', (string) $request->query('order', '')))
+            ->map(fn ($v) => (int) trim($v))
+            ->filter(fn ($v) => $v > 0)
+            ->values();
+        $navList = $orderedIds->isNotEmpty() ? $orderedIds : $usersWithStories->pluck('user_id');
+        // Sisakan hanya user yang masih punya story aktif supaya navigasi tidak mendarat di 404.
+        $activeIds = $navList->isNotEmpty()
+            ? Story::whereIn('user_id', $navList->all())
+                ->where('expires_at', '>', now())
+                ->distinct()->pluck('user_id')->flip()
+            : collect();
+        $navList = $navList->filter(fn ($id) => $activeIds->has($id))->values();
+        $navIndex = $navList->search($target->user_id);
+        $prevUserId = ($navIndex !== false && $navIndex > 0) ? $navList->get($navIndex - 1) : null;
+        $nextUserId = ($navIndex !== false && $navIndex < $navList->count() - 1) ? $navList->get($navIndex + 1) : null;
 
         return response()->json([
             'current_user' => [
-                'user_id' => $currentUser->user->user_id,
-                'username' => $currentUser->user->username,
-                'profile_picture_url' => $currentUser->user->profile_picture_url,
+                'user_id' => $target->user_id,
+                'username' => $target->username,
+                'full_name' => $target->full_name,
+                'is_verified' => (bool) $target->is_verified,
+                'role' => $target->role,
+                'profile_picture_url' => $target->profile_picture_url,
             ],
             'stories' => $formattedStories,
-            'prev_user_id' => $prevUser ? $prevUser->user_id : null,
-            'next_user_id' => $nextUser ? $nextUser->user_id : null,
+            'prev_user_id' => $prevUserId,
+            'next_user_id' => $nextUserId,
         ]);
     }
 

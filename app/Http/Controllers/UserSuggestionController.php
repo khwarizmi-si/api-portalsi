@@ -5,6 +5,7 @@ namespace App\Http\Controllers;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
 use App\Models\User;
+use App\Models\Story;
 use DB;
 
 class UserSuggestionController extends Controller
@@ -31,7 +32,7 @@ class UserSuggestionController extends Controller
 
             // cek dulu apakah ada userIds, kalau kosong jangan pakai FIELD()
             $users = $userIds->isNotEmpty()
-                ? User::select('user_id', 'username', 'full_name', 'profile_picture_url', 'is_verified')
+                ? User::select('user_id', 'username', 'full_name', 'profile_picture_url', 'is_verified', 'is_private')
                     ->whereIn('user_id', $userIds)
                     ->orderByRaw("FIELD(user_id, " . implode(',', $userIds->toArray()) . ")")
                     ->get()
@@ -44,7 +45,7 @@ class UserSuggestionController extends Controller
         if ($suggestions->count() < 10) {
             $need = 10 - $suggestions->count();
 
-            $randomUsers = User::select('user_id', 'username', 'full_name', 'profile_picture_url', 'is_verified')
+            $randomUsers = User::select('user_id', 'username', 'full_name', 'profile_picture_url', 'is_verified', 'is_private')
                 ->where('user_id', '!=', $authUser->user_id)
                 ->whereNotIn('user_id', $followingIds)
                 ->whereNotIn('user_id', $suggestions->pluck('user_id'))
@@ -55,9 +56,21 @@ class UserSuggestionController extends Controller
             $suggestions = $suggestions->merge($randomUsers);
         }
 
-        // pastikan is_verified jadi boolean true/false, bukan 1/0
-        $suggestions = $suggestions->map(function ($user) {
+        // Tandai user yang punya story aktif (untuk ring story di kartu "temukan teman").
+        // Hanya akun publik: akun privat butuh follow accepted, jadi tak diberi ring di sini.
+        $suggestionIds = $suggestions->pluck('user_id')->all();
+        $storyUserIds = ! empty($suggestionIds)
+            ? Story::whereIn('user_id', $suggestionIds)
+                ->where('expires_at', '>', now())
+                ->distinct()
+                ->pluck('user_id')
+                ->flip()
+            : collect();
+
+        $suggestions = $suggestions->map(function ($user) use ($storyUserIds) {
             $user->is_verified = (bool) $user->is_verified;
+            $user->is_private = (bool) $user->is_private;
+            $user->has_story = $storyUserIds->has($user->user_id) && ! $user->is_private;
             return $user;
         });
 
