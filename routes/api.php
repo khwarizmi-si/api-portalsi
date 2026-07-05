@@ -392,7 +392,9 @@ Route::middleware(['auth:sanctum'])->group(function () {
     });
 
     Route::get('/user', [ProfileController::class, 'me']);
-    Route::get('/users/{id}', [ProfileController::class, 'showById']);
+    // WAJIB sebelum /users/{id} — kalau tidak, "search" ketangkap sebagai {id} → 404.
+    Route::get('/users/search', [ProfileController::class, 'search']);
+    Route::get('/users/{id}', [ProfileController::class, 'showById'])->whereNumber('id');
     Route::get('/account/is-private', [AccountController::class, 'checkPrivateStatus']);
     Route::get('/mutuals', [ProfileController::class, 'mutuals']);
 
@@ -402,9 +404,8 @@ Route::middleware(['auth:sanctum'])->group(function () {
     Route::get('/posts/{post_id}/likes', [LikeController::class, 'index']);
     Route::get('/posts/{post_id}/comments', [CommentController::class, 'getCommentsByPost']);
 
-    Route::get('/users/{id}/followers', [FollowController::class, 'followers']);
-    Route::get('/users/{id}/following', [FollowController::class, 'following']);
-    Route::get('/users/search', [ProfileController::class, 'search']);
+    Route::get('/users/{id}/followers', [FollowController::class, 'followers'])->whereNumber('id');
+    Route::get('/users/{id}/following', [FollowController::class, 'following'])->whereNumber('id');
 
     Route::get('/stories/feed', [StoryController::class, 'feed']);
     Route::get('/stories/feed/user/{userId}', [StoryController::class, 'feedUser']);
