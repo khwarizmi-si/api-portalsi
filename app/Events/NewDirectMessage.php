@@ -5,11 +5,11 @@ namespace App\Events;
 use App\Models\DirectMessage;
 use App\Models\User; // <-- 1. TAMBAHKAN IMPORT USER
 use Illuminate\Broadcasting\PrivateChannel;
-use Illuminate\Contracts\Broadcasting\ShouldBroadcastNow;
+use Illuminate\Contracts\Broadcasting\ShouldBroadcast;
 use Illuminate\Foundation\Events\Dispatchable;
 use Illuminate\Queue\SerializesModels;
 
-class NewDirectMessage implements ShouldBroadcastNow
+class NewDirectMessage implements ShouldBroadcast
 {
     use Dispatchable, SerializesModels;
 

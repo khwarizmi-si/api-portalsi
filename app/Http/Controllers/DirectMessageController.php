@@ -14,7 +14,6 @@ use App\Models\Group;
 use App\Models\GroupMember;
 use App\Models\GroupMessage;
 use App\Models\User;
-use App\Services\FirebaseService;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\DB;
@@ -104,26 +103,6 @@ class DirectMessageController extends Controller
         $dataForSender = $conversationData;
         $dataForSender['recipient_id'] = $sender->user_id;
         broadcast(new ChatListUpdated($dataForSender));
-
-        try {
-            // Cek apakah receiver offline (contoh logika sederhana)
-            if (is_null($receiver->last_seen) || $receiver->last_seen < now()->subMinutes(3)) {
-                $firebase = new FirebaseService;
-                $firebase->sendToUser(
-                    $receiver->user_id,
-                    "Pesan baru dari {$sender->username}",
-                    $message->content ?: '📎 Mengirim media',
-                    [
-                        'type' => 'dm',
-                        'sender_id' => (string) $sender->user_id,
-                        'receiver_id' => (string) $receiver->user_id,
-                        'message_id' => (string) $message->message_id,
-                    ]
-                );
-            }
-        } catch (\Exception $e) {
-            \Log::error('Gagal kirim FCM: '.$e->getMessage());
-        }
 
         return response()->json([
             'message' => 'Pesan berhasil dikirim.',

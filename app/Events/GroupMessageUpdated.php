@@ -4,11 +4,11 @@ namespace App\Events;
 
 use App\Models\GroupMessage;
 use Illuminate\Broadcasting\PrivateChannel;
-use Illuminate\Contracts\Broadcasting\ShouldBroadcastNow;
+use Illuminate\Contracts\Broadcasting\ShouldBroadcast;
 use Illuminate\Foundation\Events\Dispatchable;
 use Illuminate\Queue\SerializesModels;
 
-class GroupMessageUpdated implements ShouldBroadcastNow
+class GroupMessageUpdated implements ShouldBroadcast
 {
     use Dispatchable, SerializesModels;
 
