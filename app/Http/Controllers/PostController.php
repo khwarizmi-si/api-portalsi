@@ -324,7 +324,11 @@ class PostController extends Controller
 
         $sort = $request->input('sort', 'random');
         if ($sort === 'popular') {
-            $query->orderByDesc('likes_count');
+            // Acak-populer: postingan ber-like tinggi lebih mungkin di atas, tapi urutannya
+            // bervariasi (tidak selalu 1 postingan yang sama terus di puncak). Seed di-bucket
+            // per 30 menit agar pagination (infinite scroll) tetap konsisten dalam satu sesi.
+            $seed = (int) (($authUser->user_id ?? 0) + floor(time() / 1800));
+            $query->orderByRaw('RAND(?) * (likes_count + 1) DESC', [$seed]);
         } elseif ($sort === 'newest') {
             $query->orderByDesc('created_at');
         } else {
