@@ -6,7 +6,9 @@ use App\Models\User;
 use App\Models\Story;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
+use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Storage;
+use Throwable;
 
 class ProfileController extends Controller
 {
@@ -57,19 +59,57 @@ class ProfileController extends Controller
             $paginatedPosts = $postsQuery->paginate($perPage, ['*'], 'page', $page);
 
             $recentPosts = $paginatedPosts->getCollection()->map(function ($post) {
-                $isVideo = preg_match('/\.(mp4|mov|avi|mkv|webm|3gp)$/i', $post->media_url);
-                $thumbnail = $isVideo
-                    ? $this->generateThumbnailUrl($post->media_url, $post)
-                    : null;
+                // ============ PATCH: Try-catch per post + null safety ============
+                try {
+                    // Safety: pastikan media_url ada dan bertipe string
+                    $mediaUrl = $post->media_url;
+                    
+                    if (empty($mediaUrl) || !is_string($mediaUrl)) {
+                        Log::warning('ProfileController: Invalid media_url', [
+                            'post_id' => $post->post_id ?? 'unknown',
+                            'type' => gettype($mediaUrl),
+                            'value' => var_export($mediaUrl, true),
+                        ]);
+                        
+                        return [
+                            'post_id' => $post->post_id,
+                            'caption' => $post->caption ?? '',
+                            'media_url' => null,
+                            'is_video' => 0,
+                            'thumbnail_url' => null,
+                            'created_at' => $post->created_at,
+                        ];
+                    }
 
-                return [
-                    'post_id' => $post->post_id,
-                    'caption' => $post->caption,
-                    'media_url' => $this->normalizeMediaUrl($post->media_url),
-                    'is_video' => $isVideo ? 1 : 0,
-                    'thumbnail_url' => $thumbnail,
-                    'created_at' => $post->created_at,
-                ];
+                    $isVideo = preg_match('/\.(mp4|mov|avi|mkv|webm|3gp)$/i', $mediaUrl);
+                    $thumbnail = $isVideo
+                        ? $this->generateThumbnailUrl($mediaUrl, $post)
+                        : null;
+
+                    return [
+                        'post_id' => $post->post_id,
+                        'caption' => $post->caption,
+                        'media_url' => $this->normalizeMediaUrl($mediaUrl),
+                        'is_video' => $isVideo ? 1 : 0,
+                        'thumbnail_url' => $thumbnail,
+                        'created_at' => $post->created_at,
+                    ];
+                } catch (Throwable $e) {
+                    Log::error('ProfileController: Failed to map post in show()', [
+                        'post_id' => $post->post_id ?? 'unknown',
+                        'error' => $e->getMessage(),
+                        'class' => get_class($e),
+                    ]);
+                    
+                    return [
+                        'post_id' => $post->post_id ?? null,
+                        'caption' => 'Error loading post',
+                        'media_url' => null,
+                        'is_video' => 0,
+                        'thumbnail_url' => null,
+                        'created_at' => $post->created_at ?? now(),
+                    ];
+                }
             });
 
             $pagination = [
@@ -142,19 +182,57 @@ class ProfileController extends Controller
         $paginatedPosts = $postsQuery->paginate($perPage, ['*'], 'page', $page);
 
         $recentPosts = $paginatedPosts->getCollection()->map(function ($post) {
-            $isVideo = preg_match('/\.(mp4|mov|avi|mkv|webm|3gp)$/i', $post->media_url);
-            $thumbnail = $isVideo
-                ? $this->generateThumbnailUrl($post->media_url, $post)
-                : null;
+            // ============ PATCH: Try-catch per post + null safety ============
+            try {
+                // Safety: pastikan media_url ada dan bertipe string
+                $mediaUrl = $post->media_url;
+                
+                if (empty($mediaUrl) || !is_string($mediaUrl)) {
+                    Log::warning('ProfileController: Invalid media_url in me()', [
+                        'post_id' => $post->post_id ?? 'unknown',
+                        'type' => gettype($mediaUrl),
+                        'value' => var_export($mediaUrl, true),
+                    ]);
+                    
+                    return [
+                        'post_id' => $post->post_id,
+                        'caption' => $post->caption ?? '',
+                        'media_url' => null,
+                        'is_video' => 0,
+                        'thumbnail_url' => null,
+                        'created_at' => $post->created_at,
+                    ];
+                }
 
-            return [
-                'post_id' => $post->post_id,
-                'caption' => $post->caption,
-                'media_url' => $this->normalizeMediaUrl($post->media_url),
-                'is_video' => $isVideo ? 1 : 0,
-                'thumbnail_url' => $thumbnail,
-                'created_at' => $post->created_at,
-            ];
+                $isVideo = preg_match('/\.(mp4|mov|avi|mkv|webm|3gp)$/i', $mediaUrl);
+                $thumbnail = $isVideo
+                    ? $this->generateThumbnailUrl($mediaUrl, $post)
+                    : null;
+
+                return [
+                    'post_id' => $post->post_id,
+                    'caption' => $post->caption,
+                    'media_url' => $this->normalizeMediaUrl($mediaUrl),
+                    'is_video' => $isVideo ? 1 : 0,
+                    'thumbnail_url' => $thumbnail,
+                    'created_at' => $post->created_at,
+                ];
+            } catch (Throwable $e) {
+                Log::error('ProfileController: Failed to map post in me()', [
+                    'post_id' => $post->post_id ?? 'unknown',
+                    'error' => $e->getMessage(),
+                    'class' => get_class($e),
+                ]);
+                
+                return [
+                    'post_id' => $post->post_id ?? null,
+                    'caption' => 'Error loading post',
+                    'media_url' => null,
+                    'is_video' => 0,
+                    'thumbnail_url' => null,
+                    'created_at' => $post->created_at ?? now(),
+                ];
+            }
         });
 
         $pagination = [
@@ -251,80 +329,73 @@ class ProfileController extends Controller
      * Generate thumbnail URL for a video post.
      * Prioritas:
      * 1) $post->thumbnail_url (jika ada)
-     * 2) Cek file di storage 'public' pada uploads/posts/thumbnails/{basename or name.jpg/png}
-     * 3) Fallback ke /storage/uploads/posts/thumbnails/{name}.jpg
+     * 2) Langsung generate URL tanpa Storage::exists()
+     * 3) Fallback ke placeholder
      */
     private function generateThumbnailUrl($mediaUrl, $post = null)
     {
-        if ($post && ! empty($post->thumbnail_url)) {
+        // ============ PATCH: Prioritaskan thumbnail_url dari database ============
+        if ($post && ! empty($post->thumbnail_url) && is_string($post->thumbnail_url)) {
             return $this->normalizeMediaUrl($post->thumbnail_url);
         }
 
+        // ============ PATCH: Safety check untuk mediaUrl ============
+        if (empty($mediaUrl) || !is_string($mediaUrl)) {
+            return asset('https://portalsi.com/icon.png');
+        }
+
+        // ============ PATCH: Langsung konstruksi URL, hapus Storage::exists() ============
         $basename = pathinfo($mediaUrl, PATHINFO_BASENAME);
         $nameOnly = pathinfo($basename, PATHINFO_FILENAME);
 
-        $candidates = [
-            $basename,
-            $nameOnly.'.jpg',
-            $nameOnly.'.jpeg',
-            $nameOnly.'.png',
-        ];
-
-        foreach ($candidates as $candidate) {
-            $p = "uploads/posts/thumbnails/{$candidate}";
-            if (Storage::disk($this->mediaDisk())->exists($p)) {
-                return Storage::disk($this->mediaDisk())->url($p);
-            }
-        }
-
-        return Storage::disk($this->mediaDisk())->url("uploads/posts/thumbnails/{$nameOnly}.jpg");
+        // Untuk video, thumbnail diasumsikan .jpg
+        return Storage::disk($this->mediaDisk())
+            ->url("uploads/posts/thumbnails/{$nameOnly}.jpg");
     }
 
     /**
      * Normalize media URL / path menjadi URL yang bisa diakses klien.
+     * 
+     * ============ PATCH: Hapus semua Storage::exists() ============
      */
     private function normalizeMediaUrl($mediaUrl)
     {
-        if (! $mediaUrl) {
+        // ============ PATCH: Null/empty safety ============
+        if (! $mediaUrl || !is_string($mediaUrl)) {
             return null;
         }
 
+        // Jika sudah full URL, return langsung
         if (preg_match('#^https?://#i', $mediaUrl)) {
             return $mediaUrl;
         }
 
+        // Jika dimulai dengan /storage/, konversi ke URL relatif
         if (strpos($mediaUrl, '/storage/') === 0) {
             return url($mediaUrl);
         }
 
+        // Jika mengandung storage/app/public, ekstrak relative path
         if (strpos($mediaUrl, 'storage/app/public') !== false) {
             $parts = explode('storage/app/public', $mediaUrl);
-            $rel = ltrim($parts[1], '/\\');
-
-            return Storage::disk($this->mediaDisk())->url($rel);
+            $rel = ltrim($parts[1] ?? '', '/\\');
+            
+            if (!empty($rel)) {
+                return Storage::disk($this->mediaDisk())->url($rel);
+            }
         }
 
+        // Jika absolute path server (Linux/Windows)
         if (strpos($mediaUrl, '/home/') === 0 || strpos($mediaUrl, 'C:\\') === 0) {
             $basename = pathinfo($mediaUrl, PATHINFO_BASENAME);
-            $tryPaths = [
-                "uploads/posts/thumbnails/{$basename}",
-                "uploads/posts/{$basename}",
-                $basename,
-            ];
-            foreach ($tryPaths as $p) {
-                if (Storage::disk($this->mediaDisk())->exists($p)) {
-                    return Storage::disk($this->mediaDisk())->url($p);
-                }
-            }
-
+            // ============ PATCH: Langsung return URL tanpa exists check ============
             return Storage::disk($this->mediaDisk())->url("uploads/posts/{$basename}");
         }
 
+        // Fallback: gunakan storagePathFromUrl lalu generate URL
         $rel = $this->storagePathFromUrl($mediaUrl);
-        if (Storage::disk($this->mediaDisk())->exists($rel)) {
-            return Storage::disk($this->mediaDisk())->url($rel);
-        }
-
+        
+        // ============ PATCH: Return URL langsung, hapus exists() ============
         return Storage::disk($this->mediaDisk())->url($rel);
     }
 }
