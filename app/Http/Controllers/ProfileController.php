@@ -50,35 +50,39 @@ class ProfileController extends Controller
         $pagination = null;
 
         if ($canViewPosts) {
-            $postsQuery = $user->posts()
-                ->latest()
-                ->select('post_id', 'caption', 'media_url', 'created_at', 'thumbnail_url');
+                // DEBUG: sementara kosongkan postingan
+    $recentPosts = [];
+    $pagination = null;
+}
+            // $postsQuery = $user->posts()
+            //     ->latest()
+            //     ->select('post_id', 'caption', 'media_url', 'created_at', 'thumbnail_url');
 
-            $paginatedPosts = $postsQuery->paginate($perPage, ['*'], 'page', $page);
+            // $paginatedPosts = $postsQuery->paginate($perPage, ['*'], 'page', $page);
 
-            $recentPosts = $paginatedPosts->getCollection()->map(function ($post) {
-                $isVideo = preg_match('/\.(mp4|mov|avi|mkv|webm|3gp)$/i', $post->media_url);
-                $thumbnail = $isVideo
-                    ? $this->generateThumbnailUrl($post->media_url, $post)
-                    : null;
+            // $recentPosts = $paginatedPosts->getCollection()->map(function ($post) {
+            //     $isVideo = preg_match('/\.(mp4|mov|avi|mkv|webm|3gp)$/i', $post->media_url);
+            //     $thumbnail = $isVideo
+            //         ? $this->generateThumbnailUrl($post->media_url, $post)
+            //         : null;
 
-                return [
-                    'post_id' => $post->post_id,
-                    'caption' => $post->caption,
-                    'media_url' => $this->normalizeMediaUrl($post->media_url),
-                    'is_video' => $isVideo ? 1 : 0,
-                    'thumbnail_url' => $thumbnail,
-                    'created_at' => $post->created_at,
-                ];
-            });
+            //     return [
+            //         'post_id' => $post->post_id,
+            //         'caption' => $post->caption,
+            //         'media_url' => $this->normalizeMediaUrl($post->media_url),
+            //         'is_video' => $isVideo ? 1 : 0,
+            //         'thumbnail_url' => $thumbnail,
+            //         'created_at' => $post->created_at,
+            //     ];
+            // });
 
-            $pagination = [
-                'current_page' => $paginatedPosts->currentPage(),
-                'last_page' => $paginatedPosts->lastPage(),
-                'per_page' => $paginatedPosts->perPage(),
-                'total' => $paginatedPosts->total(),
-                'next_page_url' => $paginatedPosts->nextPageUrl(),
-            ];
+            // $pagination = [
+            //     'current_page' => $paginatedPosts->currentPage(),
+            //     'last_page' => $paginatedPosts->lastPage(),
+            //     'per_page' => $paginatedPosts->perPage(),
+            //     'total' => $paginatedPosts->total(),
+            //     'next_page_url' => $paginatedPosts->nextPageUrl(),
+            // ];
         }
 
         // Story ring: hanya bila punya story aktif DAN boleh dilihat (publik / diri / follower accepted).
