@@ -347,7 +347,7 @@ class ProfileController extends Controller
 
         // Safety check untuk mediaUrl
         if (empty($mediaUrl) || !is_string($mediaUrl)) {
-            return asset('https://portalsi.com/icon.png');
+            return asset('img/video-placeholder-black.jpg');
         }
 
         // Ekstrak nama file tanpa ekstensi
@@ -377,7 +377,7 @@ class ProfileController extends Controller
 
         // Jika tidak ada thumbnail yang ditemukan, gunakan placeholder
         // Ini mencegah broken image di frontend
-        return asset('https://portalsi.com/icon.png');
+        return asset('img/video-placeholder-black.jpg');
     }
 
     /**
