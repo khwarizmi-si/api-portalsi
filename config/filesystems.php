@@ -66,7 +66,7 @@ return [
             'url' => env('R2_URL'),          // URL publik CDN (misal: https://cdn.portalsi.com)
             'endpoint' => env('R2_ENDPOINT'), // https://<ACCOUNT_ID>.r2.cloudflarestorage.com
             'use_path_style_endpoint' => false,
-            'throw' => false,
+            'throw' => true,
         ],
 
     ],
