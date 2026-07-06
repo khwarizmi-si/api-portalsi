@@ -27,9 +27,6 @@ class ProfileController extends Controller
     // ---------------- Public Profile ----------------
     public function show(Request $request, $username)
     {
-        // This route is publicly readable, so explicitly resolve an optional
-        // Sanctum bearer token when one is present. Without this, accepted
-        // followers were still treated as guests on private profiles.
         $authUser = $request->user('sanctum') ?? Auth::user();
         $page = (int) $request->input('page', 1);
         $perPage = (int) $request->input('per_page', 9);
@@ -60,17 +57,10 @@ class ProfileController extends Controller
 
             $recentPosts = $paginatedPosts->getCollection()->map(function ($post) {
                 try {
-                    // Safety: pastikan media_url ada dan bertipe string
                     $mediaUrl = $post->media_url;
                     
+                    // Jika media_url kosong/null/bukan string
                     if (empty($mediaUrl) || !is_string($mediaUrl)) {
-                        Log::warning('ProfileController: Invalid media_url in show()', [
-                            'post_id' => $post->post_id ?? 'unknown',
-                            'username' => 'tsaqibbb',
-                            'type' => gettype($mediaUrl),
-                            'value' => var_export($mediaUrl, true),
-                        ]);
-                        
                         return [
                             'post_id' => $post->post_id,
                             'caption' => $post->caption ?? '',
@@ -95,11 +85,9 @@ class ProfileController extends Controller
                         'created_at' => $post->created_at,
                     ];
                 } catch (Throwable $e) {
-                    Log::error('ProfileController: Failed to map post in show()', [
+                    Log::error('Failed to map post', [
                         'post_id' => $post->post_id ?? 'unknown',
                         'error' => $e->getMessage(),
-                        'class' => get_class($e),
-                        'trace' => $e->getTraceAsString(),
                     ]);
                     
                     return [
@@ -122,7 +110,6 @@ class ProfileController extends Controller
             ];
         }
 
-        // Story ring: hanya bila punya story aktif DAN boleh dilihat (publik / diri / follower accepted).
         $hasStory = $canViewPosts && Story::where('user_id', $user->user_id)
             ->where('expires_at', '>', now())
             ->exists();
@@ -184,16 +171,9 @@ class ProfileController extends Controller
 
         $recentPosts = $paginatedPosts->getCollection()->map(function ($post) {
             try {
-                // Safety: pastikan media_url ada dan bertipe string
                 $mediaUrl = $post->media_url;
                 
                 if (empty($mediaUrl) || !is_string($mediaUrl)) {
-                    Log::warning('ProfileController: Invalid media_url in me()', [
-                        'post_id' => $post->post_id ?? 'unknown',
-                        'type' => gettype($mediaUrl),
-                        'value' => var_export($mediaUrl, true),
-                    ]);
-                    
                     return [
                         'post_id' => $post->post_id,
                         'caption' => $post->caption ?? '',
@@ -218,11 +198,9 @@ class ProfileController extends Controller
                     'created_at' => $post->created_at,
                 ];
             } catch (Throwable $e) {
-                Log::error('ProfileController: Failed to map post in me()', [
+                Log::error('Failed to map post in me()', [
                     'post_id' => $post->post_id ?? 'unknown',
                     'error' => $e->getMessage(),
-                    'class' => get_class($e),
-                    'trace' => $e->getTraceAsString(),
                 ]);
                 
                 return [
@@ -284,7 +262,6 @@ class ProfileController extends Controller
                     $q->orWhere('full_name', 'like', "%{$fullName}%");
                 }
             })
-            // Exclude the current user from their own search results.
             ->when($request->user(), fn ($q) => $q->where('user_id', '!=', $request->user()->user_id))
             ->select('user_id', 'username', 'full_name', 'is_verified', 'profile_picture_url')
             ->paginate($perPage)
@@ -311,7 +288,6 @@ class ProfileController extends Controller
 
         $perPage = (int) $request->input('per_page', 10);
 
-        // ambil id following & followers
         $followingIds = $authUser->following()->pluck('users.user_id')->toArray();
         $followerIds = $authUser->followers()->pluck('users.user_id')->toArray();
 
@@ -327,102 +303,70 @@ class ProfileController extends Controller
     // ---------------- Helper functions ----------------
 
     /**
-     * Generate thumbnail URL for a video post.
+     * Generate thumbnail URL.
      * 
-     * Strategy:
-     * 1. Gunakan thumbnail_url dari database jika tersedia
-     * 2. Cari file thumbnail di storage dengan berbagai ekstensi
-     * 3. Jika tidak ditemukan, gunakan placeholder statis
-     * 
-     * @param string $mediaUrl
-     * @param mixed $post
-     * @return string
+     * NO Storage::exists() - langsung konstruksi URL.
+     * Jika file tidak ada, frontend harus handle dengan onError fallback.
      */
     private function generateThumbnailUrl($mediaUrl, $post = null)
     {
-        // Prioritas 1: Gunakan thumbnail_url dari database jika tersedia
+        // 1. Database punya thumbnail_url? Pakai itu.
         if ($post && !empty($post->thumbnail_url) && is_string($post->thumbnail_url)) {
             return $this->normalizeMediaUrl($post->thumbnail_url);
         }
 
-        // Safety check untuk mediaUrl
+        // 2. Safety
         if (empty($mediaUrl) || !is_string($mediaUrl)) {
-            return asset('img/video-placeholder-black.jpg');
+            return url('/img/video-placeholder-black.jpg');
         }
 
-        // Ekstrak nama file tanpa ekstensi
+        // 3. Konstruksi URL thumbnail dari nama file video
         $basename = pathinfo($mediaUrl, PATHINFO_BASENAME);
         $nameOnly = pathinfo($basename, PATHINFO_FILENAME);
 
-        // Daftar ekstensi thumbnail yang mungkin (urut dari prioritas)
-        $extensions = ['jpg', 'jpeg', 'png', 'webp'];
-
-        // Coba cari thumbnail yang EXISTS di storage
-        foreach ($extensions as $ext) {
-            $path = "uploads/posts/thumbnails/{$nameOnly}.{$ext}";
-            
-            try {
-                if (Storage::disk($this->mediaDisk())->exists($path)) {
-                    return Storage::disk($this->mediaDisk())->url($path);
-                }
-            } catch (Throwable $e) {
-                // Jika R2 error untuk file ini, log dan lanjut ke kandidat berikutnya
-                Log::warning("ProfileController: Failed to check thumbnail existence", [
-                    'path' => $path,
-                    'error' => $e->getMessage(),
-                ]);
-                continue;
-            }
-        }
-
-        // Jika tidak ada thumbnail yang ditemukan, gunakan placeholder
-        // Ini mencegah broken image di frontend
-        return asset('img/video-placeholder-black.jpg');
+        // Langsung return URL, tidak peduli file ada atau tidak
+        // Frontend harus handle 404 dengan <img onError={...} />
+        return Storage::disk($this->mediaDisk())
+            ->url("uploads/posts/thumbnails/{$nameOnly}.jpg");
     }
 
     /**
-     * Normalize media URL / path menjadi URL yang bisa diakses klien.
+     * Normalize media URL.
      * 
-     * Tidak menggunakan Storage::exists() untuk menghindari overhead I/O.
-     * Langsung menghasilkan URL dari path yang diberikan.
-     * 
-     * @param string $mediaUrl
-     * @return string|null
+     * NO Storage::exists() - langsung konstruksi URL.
      */
     private function normalizeMediaUrl($mediaUrl)
     {
-        // Null/empty safety
         if (!$mediaUrl || !is_string($mediaUrl)) {
             return null;
         }
 
-        // Jika sudah full URL, return langsung
+        // Already full URL
         if (preg_match('#^https?://#i', $mediaUrl)) {
             return $mediaUrl;
         }
 
-        // Jika dimulai dengan /storage/, konversi ke URL relatif
+        // /storage/... path
         if (strpos($mediaUrl, '/storage/') === 0) {
             return url($mediaUrl);
         }
 
-        // Jika mengandung storage/app/public, ekstrak relative path
+        // storage/app/public/... path
         if (strpos($mediaUrl, 'storage/app/public') !== false) {
             $parts = explode('storage/app/public', $mediaUrl);
             $rel = ltrim($parts[1] ?? '', '/\\');
-            
             if (!empty($rel)) {
                 return Storage::disk($this->mediaDisk())->url($rel);
             }
         }
 
-        // Jika absolute path server (Linux/Windows)
+        // Absolute server path
         if (strpos($mediaUrl, '/home/') === 0 || strpos($mediaUrl, 'C:\\') === 0) {
             $basename = pathinfo($mediaUrl, PATHINFO_BASENAME);
             return Storage::disk($this->mediaDisk())->url("uploads/posts/{$basename}");
         }
 
-        // Fallback: gunakan storagePathFromUrl lalu generate URL
+        // Fallback
         $rel = $this->storagePathFromUrl($mediaUrl);
         return Storage::disk($this->mediaDisk())->url($rel);
     }
