@@ -53,7 +53,7 @@ class ProfileController extends Controller
                 // DEBUG: sementara kosongkan postingan
     $recentPosts = [];
     $pagination = null;
-}
+
             // $postsQuery = $user->posts()
             //     ->latest()
             //     ->select('post_id', 'caption', 'media_url', 'created_at', 'thumbnail_url');
