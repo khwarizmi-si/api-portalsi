@@ -59,14 +59,14 @@ class ProfileController extends Controller
             $paginatedPosts = $postsQuery->paginate($perPage, ['*'], 'page', $page);
 
             $recentPosts = $paginatedPosts->getCollection()->map(function ($post) {
-                // ============ PATCH: Try-catch per post + null safety ============
                 try {
                     // Safety: pastikan media_url ada dan bertipe string
                     $mediaUrl = $post->media_url;
                     
                     if (empty($mediaUrl) || !is_string($mediaUrl)) {
-                        Log::warning('ProfileController: Invalid media_url', [
+                        Log::warning('ProfileController: Invalid media_url in show()', [
                             'post_id' => $post->post_id ?? 'unknown',
+                            'username' => 'tsaqibbb',
                             'type' => gettype($mediaUrl),
                             'value' => var_export($mediaUrl, true),
                         ]);
@@ -99,6 +99,7 @@ class ProfileController extends Controller
                         'post_id' => $post->post_id ?? 'unknown',
                         'error' => $e->getMessage(),
                         'class' => get_class($e),
+                        'trace' => $e->getTraceAsString(),
                     ]);
                     
                     return [
@@ -182,7 +183,6 @@ class ProfileController extends Controller
         $paginatedPosts = $postsQuery->paginate($perPage, ['*'], 'page', $page);
 
         $recentPosts = $paginatedPosts->getCollection()->map(function ($post) {
-            // ============ PATCH: Try-catch per post + null safety ============
             try {
                 // Safety: pastikan media_url ada dan bertipe string
                 $mediaUrl = $post->media_url;
@@ -222,6 +222,7 @@ class ProfileController extends Controller
                     'post_id' => $post->post_id ?? 'unknown',
                     'error' => $e->getMessage(),
                     'class' => get_class($e),
+                    'trace' => $e->getTraceAsString(),
                 ]);
                 
                 return [
@@ -327,41 +328,71 @@ class ProfileController extends Controller
 
     /**
      * Generate thumbnail URL for a video post.
-     * Prioritas:
-     * 1) $post->thumbnail_url (jika ada)
-     * 2) Langsung generate URL tanpa Storage::exists()
-     * 3) Fallback ke placeholder
+     * 
+     * Strategy:
+     * 1. Gunakan thumbnail_url dari database jika tersedia
+     * 2. Cari file thumbnail di storage dengan berbagai ekstensi
+     * 3. Jika tidak ditemukan, gunakan placeholder statis
+     * 
+     * @param string $mediaUrl
+     * @param mixed $post
+     * @return string
      */
     private function generateThumbnailUrl($mediaUrl, $post = null)
     {
-        // ============ PATCH: Prioritaskan thumbnail_url dari database ============
-        if ($post && ! empty($post->thumbnail_url) && is_string($post->thumbnail_url)) {
+        // Prioritas 1: Gunakan thumbnail_url dari database jika tersedia
+        if ($post && !empty($post->thumbnail_url) && is_string($post->thumbnail_url)) {
             return $this->normalizeMediaUrl($post->thumbnail_url);
         }
 
-        // ============ PATCH: Safety check untuk mediaUrl ============
+        // Safety check untuk mediaUrl
         if (empty($mediaUrl) || !is_string($mediaUrl)) {
             return asset('https://portalsi.com/icon.png');
         }
 
-        // ============ PATCH: Langsung konstruksi URL, hapus Storage::exists() ============
+        // Ekstrak nama file tanpa ekstensi
         $basename = pathinfo($mediaUrl, PATHINFO_BASENAME);
         $nameOnly = pathinfo($basename, PATHINFO_FILENAME);
 
-        // Untuk video, thumbnail diasumsikan .jpg
-        return Storage::disk($this->mediaDisk())
-            ->url("uploads/posts/thumbnails/{$nameOnly}.jpg");
+        // Daftar ekstensi thumbnail yang mungkin (urut dari prioritas)
+        $extensions = ['jpg', 'jpeg', 'png', 'webp'];
+
+        // Coba cari thumbnail yang EXISTS di storage
+        foreach ($extensions as $ext) {
+            $path = "uploads/posts/thumbnails/{$nameOnly}.{$ext}";
+            
+            try {
+                if (Storage::disk($this->mediaDisk())->exists($path)) {
+                    return Storage::disk($this->mediaDisk())->url($path);
+                }
+            } catch (Throwable $e) {
+                // Jika R2 error untuk file ini, log dan lanjut ke kandidat berikutnya
+                Log::warning("ProfileController: Failed to check thumbnail existence", [
+                    'path' => $path,
+                    'error' => $e->getMessage(),
+                ]);
+                continue;
+            }
+        }
+
+        // Jika tidak ada thumbnail yang ditemukan, gunakan placeholder
+        // Ini mencegah broken image di frontend
+        return asset('https://portalsi.com/icon.png');
     }
 
     /**
      * Normalize media URL / path menjadi URL yang bisa diakses klien.
      * 
-     * ============ PATCH: Hapus semua Storage::exists() ============
+     * Tidak menggunakan Storage::exists() untuk menghindari overhead I/O.
+     * Langsung menghasilkan URL dari path yang diberikan.
+     * 
+     * @param string $mediaUrl
+     * @return string|null
      */
     private function normalizeMediaUrl($mediaUrl)
     {
-        // ============ PATCH: Null/empty safety ============
-        if (! $mediaUrl || !is_string($mediaUrl)) {
+        // Null/empty safety
+        if (!$mediaUrl || !is_string($mediaUrl)) {
             return null;
         }
 
@@ -388,14 +419,11 @@ class ProfileController extends Controller
         // Jika absolute path server (Linux/Windows)
         if (strpos($mediaUrl, '/home/') === 0 || strpos($mediaUrl, 'C:\\') === 0) {
             $basename = pathinfo($mediaUrl, PATHINFO_BASENAME);
-            // ============ PATCH: Langsung return URL tanpa exists check ============
             return Storage::disk($this->mediaDisk())->url("uploads/posts/{$basename}");
         }
 
         // Fallback: gunakan storagePathFromUrl lalu generate URL
         $rel = $this->storagePathFromUrl($mediaUrl);
-        
-        // ============ PATCH: Return URL langsung, hapus exists() ============
         return Storage::disk($this->mediaDisk())->url($rel);
     }
 }
