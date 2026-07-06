@@ -303,16 +303,20 @@ class ProfileController extends Controller
     // ---------------- Helper functions ----------------
 
     /**
-     * Generate thumbnail URL.
+     * Generate thumbnail URL dengan exists check YANG AMAN.
      * 
-     * NO Storage::exists() - langsung konstruksi URL.
-     * Jika file tidak ada, frontend harus handle dengan onError fallback.
+     * Hanya cek 1 file (.jpg) per video.
+     * Kalau ga ada → placeholder.
      */
     private function generateThumbnailUrl($mediaUrl, $post = null)
     {
-        // 1. Database punya thumbnail_url? Pakai itu.
+        // 1. Prioritas: thumbnail_url dari database
         if ($post && !empty($post->thumbnail_url) && is_string($post->thumbnail_url)) {
-            return $this->normalizeMediaUrl($post->thumbnail_url);
+            $thumbPath = $this->getRelativePath($post->thumbnail_url);
+            if ($thumbPath && $this->safeExists($thumbPath)) {
+                return $this->normalizeMediaUrl($post->thumbnail_url);
+            }
+            // Kalau thumbnail_url dari DB juga ga ada filenya, lanjut ke bawah
         }
 
         // 2. Safety
@@ -320,14 +324,64 @@ class ProfileController extends Controller
             return url('/img/video-placeholder-black.jpg');
         }
 
-        // 3. Konstruksi URL thumbnail dari nama file video
+        // 3. Cek thumbnail .jpg (SATU KALI SAJA)
         $basename = pathinfo($mediaUrl, PATHINFO_BASENAME);
         $nameOnly = pathinfo($basename, PATHINFO_FILENAME);
+        $thumbPath = "uploads/posts/thumbnails/{$nameOnly}.jpg";
 
-        // Langsung return URL, tidak peduli file ada atau tidak
-        // Frontend harus handle 404 dengan <img onError={...} />
-        return Storage::disk($this->mediaDisk())
-            ->url("uploads/posts/thumbnails/{$nameOnly}.jpg");
+        if ($this->safeExists($thumbPath)) {
+            return Storage::disk($this->mediaDisk())->url($thumbPath);
+        }
+
+        // 4. Tidak ada thumbnail → placeholder
+        return url('/img/video-placeholder-black.jpg');
+    }
+
+    /**
+     * Cek apakah file exists di storage TANPA throw exception.
+     * 
+     * @param string $path
+     * @return bool
+     */
+    private function safeExists(string $path): bool
+    {
+        try {
+            return Storage::disk($this->mediaDisk())->exists($path);
+        } catch (Throwable $e) {
+            Log::warning('Storage::exists() failed', [
+                'path' => $path,
+                'error' => $e->getMessage(),
+            ]);
+            return false;
+        }
+    }
+
+    /**
+     * Ekstrak relative path dari berbagai format URL.
+     * 
+     * @param string $url
+     * @return string|null
+     */
+    private function getRelativePath(string $url): ?string
+    {
+        // Full URL → ambil path setelah /uploads/
+        if (preg_match('#https?://[^/]+/(.*)$#', $url, $matches)) {
+            return $matches[1];
+        }
+
+        // /storage/... → buang /storage/
+        if (strpos($url, '/storage/') === 0) {
+            return substr($url, 9); // buang '/storage/'
+        }
+
+        // storage/app/public/... → ambil setelahnya
+        if (strpos($url, 'storage/app/public') !== false) {
+            $parts = explode('storage/app/public', $url);
+            return ltrim($parts[1] ?? '', '/\\');
+        }
+
+        // Anggap sudah relative path
+        return ltrim($url, '/');
     }
 
     /**
