@@ -5,10 +5,18 @@ namespace App\Http\Controllers;
 use App\Events\NotificationCreated;
 use App\Models\Notification;
 use App\Models\User;
+use App\Notifications\ConfirmEmailChange;
+use Illuminate\Auth\Events\Verified;
 use Illuminate\Http\Request;
+use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\Auth;
+use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\Hash;
+use Illuminate\Support\Facades\Log;
+use Illuminate\Support\Facades\Notification as NotificationFacade;
 use Illuminate\Support\Facades\Storage;
+use Illuminate\Support\Facades\URL;
+use Illuminate\Support\Str;
 use Illuminate\Validation\ValidationException;
 
 class AccountController extends Controller
@@ -39,7 +47,6 @@ class AccountController extends Controller
                 'unique:users,username,'.$user->user_id.',user_id',
             ],
             'full_name' => 'nullable|string',
-            'email' => 'nullable|email|unique:users,email,'.$user->user_id.',user_id',
             'bio' => 'nullable|string',
             'is_private' => 'nullable|boolean',
             'profile_picture' => 'nullable|image|max:10240', // max 10MB
@@ -72,11 +79,10 @@ class AccountController extends Controller
             $user->banner_url = Storage::disk($disk)->url($path);
         }
 
-        // ✅ Update field lain
+        // ✅ Update field lain (email TIDAK termasuk — ganti email lewat alur konfirmasi terpisah)
         $user->fill($request->only([
             'username',
             'full_name',
-            'email',
             'bio',
             'is_private',
         ]));
@@ -125,6 +131,116 @@ class AccountController extends Controller
         $user->save();
 
         return response()->json(['message' => 'Password berhasil diganti']);
+    }
+
+    // 📧 Minta ganti email — kirim tautan konfirmasi ke email BARU, dibatasi sekali per hari.
+    public function requestEmailChange(Request $request)
+    {
+        $user = Auth::user();
+
+        $request->validate([
+            'email' => 'required|email|max:255|unique:users,email,'.$user->user_id.',user_id',
+        ], [
+            'email.required' => 'Email baru wajib diisi.',
+            'email.email' => 'Format email tidak valid.',
+            'email.unique' => 'Email sudah dipakai akun lain.',
+        ]);
+
+        $newEmail = strtolower(trim($request->email));
+
+        if ($newEmail === strtolower(trim((string) $user->email))) {
+            throw ValidationException::withMessages([
+                'email' => ['Email baru sama dengan email Anda sekarang.'],
+            ]);
+        }
+
+        // ⏳ Batasi sekali per hari.
+        $limitKey = 'email_change_last:'.$user->user_id;
+        if (Cache::has($limitKey)) {
+            $expiresAt = Cache::get($limitKey.':until');
+            $retry = $expiresAt ? max(0, Carbon::parse($expiresAt)->diffInSeconds(now())) : 86400;
+
+            return response()->json([
+                'message' => 'Anda hanya dapat mengganti email sekali dalam 24 jam. Coba lagi nanti.',
+                'retry_after_seconds' => $retry,
+            ], 429);
+        }
+
+        $token = Str::random(48);
+        Cache::put('email_change:'.$token, [
+            'user_id' => $user->user_id,
+            'email' => $newEmail,
+        ], now()->addHour());
+
+        $until = now()->addDay();
+        Cache::put($limitKey, $newEmail, $until);
+        Cache::put($limitKey.':until', $until->toIso8601String(), $until);
+
+        $confirmUrl = URL::temporarySignedRoute(
+            'account.email.confirm',
+            now()->addHour(),
+            ['token' => $token]
+        );
+
+        try {
+            NotificationFacade::route('mail', $newEmail)
+                ->notify(new ConfirmEmailChange($confirmUrl, $user->full_name ?: $user->username, $newEmail));
+        } catch (\Throwable $e) {
+            Log::error('Failed to send email-change confirmation: '.$e->getMessage(), [
+                'user_id' => $user->user_id,
+                'new_email' => $newEmail,
+            ]);
+            // Batalkan rate-limit supaya user bisa mencoba lagi.
+            Cache::forget($limitKey);
+            Cache::forget($limitKey.':until');
+            Cache::forget('email_change:'.$token);
+
+            return response()->json([
+                'message' => 'Email konfirmasi gagal dikirim. Coba lagi nanti.',
+            ], 500);
+        }
+
+        return response()->json([
+            'message' => 'Tautan konfirmasi telah dikirim ke '.$newEmail.'. Buka email tersebut untuk menyelesaikan perubahan.',
+            'pending_email' => $newEmail,
+        ]);
+    }
+
+    // ✅ Konfirmasi ganti email (dari tautan bertanda tangan di email baru).
+    public function confirmEmailChange(Request $request, string $token)
+    {
+        $frontend = rtrim(config('app.frontend_url', 'https://portalsi.com'), '/');
+        $payload = Cache::get('email_change:'.$token);
+
+        if (! $payload || empty($payload['user_id']) || empty($payload['email'])) {
+            return redirect($frontend.'/verified-success?email=invalid');
+        }
+
+        $user = User::find($payload['user_id']);
+        if (! $user) {
+            Cache::forget('email_change:'.$token);
+
+            return redirect($frontend.'/verified-success?email=invalid');
+        }
+
+        $newEmail = strtolower(trim($payload['email']));
+        $taken = User::where('user_id', '!=', $user->user_id)
+            ->whereRaw('LOWER(TRIM(email)) = ?', [$newEmail])
+            ->exists();
+        if ($taken) {
+            Cache::forget('email_change:'.$token);
+
+            return redirect($frontend.'/verified-success?email=taken');
+        }
+
+        $user->email = $newEmail;
+        $user->email_verified_at = now();
+        $user->save();
+        event(new Verified($user));
+
+        Cache::forget('email_change:'.$token);
+
+        return redirect($frontend.'/verified-success?email=changed');
     }
 
     // ❌ Hapus akun

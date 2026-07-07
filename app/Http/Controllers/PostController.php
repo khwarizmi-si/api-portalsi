@@ -441,7 +441,7 @@ class PostController extends Controller
     public function store(Request $request)
     {
         $request->validate([
-            'caption' => 'nullable|string',
+            'caption' => 'nullable|string|max:2200',
             'media' => 'nullable|file|max:512000',
             'media_key' => 'nullable|string|max:255', // jalur direct-upload ke R2
             'thumbnail' => 'nullable|file|mimes:jpg,jpeg,png|max:51200', // up to 50MB thumb jika perlu (ubah sesuai kebijakan)
@@ -643,7 +643,7 @@ class PostController extends Controller
         }
 
         $request->validate([
-            'caption' => 'nullable|string',
+            'caption' => 'nullable|string|max:2200',
             'media' => 'nullable|file|mimes:jpg,jpeg,png,mp4,mov,webm,avi,3gp,mkv|max:512000',
             'thumbnail' => 'nullable|file|mimes:jpg,jpeg,png|max:51200',
             'location' => 'nullable|string',

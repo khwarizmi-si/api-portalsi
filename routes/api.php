@@ -227,16 +227,46 @@ Route::post('/login', function (Request $request) use ($sendVerificationEmail) {
     $tokenId = PersonalAccessToken::where('token', hash('sha256', explode('|', $plainTextToken)[1]))->first()?->id;
 
     try {
+        // Frontend (SvelteKit) meneruskan UA & IP asli browser lewat header ini, karena
+        // request ke API datang dari server SSR (bukan langsung dari browser).
+        $clientUa = $request->header('X-Real-Client-Ua') ?: ($request->header('User-Agent') ?: 'unknown');
+        $clientIp = $request->header('X-Real-Client-Ip') ?: ($request->ip() ?: 'unknown');
+
         $agent = new Agent;
-        $agent->setUserAgent($request->userAgent() ?: '');
+        $agent->setUserAgent($clientUa);
+
+        $deviceType = $agent->isMobile() ? 'Ponsel' : ($agent->isTablet() ? 'Tablet' : ($agent->isDesktop() ? 'Komputer' : 'Perangkat'));
+        $deviceModel = $agent->device();
+        $device = ($deviceModel && ! in_array(strtolower($deviceModel), ['webkit', 'unknown'], true))
+            ? $deviceType.' · '.$deviceModel
+            : $deviceType;
+
+        // Lokasi dari IP (ip-api.com, gratis/tanpa key). Diabaikan bila gagal.
+        $location = null;
+        try {
+            if ($clientIp && ! in_array($clientIp, ['127.0.0.1', '::1', 'unknown'], true)) {
+                $geo = \Illuminate\Support\Facades\Http::timeout(3)
+                    ->get("http://ip-api.com/json/{$clientIp}", ['fields' => 'status,country,city,regionName']);
+                if ($geo->ok() && $geo->json('status') === 'success') {
+                    $location = trim(implode(', ', array_filter([
+                        $geo->json('city') ?: $geo->json('regionName'),
+                        $geo->json('country'),
+                    ])), ', ') ?: null;
+                }
+            }
+        } catch (\Throwable $e) {
+            // biarkan lokasi null
+        }
+
         LoginHistory::create([
             'user_id' => $user->user_id,
             'token_id' => $tokenId,
-            'ip_address' => $request->ip() ?? 'unknown',
-            'user_agent' => $request->header('User-Agent') ?? 'unknown',
-            'device' => $agent->device() ?: ($agent->isDesktop() ? 'Komputer' : 'Perangkat tidak dikenal'),
+            'ip_address' => $clientIp,
+            'user_agent' => $clientUa,
+            'device' => $device,
             'browser' => $agent->browser() ?: 'Browser tidak dikenal',
             'platform' => $agent->platform() ?: 'Sistem tidak dikenal',
+            'location' => $location,
             'login_at' => now(),
         ]);
     } catch (Exception $e) {
@@ -260,6 +290,10 @@ Route::get('/email/verify/{id}/{hash}', function (Request $request, $id, $hash) 
 
     return redirect('https://portalsi.com/verified-success');
 })->middleware('signed')->name('verification.verify');
+
+Route::get('/account/email/confirm/{token}', [AccountController::class, 'confirmEmailChange'])
+    ->middleware('signed')
+    ->name('account.email.confirm');
 
 Route::post('/email/verification-notification', function (Request $request) use ($sendVerificationEmail) {
     $verificationEmail = $sendVerificationEmail($request->user(), 'authenticated_resend');
@@ -505,6 +539,7 @@ Route::middleware(['auth:sanctum'])->group(function () {
 
         Route::post('/account/settings', [AccountController::class, 'update']);
         Route::put('/account/password', [AccountController::class, 'updatePassword']);
+        Route::post('/account/email/change', [AccountController::class, 'requestEmailChange']);
         Route::delete('/account/delete', [AccountController::class, 'destroy']);
 
         Route::post('/announcements', [AnnouncementController::class, 'store']);

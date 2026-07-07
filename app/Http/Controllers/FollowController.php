@@ -119,6 +119,30 @@ class FollowController extends Controller
     }
 
     // ✅ LIHAT FOLLOWERS (dengan pagination)
+    /**
+     * Tandai tiap user pada daftar dengan status relatif ke user yang login:
+     * is_following (sudah diikuti/accepted), is_requested (menunggu), is_self.
+     */
+    private function annotateFollowState(array $items): array
+    {
+        $authUser = Auth::user();
+        $followingIds = $authUser
+            ? $authUser->following()->wherePivot('status', 'accepted')->pluck('users.user_id')->flip()
+            : collect();
+        $requestedIds = $authUser
+            ? $authUser->following()->wherePivot('status', 'pending')->pluck('users.user_id')->flip()
+            : collect();
+
+        return collect($items)->map(function ($u) use ($authUser, $followingIds, $requestedIds) {
+            $u->is_verified = (bool) $u->is_verified;
+            $u->is_following = $followingIds->has($u->user_id);
+            $u->is_requested = $requestedIds->has($u->user_id);
+            $u->is_self = $authUser ? ($authUser->user_id === $u->user_id) : false;
+
+            return $u;
+        })->all();
+    }
+
     public function followers($id, Request $request)
     {
         $user = User::findOrFail($id);
@@ -131,10 +155,11 @@ class FollowController extends Controller
             ->select('users.user_id', 'username', 'full_name', 'profile_picture_url', 'is_verified');
 
         $paginatedFollowers = $followersQuery->paginate($perPage, ['*'], 'page', $page);
+        $items = $this->annotateFollowState($paginatedFollowers->items());
 
         return response()->json([
             'followers_count' => $paginatedFollowers->total(),
-            'followers' => $paginatedFollowers->items(),
+            'followers' => $items,
             'pagination' => [
                 'current_page' => $paginatedFollowers->currentPage(),
                 'last_page' => $paginatedFollowers->lastPage(),
@@ -158,10 +183,11 @@ class FollowController extends Controller
             ->select('users.user_id', 'username', 'full_name', 'profile_picture_url', 'is_verified');
 
         $paginatedFollowing = $followingQuery->paginate($perPage, ['*'], 'page', $page);
+        $items = $this->annotateFollowState($paginatedFollowing->items());
 
         return response()->json([
             'following_count' => $paginatedFollowing->total(),
-            'following' => $paginatedFollowing->items(),
+            'following' => $items,
             'pagination' => [
                 'current_page' => $paginatedFollowing->currentPage(),
                 'last_page' => $paginatedFollowing->lastPage(),

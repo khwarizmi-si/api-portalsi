@@ -21,6 +21,7 @@ class LoginHistoryController extends Controller
             'device',
             'browser',
             'platform',
+            'location',
             'login_at',
             'created_at',
             'updated_at'
