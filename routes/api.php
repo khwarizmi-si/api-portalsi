@@ -479,6 +479,7 @@ Route::middleware(['auth:sanctum'])->group(function () {
 
     // ── VERIFIED USERS ONLY ──
     Route::middleware('verified.api')->group(function () {
+        Route::post('/uploads/presign', [\App\Http\Controllers\UploadController::class, 'presign']);
         Route::post('/posts', [PostController::class, 'store']);
         Route::post('/posts/{id}/update', [PostController::class, 'update']);
         Route::delete('/posts/{id}', [PostController::class, 'destroy']);
