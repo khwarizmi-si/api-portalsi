@@ -36,6 +36,7 @@ class StoryController extends Controller
         $request->validate([
             'type' => 'required|in:image,video,music',
             'media' => 'nullable|file|max:512000',
+            'media_key' => 'nullable|string|max:255', // jalur direct-upload ke R2
             'caption' => 'nullable|string',
             'music_track_name' => 'nullable|string|max:255',
             'music_artist_name' => 'nullable|string|max:255',
@@ -51,34 +52,57 @@ class StoryController extends Controller
             'color_pallete' => 'nullable|json',
         ]);
 
+        $extensionsByType = [
+            'image' => ['jpg', 'jpeg', 'png', 'webp', 'gif'],
+            'video' => ['mp4', 'mov', 'webm', 'avi', '3gp', 'mkv', 'm4v'],
+            'music' => ['mp3', 'wav', 'm4a', 'aac', 'ogg'],
+        ];
+
+        $user = Auth::user();
+        // Configured default disk (r2 in prod, public locally).
+        $disk = $this->mediaDisk();
+        $mediaUrl = null;
+
         $media = $request->file('media');
-        if ($media) {
-            $extension = strtolower($media->getClientOriginalExtension());
-            $extensionsByType = [
-                'image' => ['jpg', 'jpeg', 'png', 'webp', 'gif'],
-                'video' => ['mp4', 'mov', 'webm', 'avi', '3gp', 'mkv', 'm4v'],
-                'music' => ['mp3', 'wav', 'm4a', 'aac', 'ogg'],
-            ];
+        $mediaKey = trim((string) $request->input('media_key'));
+
+        if ($mediaKey !== '') {
+            // JALUR DIRECT: berkas sudah diunggah langsung ke R2 via presigned URL.
+            if (! preg_match('#^uploads/(posts|stories)/[A-Za-z0-9._/\-]+\.[A-Za-z0-9]+$#', $mediaKey)
+                || str_contains($mediaKey, '..')) {
+                return response()->json([
+                    'message' => 'Key media tidak valid.',
+                    'errors' => ['media' => ['Key media tidak valid.']],
+                ], 422);
+            }
+            $extension = strtolower(pathinfo($mediaKey, PATHINFO_EXTENSION));
             if (! in_array($extension, $extensionsByType[$request->type] ?? [], true)) {
                 return response()->json([
                     'message' => 'Format berkas tidak sesuai dengan jenis cerita yang dipilih.',
                     'errors' => ['media' => ['Format media cerita tidak didukung.']],
                 ], 422);
             }
-        } elseif (in_array($request->type, ['image', 'video'], true)) {
-            return response()->json([
-                'message' => 'Foto atau video cerita wajib dipilih.',
-                'errors' => ['media' => ['Media wajib dipilih.']],
-            ], 422);
-        }
-
-        $user = Auth::user();
-        $mediaPath = null;
-        // Configured default disk (r2 in prod, public locally).
-        $disk = $this->mediaDisk();
-
-        // Kalau ada file media diupload
-        if ($media) {
+            try {
+                $exists = Storage::disk($disk)->exists($mediaKey);
+            } catch (\Throwable $error) {
+                return response()->json(['message' => 'Media cerita belum dapat diverifikasi. Coba lagi.'], 503);
+            }
+            if (! $exists) {
+                return response()->json([
+                    'message' => 'Media cerita belum selesai terunggah. Coba lagi.',
+                    'errors' => ['media' => ['Media belum terunggah.']],
+                ], 422);
+            }
+            $mediaUrl = Storage::disk($disk)->url($mediaKey);
+        } elseif ($media) {
+            // JALUR LAMA (fallback): berkas dikirim ke Laravel lalu disimpan ke disk.
+            $extension = strtolower($media->getClientOriginalExtension());
+            if (! in_array($extension, $extensionsByType[$request->type] ?? [], true)) {
+                return response()->json([
+                    'message' => 'Format berkas tidak sesuai dengan jenis cerita yang dipilih.',
+                    'errors' => ['media' => ['Format media cerita tidak didukung.']],
+                ], 422);
+            }
             try {
                 $mediaPath = $media->store('uploads/stories', $disk);
             } catch (\Throwable $error) {
@@ -96,12 +120,18 @@ class StoryController extends Controller
             if (! $mediaPath) {
                 return response()->json(['message' => 'Media cerita gagal disimpan. Silakan coba lagi.'], 503);
             }
+            $mediaUrl = Storage::disk($disk)->url($mediaPath);
+        } elseif (in_array($request->type, ['image', 'video'], true)) {
+            return response()->json([
+                'message' => 'Foto atau video cerita wajib dipilih.',
+                'errors' => ['media' => ['Media wajib dipilih.']],
+            ], 422);
         }
 
         // Insert ke DB
         $story = Story::create([
             'user_id' => $user->user_id,
-            'media_url' => $mediaPath ? Storage::disk($disk)->url($mediaPath) : null,
+            'media_url' => $mediaUrl,
             'type' => $request->type,
             'music_track_name' => $request->music_track_name,
             'music_artist_name' => $request->music_artist_name,

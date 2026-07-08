@@ -462,20 +462,57 @@ class PostController extends Controller
         $allowedExtensions = [...$imageExtensions, ...$videoExtensions];
         $disk = $this->mediaDisk();
 
-        $mediaKey = trim((string) $request->input('media_key'));
-        if ($mediaKey !== '') {
-            // JALUR DIRECT: file sudah diunggah langsung ke R2 via presigned URL
-            // (tidak melewati Laravel). Cukup verifikasi key & keberadaannya.
-            if (! preg_match('#^uploads/(posts|stories)/[A-Za-z0-9._/\-]+\.[A-Za-z0-9]+$#', $mediaKey)
-                || str_contains($mediaKey, '..')) {
+        // Kumpulkan media dari jalur direct (media_keys[] / media_key) dan fallback (file media[]).
+        $rawKeys = $request->input('media_keys', []);
+        if (! is_array($rawKeys)) {
+            $rawKeys = [$rawKeys];
+        }
+        $singleKey = trim((string) $request->input('media_key'));
+        if ($singleKey !== '') {
+            $rawKeys[] = $singleKey;
+        }
+        $rawKeys = array_values(array_unique(array_filter(array_map(
+            fn ($key) => trim((string) $key),
+            $rawKeys
+        ))));
+
+        $files = array_values(array_filter(\Illuminate\Support\Arr::wrap($request->file('media'))));
+
+        $total = count($rawKeys) + count($files);
+        if ($total === 0) {
+            return response()->json([
+                'message' => 'Media wajib diunggah.',
+                'errors' => ['media' => ['Media wajib diunggah.']],
+            ], 422);
+        }
+        if ($total > 15) {
+            return response()->json([
+                'message' => 'Maksimal 15 foto per postingan.',
+                'errors' => ['media' => ['Maksimal 15 foto per postingan.']],
+            ], 422);
+        }
+
+        $mediaUrls = [];
+        $extensions = [];
+
+        // Jalur direct: verifikasi tiap key di R2.
+        foreach ($rawKeys as $key) {
+            if (! preg_match('#^uploads/(posts|stories)/[A-Za-z0-9._/\-]+\.[A-Za-z0-9]+$#', $key)
+                || str_contains($key, '..')) {
                 return response()->json([
                     'message' => 'Key media tidak valid.',
                     'errors' => ['media' => ['Key media tidak valid.']],
                 ], 422);
             }
-            $extension = strtolower(pathinfo($mediaKey, PATHINFO_EXTENSION));
+            $ext = strtolower(pathinfo($key, PATHINFO_EXTENSION));
+            if (! in_array($ext, $allowedExtensions, true)) {
+                return response()->json([
+                    'message' => 'Format media tidak didukung.',
+                    'errors' => ['media' => ['Format media tidak didukung.']],
+                ], 422);
+            }
             try {
-                $exists = Storage::disk($disk)->exists($mediaKey);
+                $exists = Storage::disk($disk)->exists($key);
             } catch (\Throwable $error) {
                 return response()->json(['message' => 'Media belum dapat diverifikasi. Coba lagi.'], 503);
             }
@@ -485,18 +522,14 @@ class PostController extends Controller
                     'errors' => ['media' => ['Media belum terunggah.']],
                 ], 422);
             }
-            $mediaUrl = Storage::disk($disk)->url($mediaKey);
-        } else {
-            // JALUR LAMA (fallback): file dikirim ke Laravel lalu disimpan ke disk.
-            $media = $request->file('media');
-            if (! $media) {
-                return response()->json([
-                    'message' => 'Media wajib diunggah.',
-                    'errors' => ['media' => ['Media wajib diunggah.']],
-                ], 422);
-            }
-            $extension = strtolower($media->getClientOriginalExtension());
-            if (! in_array($extension, $allowedExtensions, true)) {
+            $extensions[] = $ext;
+            $mediaUrls[] = Storage::disk($disk)->url($key);
+        }
+
+        // Jalur fallback: simpan tiap file ke disk.
+        foreach ($files as $media) {
+            $ext = strtolower($media->getClientOriginalExtension());
+            if (! in_array($ext, $allowedExtensions, true)) {
                 return response()->json([
                     'message' => 'Format media tidak didukung. Gunakan JPG, PNG, WebP, GIF, MP4, MOV, WebM, AVI, 3GP, MKV, atau M4V.',
                     'errors' => ['media' => ['Format media tidak didukung.']],
@@ -507,7 +540,7 @@ class PostController extends Controller
             } catch (\Throwable $error) {
                 \Log::error('Post media upload failed', [
                     'user_id' => Auth::id(),
-                    'extension' => $extension,
+                    'extension' => $ext,
                     'error' => $error->getMessage(),
                 ]);
 
@@ -516,22 +549,22 @@ class PostController extends Controller
             if (! $mediaPath) {
                 return response()->json(['message' => 'Media gagal disimpan ke penyimpanan. Silakan coba lagi.'], 503);
             }
-            $mediaUrl = Storage::disk($disk)->url($mediaPath);
+            $extensions[] = $ext;
+            $mediaUrls[] = Storage::disk($disk)->url($mediaPath);
         }
 
-        // Validasi kesesuaian tipe untuk kedua jalur.
-        if (! in_array($extension, $allowedExtensions, true)) {
+        // Aturan: video hanya boleh tunggal; unggah banyak media hanya untuk foto.
+        $hasVideo = count(array_intersect($extensions, $videoExtensions)) > 0;
+        if ($hasVideo && count($mediaUrls) > 1) {
             return response()->json([
-                'message' => 'Format media tidak didukung.',
-                'errors' => ['media' => ['Format media tidak didukung.']],
+                'message' => 'Video hanya boleh satu per postingan. Untuk banyak media, gunakan foto.',
+                'errors' => ['media' => ['Video hanya boleh satu per postingan.']],
             ], 422);
         }
-        if ($request->boolean('is_video') !== in_array($extension, $videoExtensions, true)) {
-            return response()->json([
-                'message' => 'Jenis media tidak sesuai dengan berkas yang dipilih.',
-                'errors' => ['media' => ['Jenis media tidak sesuai.']],
-            ], 422);
-        }
+
+        $isVideo = $hasVideo;
+        $mediaUrl = $mediaUrls[0];
+        $extension = $extensions[0];
 
         // Simpan thumbnail jika ada (frontend disarankan mengirim screenshot 1 detik pertama)
         $thumbnailUrl = null;
@@ -554,10 +587,11 @@ class PostController extends Controller
             'user_id' => Auth::id(),
             'caption' => $request->caption,
             'media_url' => $mediaUrl,
+            'media_urls' => count($mediaUrls) > 1 ? $mediaUrls : null,
             'thumbnail_url' => $thumbnailUrl,
             'location' => $request->location,
             'is_archived' => $request->is_archived ?? false,
-            'is_video' => $request->is_video ?? false,
+            'is_video' => $isVideo,
             // musik
             'music_track_name' => $request->music_track_name,
             'music_artist_name' => $request->music_artist_name,

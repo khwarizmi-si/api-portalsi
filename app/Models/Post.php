@@ -16,6 +16,7 @@ class Post extends Model
         'user_id',
         'caption',
         'media_url',
+        'media_urls',
         'thumbnail_url',
         'location',
         'is_archived',
@@ -31,6 +32,7 @@ class Post extends Model
     protected $casts = [
         'is_archived' => 'boolean',
         'is_video' => 'boolean',
+        'media_urls' => 'array',
     ];
 
     public function user()
