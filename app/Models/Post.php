@@ -21,6 +21,7 @@ class Post extends Model
         'location',
         'is_archived',
         'is_video',
+        'video_muted',
         'music_track_name',
         'music_artist_name',
         'music_preview_url',
@@ -32,6 +33,7 @@ class Post extends Model
     protected $casts = [
         'is_archived' => 'boolean',
         'is_video' => 'boolean',
+        'video_muted' => 'boolean',
         'media_urls' => 'array',
     ];
 

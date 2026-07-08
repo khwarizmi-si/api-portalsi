@@ -412,6 +412,26 @@ Route::post('/bind-email', function (Request $request) use ($sendVerificationEma
 
 Route::get('/profile/{username}', [ProfileController::class, 'show']);
 
+// Metadata publik untuk Open Graph (share ke WhatsApp/sosmed) — tanpa auth.
+// Akun privat hanya mengembalikan nama pembuat, tanpa gambar/caption.
+Route::get('/posts/{id}/og', function ($id) {
+    $post = \App\Models\Post::with('user')->find($id);
+    if (! $post) {
+        return response()->json(['found' => false], 404);
+    }
+    $private = (bool) ($post->user->is_private ?? false);
+    $name = $post->user->full_name ?: $post->user->username;
+
+    return response()->json([
+        'found' => true,
+        'username' => $post->user->username,
+        'full_name' => $name,
+        'caption' => $private ? null : $post->caption,
+        'is_video' => (bool) $post->is_video,
+        'image' => $private ? null : ($post->is_video ? $post->thumbnail_url : $post->media_url),
+    ]);
+})->whereNumber('id');
+
 // ═══════════════════════════════════════════
 // PROTECTED ROUTES (auth:sanctum)
 // ═══════════════════════════════════════════

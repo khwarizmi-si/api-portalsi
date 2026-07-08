@@ -448,6 +448,7 @@ class PostController extends Controller
             'location' => 'nullable|string',
             'is_archived' => 'nullable|boolean',
             'is_video' => 'nullable|boolean',
+            'video_muted' => 'nullable|boolean',
             // musik fields
             'music_track_name' => 'nullable|string|max:255',
             'music_artist_name' => 'nullable|string|max:255',
@@ -592,6 +593,8 @@ class PostController extends Controller
             'location' => $request->location,
             'is_archived' => $request->is_archived ?? false,
             'is_video' => $isVideo,
+            // Video dibisukan bila diminta user ATAU saat post memakai musik.
+            'video_muted' => $isVideo && ($request->boolean('video_muted') || $request->filled('music_track_name')),
             // musik
             'music_track_name' => $request->music_track_name,
             'music_artist_name' => $request->music_artist_name,
