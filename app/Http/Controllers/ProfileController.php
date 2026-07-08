@@ -51,7 +51,7 @@ class ProfileController extends Controller
         if ($canViewPosts) {
             $postsQuery = $user->posts()
                 ->latest()
-                ->select('post_id', 'caption', 'media_url', 'created_at', 'thumbnail_url');
+                ->select('post_id', 'caption', 'media_url', 'media_urls', 'is_video', 'created_at', 'thumbnail_url');
 
             $paginatedPosts = $postsQuery->paginate($perPage, ['*'], 'page', $page);
 
@@ -81,6 +81,7 @@ class ProfileController extends Controller
                         'caption' => $post->caption,
                         'media_url' => $this->normalizeMediaUrl($mediaUrl),
                         'is_video' => $isVideo ? 1 : 0,
+                        'is_multiple' => (is_array($post->media_urls) && count($post->media_urls) > 1) ? 1 : 0,
                         'thumbnail_url' => $thumbnail,
                         'created_at' => $post->created_at,
                     ];
