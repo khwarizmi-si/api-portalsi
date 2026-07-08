@@ -37,8 +37,8 @@ class CommentController extends Controller
             ], 422);
         }
 
-        // Hanya izinkan GIF dari Tenor demi keamanan.
-        if ($gifUrl !== '' && ! preg_match('#^https://(media[0-9]*\.tenor\.com|c\.tenor\.com|tenor\.com)/#i', $gifUrl)) {
+        // Hanya izinkan GIF dari GIPHY demi keamanan.
+        if ($gifUrl !== '' && ! preg_match('#^https://(media[0-9]*\.giphy\.com|i\.giphy\.com|giphy\.com)/#i', $gifUrl)) {
             return response()->json([
                 'message' => 'Sumber GIF tidak didukung.',
                 'errors' => ['gif_url' => ['GIF tidak valid.']],
