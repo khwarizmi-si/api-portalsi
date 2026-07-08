@@ -117,20 +117,31 @@ class AccountController extends Controller
         $user = Auth::user();
 
         $request->validate([
-            'current_password' => 'required',
-            'new_password' => 'required|min:6',
+            'current_password' => 'required|string',
+            'new_password' => 'required|string|min:8|confirmed',
+        ], [
+            'current_password.required' => 'Kata sandi saat ini wajib diisi.',
+            'new_password.required' => 'Kata sandi baru wajib diisi.',
+            'new_password.min' => 'Kata sandi baru minimal 8 karakter.',
+            'new_password.confirmed' => 'Konfirmasi kata sandi baru tidak cocok.',
         ]);
 
         if (! Hash::check($request->current_password, $user->password_hash)) {
             throw ValidationException::withMessages([
-                'current_password' => ['Password saat ini salah'],
+                'current_password' => ['Kata sandi saat ini salah.'],
+            ]);
+        }
+
+        if (Hash::check($request->new_password, $user->password_hash)) {
+            throw ValidationException::withMessages([
+                'new_password' => ['Kata sandi baru harus berbeda dari kata sandi lama.'],
             ]);
         }
 
         $user->password_hash = bcrypt($request->new_password);
         $user->save();
 
-        return response()->json(['message' => 'Password berhasil diganti']);
+        return response()->json(['message' => 'Kata sandi berhasil diperbarui.']);
     }
 
     // 📧 Minta ganti email — kirim tautan konfirmasi ke email BARU, dibatasi sekali per hari.

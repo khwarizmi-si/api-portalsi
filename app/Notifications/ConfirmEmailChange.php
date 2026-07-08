@@ -25,10 +25,11 @@ class ConfirmEmailChange extends Notification
     {
         return (new MailMessage)
             ->subject('Konfirmasi Perubahan Email - Portal SI')
-            ->greeting('Halo '.$this->name)
-            ->line('Kami menerima permintaan untuk mengganti email akun Portal SI Anda menjadi alamat ini ('.$this->newEmail.').')
-            ->action('Konfirmasi Email Baru', $this->url)
-            ->line('Tautan ini berlaku selama 60 menit.')
-            ->line('Jika Anda tidak meminta perubahan ini, abaikan email ini — email akun Anda tidak akan berubah.');
+            ->view('emails.confirm-email-change', [
+                'url' => $this->url,
+                'name' => $this->name,
+                'newEmail' => $this->newEmail,
+                'preheader' => 'Konfirmasi perubahan email akun Portal SI Anda.',
+            ]);
     }
 }

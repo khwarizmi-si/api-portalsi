@@ -28,22 +28,32 @@ class LoginHistoryController extends Controller
         )
             ->where('user_id', $request->user()->user_id)
             ->orderByDesc('login_at')
-            ->get()
-            ->map(function (LoginHistory $history) use ($request) {
-                if (in_array((string) $history->device, ['', '0', 'unknown'], true)
-                    || in_array((string) $history->browser, ['', '0', 'unknown'], true)
-                    || in_array((string) $history->platform, ['', '0', 'unknown'], true)) {
-                    $agent = new Agent;
-                    $agent->setUserAgent($history->user_agent ?: '');
-                    $history->device = $agent->device() ?: ($agent->isDesktop() ? 'Komputer' : 'Perangkat tidak dikenal');
-                    $history->browser = $agent->browser() ?: 'Browser tidak dikenal';
-                    $history->platform = $agent->platform() ?: 'Sistem tidak dikenal';
-                }
+            ->get();
 
-                $history->is_current = (int) $history->token_id === (int) optional($request->user()->currentAccessToken())->id;
+        // Sesi yang masih aktif = token-nya masih ada di personal_access_tokens.
+        $activeTokenIds = array_flip(
+            PersonalAccessToken::whereIn('id', $histories->pluck('token_id')->filter()->all())
+                ->pluck('id')
+                ->all()
+        );
+        $currentTokenId = (int) optional($request->user()->currentAccessToken())->id;
 
-                return $history;
-            });
+        $histories = $histories->map(function (LoginHistory $history) use ($activeTokenIds, $currentTokenId) {
+            if (in_array((string) $history->device, ['', '0', 'unknown'], true)
+                || in_array((string) $history->browser, ['', '0', 'unknown'], true)
+                || in_array((string) $history->platform, ['', '0', 'unknown'], true)) {
+                $agent = new Agent;
+                $agent->setUserAgent($history->user_agent ?: '');
+                $history->device = $agent->device() ?: ($agent->isDesktop() ? 'Komputer' : 'Perangkat tidak dikenal');
+                $history->browser = $agent->browser() ?: 'Browser tidak dikenal';
+                $history->platform = $agent->platform() ?: 'Sistem tidak dikenal';
+            }
+
+            $history->is_current = (int) $history->token_id === $currentTokenId;
+            $history->is_active = $history->token_id !== null && isset($activeTokenIds[(int) $history->token_id]);
+
+            return $history;
+        });
 
         return response()->json($histories);
     }

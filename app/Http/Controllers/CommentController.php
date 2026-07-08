@@ -21,9 +21,29 @@ class CommentController extends Controller
     public function store(Request $request, $post_id)
     {
         $request->validate([
-            'content' => 'required|string',
+            'content' => 'nullable|string|max:2000',
+            'gif_url' => 'nullable|url|max:600',
             'parent_comment_id' => 'nullable|exists:comments,comment_id',
         ]);
+
+        $content = trim((string) $request->input('content'));
+        $gifUrl = trim((string) $request->input('gif_url'));
+
+        // Komentar harus punya teks ATAU GIF.
+        if ($content === '' && $gifUrl === '') {
+            return response()->json([
+                'message' => 'Komentar tidak boleh kosong.',
+                'errors' => ['content' => ['Tulis komentar atau pilih GIF.']],
+            ], 422);
+        }
+
+        // Hanya izinkan GIF dari Tenor demi keamanan.
+        if ($gifUrl !== '' && ! preg_match('#^https://(media[0-9]*\.tenor\.com|c\.tenor\.com|tenor\.com)/#i', $gifUrl)) {
+            return response()->json([
+                'message' => 'Sumber GIF tidak didukung.',
+                'errors' => ['gif_url' => ['GIF tidak valid.']],
+            ], 422);
+        }
 
         $user_id = Auth::id();
         $post = Post::findOrFail($post_id);
@@ -31,7 +51,8 @@ class CommentController extends Controller
         $comment = Comment::create([
             'post_id' => $post_id,
             'user_id' => $user_id,
-            'content' => $request->input('content'),
+            'content' => $content,
+            'gif_url' => $gifUrl !== '' ? $gifUrl : null,
             'parent_comment_id' => $request->input('parent_comment_id'),
         ]);
 
