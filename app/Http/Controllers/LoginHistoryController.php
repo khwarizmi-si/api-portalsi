@@ -30,15 +30,14 @@ class LoginHistoryController extends Controller
             ->orderByDesc('login_at')
             ->get();
 
-        // Sesi yang masih aktif = token-nya masih ada di personal_access_tokens.
-        $activeTokenIds = array_flip(
-            PersonalAccessToken::whereIn('id', $histories->pluck('token_id')->filter()->all())
-                ->pluck('id')
-                ->all()
-        );
+        // "Sedang aktif" = token-nya baru digunakan (last_used_at) dalam 10 menit terakhir.
+        // Token yang hanya ada tapi lama tak dipakai (device sudah ditutup) TIDAK dihitung aktif.
+        $activeThreshold = now()->subMinutes(10);
+        $lastUsedByToken = PersonalAccessToken::whereIn('id', $histories->pluck('token_id')->filter()->all())
+            ->pluck('last_used_at', 'id');
         $currentTokenId = (int) optional($request->user()->currentAccessToken())->id;
 
-        $histories = $histories->map(function (LoginHistory $history) use ($activeTokenIds, $currentTokenId) {
+        $histories = $histories->map(function (LoginHistory $history) use ($lastUsedByToken, $currentTokenId, $activeThreshold) {
             if (in_array((string) $history->device, ['', '0', 'unknown'], true)
                 || in_array((string) $history->browser, ['', '0', 'unknown'], true)
                 || in_array((string) $history->platform, ['', '0', 'unknown'], true)) {
@@ -50,7 +49,10 @@ class LoginHistoryController extends Controller
             }
 
             $history->is_current = (int) $history->token_id === $currentTokenId;
-            $history->is_active = $history->token_id !== null && isset($activeTokenIds[(int) $history->token_id]);
+            $lastUsed = $history->token_id !== null ? ($lastUsedByToken[$history->token_id] ?? null) : null;
+            // Sesi saat ini selalu aktif; lainnya aktif bila last_used_at masih baru.
+            $history->is_active = $history->is_current
+                || ($lastUsed !== null && \Illuminate\Support\Carbon::parse($lastUsed)->greaterThanOrEqualTo($activeThreshold));
 
             return $history;
         });

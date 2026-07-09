@@ -277,10 +277,19 @@ class DirectMessageController extends Controller
         $groups = GroupMember::with('group')
             ->where('user_id', $auth_id)
             ->get()
-            ->map(function ($member) {
+            ->map(function ($member) use ($auth_id) {
                 $lastMessage = GroupMessage::where('group_id', $member->group->id)
                     ->orderBy('sent_at', 'desc')
                     ->first();
+
+                // Jumlah pesan grup (bukan dari saya, belum saya baca).
+                $unreadCount = GroupMessage::where('group_id', $member->group->id)
+                    ->where('sender_id', '!=', $auth_id)
+                    ->where('is_deleted', false)
+                    ->whereDoesntHave('reads', function ($q) use ($auth_id) {
+                        $q->where('user_id', $auth_id);
+                    })
+                    ->count();
 
                 return [
                     'type' => 'group',
@@ -292,6 +301,7 @@ class DirectMessageController extends Controller
                     'role' => $member->role,
                     'joined_at' => $member->joined_at,
                     'is_muted' => (bool) $member->is_muted,
+                    'unread_count' => $unreadCount,
 
                     'last_message' => $lastMessage
                         ? ($lastMessage->is_deleted ? '[Pesan telah dihapus]' : ($lastMessage->content ?: '📎 Media'))

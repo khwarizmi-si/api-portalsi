@@ -254,10 +254,22 @@ class AccountController extends Controller
         return redirect($frontend.'/verified-success?email=changed');
     }
 
-    // ❌ Hapus akun
+    // ❌ Hapus akun (wajib verifikasi kata sandi)
     public function destroy(Request $request)
     {
         $user = Auth::user();
+
+        $request->validate([
+            'password' => 'required|string',
+        ], [
+            'password.required' => 'Kata sandi wajib diisi untuk menghapus akun.',
+        ]);
+
+        if (! Hash::check($request->input('password'), $user->password_hash)) {
+            throw ValidationException::withMessages([
+                'password' => ['Kata sandi salah. Akun tidak dihapus.'],
+            ]);
+        }
 
         // Hapus profile picture jika ada
         if ($user->profile_picture_url) {
