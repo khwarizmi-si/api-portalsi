@@ -3,6 +3,7 @@
 namespace App\Http\Controllers;
 
 use App\Events\NotificationCreated;
+use App\Jobs\GenerateVideoThumbnail;
 use App\Models\Notification;
 use App\Models\Post;
 use App\Models\PostMention;
@@ -59,7 +60,7 @@ class PostController extends Controller
     {
         $authUser = Auth::user();
         $page = max(1, (int) $request->input('page', 1));
-        $perPage = 2; // pagination per 2
+        $perPage = max(1, min(20, (int) $request->input('per_page', 10)));
 
         $followingIds = $authUser->following()
             ->wherePivot('status', 'accepted')
@@ -72,8 +73,10 @@ class PostController extends Controller
             // random feed untuk user yang belum follow siapapun
             $mainPosts = Post::with(['user', 'tags', 'mentions'])
                 ->withCount(['likes', 'comments'])
+                ->where('is_archived', false)
                 ->whereHas('user', fn ($q) => $q->where('is_private', 0))
                 ->orderByDesc('created_at')
+                ->take(100)
                 ->get()
                 ->map(function ($post) use ($authUser) {
                     $post->is_liked = (bool) $post->likes()->where('user_id', $authUser->user_id)->exists();
@@ -104,11 +107,13 @@ class PostController extends Controller
             $countRelasi = (int) round($total * 0.10);
             $countRandom = (int) round($total * 0.25);
             $countLiked = (int) round($total * 0.15);
+            $timelineUserIds = $followingIds->concat([$authUser->user_id])->unique()->values();
 
             // Timeline posts (dari following + diri sendiri)
             $timelinePosts = Post::with(['user', 'tags', 'mentions'])
                 ->withCount(['likes', 'comments'])
-                ->whereIn('user_id', $followingIds->push($authUser->user_id))
+                ->where('is_archived', false)
+                ->whereIn('user_id', $timelineUserIds)
                 ->orderByDesc('created_at')
                 ->take($countTimeline)
                 ->get();
@@ -122,6 +127,7 @@ class PostController extends Controller
 
             $relasiPosts = Post::with(['user', 'tags', 'mentions'])
                 ->withCount(['likes', 'comments'])
+                ->where('is_archived', false)
                 ->whereIn('user_id', $secondDegreeIds)
                 ->whereHas('user', fn ($q) => $q->where('is_private', 0))
                 ->orderByDesc('created_at')
@@ -131,6 +137,7 @@ class PostController extends Controller
             // Random posts
             $randomPosts = Post::with(['user', 'tags', 'mentions'])
                 ->withCount(['likes', 'comments'])
+                ->where('is_archived', false)
                 ->whereNotIn('user_id', $followingIds)
                 ->where('user_id', '!=', $authUser->user_id)
                 ->whereHas('user', fn ($q) => $q->where('is_private', 0))
@@ -145,6 +152,7 @@ class PostController extends Controller
 
             $likedPosts = Post::with(['user', 'tags', 'mentions'])
                 ->withCount(['likes', 'comments'])
+                ->where('is_archived', false)
                 ->whereIn('post_id', $likedByFollowingIds)
                 ->whereHas('user', fn ($q) => $q->where('is_private', 0))
                 ->orderByDesc('created_at')
@@ -177,6 +185,34 @@ class PostController extends Controller
                     $post->music_clip_duration_ms = $post->music_clip_duration_ms ?? null;
 
                     // thumbnail safe field
+                    $post->thumbnail_url = $post->thumbnail_url ?? null;
+
+                    return $post;
+                })
+                ->shuffle()
+                ->values();
+        }
+
+        if ($mainPosts->isEmpty()) {
+            $mainPosts = Post::with(['user', 'tags', 'mentions'])
+                ->withCount(['likes', 'comments'])
+                ->where('is_archived', false)
+                ->whereHas('user', fn ($q) => $q->where('is_private', 0))
+                ->orderByDesc('created_at')
+                ->take(100)
+                ->get()
+                ->map(function ($post) use ($authUser) {
+                    $post->is_liked = (bool) $post->likes()->where('user_id', $authUser->user_id)->exists();
+                    $post->is_bookmarked = (bool) $post->bookmarks()->where('user_id', $authUser->user_id)->exists();
+                    $post->type = 'post';
+                    $post->user = $this->attachStoryInfo($post->user, $authUser);
+                    $post->user->is_verified = (bool) $post->user->is_verified;
+                    $post->music_track_name = $post->music_track_name ?? null;
+                    $post->music_artist_name = $post->music_artist_name ?? null;
+                    $post->music_preview_url = $post->music_preview_url ?? null;
+                    $post->music_album_art_url = $post->music_album_art_url ?? null;
+                    $post->music_start_position_ms = $post->music_start_position_ms ?? null;
+                    $post->music_clip_duration_ms = $post->music_clip_duration_ms ?? null;
                     $post->thumbnail_url = $post->thumbnail_url ?? null;
 
                     return $post;
@@ -257,7 +293,10 @@ class PostController extends Controller
                             return [
                                 'user_id' => $user->user_id,
                                 'username' => $user->username,
+                                'full_name' => $user->full_name,
                                 'profile_picture_url' => $user->profile_picture_url,
+                                'role' => $user->role ?? 'student',
+                                'is_private' => (bool) $user->is_private,
                                 'is_follow_back' => (bool) $user->is_follow_back,
                                 'is_verified' => (bool) $user->is_verified,
                                 'has_story' => (bool) $user->has_story,
@@ -603,6 +642,10 @@ class PostController extends Controller
             'music_start_position_ms' => $request->music_start_position_ms,
             'music_clip_duration_ms' => $request->music_clip_duration_ms,
         ]);
+
+        if ($isVideo && empty($thumbnailUrl)) {
+            GenerateVideoThumbnail::dispatch($post->post_id)->afterResponse();
+        }
 
         // Tangani hashtag
         if ($request->filled('caption')) {

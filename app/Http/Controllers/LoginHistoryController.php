@@ -4,6 +4,7 @@ namespace App\Http\Controllers;
 
 use App\Models\LoginHistory;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Schema;
 use Jenssegers\Agent\Agent;
 use Laravel\Sanctum\PersonalAccessToken;
 
@@ -12,7 +13,7 @@ class LoginHistoryController extends Controller
     // List tanpa pagination (menampilkan semua field sesuai struktur tabel)
     public function index(Request $request)
     {
-        $histories = LoginHistory::select(
+        $columns = collect([
             'id',
             'user_id',
             'token_id',
@@ -24,17 +25,23 @@ class LoginHistoryController extends Controller
             'location',
             'login_at',
             'created_at',
-            'updated_at'
-        )
+            'updated_at',
+        ])->filter(fn ($column) => Schema::hasColumn('login_histories', $column))->values()->all();
+
+        $histories = LoginHistory::select($columns)
             ->where('user_id', $request->user()->user_id)
-            ->orderByDesc('login_at')
+            ->orderByDesc(Schema::hasColumn('login_histories', 'login_at') ? 'login_at' : 'created_at')
             ->get();
 
         // "Sedang aktif" = token-nya baru digunakan (last_used_at) dalam 10 menit terakhir.
         // Token yang hanya ada tapi lama tak dipakai (device sudah ditutup) TIDAK dihitung aktif.
         $activeThreshold = now()->subMinutes(10);
-        $lastUsedByToken = PersonalAccessToken::whereIn('id', $histories->pluck('token_id')->filter()->all())
-            ->pluck('last_used_at', 'id');
+        $tokenIds = Schema::hasColumn('login_histories', 'token_id')
+            ? $histories->pluck('token_id')->filter()->all()
+            : [];
+        $lastUsedByToken = empty($tokenIds)
+            ? collect()
+            : PersonalAccessToken::whereIn('id', $tokenIds)->pluck('last_used_at', 'id');
         $currentTokenId = (int) optional($request->user()->currentAccessToken())->id;
 
         $histories = $histories->map(function (LoginHistory $history) use ($lastUsedByToken, $currentTokenId, $activeThreshold) {
