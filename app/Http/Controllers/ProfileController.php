@@ -265,7 +265,7 @@ class ProfileController extends Controller
                 }
             })
             ->when($request->user(), fn ($q) => $q->where('user_id', '!=', $request->user()->user_id))
-            ->select('user_id', 'username', 'full_name', 'is_verified', 'profile_picture_url')
+            ->select('user_id', 'username', 'full_name', 'is_verified', 'profile_picture_url', 'role', 'is_private')
             ->paginate($perPage)
             ->appends([
                 'username' => $username,

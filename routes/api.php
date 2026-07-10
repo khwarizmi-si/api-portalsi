@@ -15,6 +15,7 @@ use App\Http\Controllers\NotificationController;
 use App\Http\Controllers\PortfolioController;
 use App\Http\Controllers\PostController;
 use App\Http\Controllers\ProfileController;
+use App\Http\Controllers\SearchHistoryController;
 use App\Http\Controllers\StoryController;
 use App\Http\Controllers\StoryViewController;
 use App\Http\Controllers\UserSuggestionController;
@@ -446,6 +447,10 @@ Route::middleware(['auth:sanctum'])->group(function () {
     });
 
     Route::get('/user', [ProfileController::class, 'me']);
+    Route::get('/search-histories', [SearchHistoryController::class, 'index']);
+    Route::post('/search-histories', [SearchHistoryController::class, 'store']);
+    Route::delete('/search-histories', [SearchHistoryController::class, 'destroyAll']);
+    Route::delete('/search-histories/{id}', [SearchHistoryController::class, 'destroy'])->whereNumber('id');
     // WAJIB sebelum /users/{id} — kalau tidak, "search" ketangkap sebagai {id} → 404.
     Route::get('/users/search', [ProfileController::class, 'search']);
     Route::get('/users/{id}', [ProfileController::class, 'showById'])->whereNumber('id');
